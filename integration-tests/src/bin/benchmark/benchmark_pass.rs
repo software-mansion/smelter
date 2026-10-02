@@ -212,6 +212,7 @@ impl SingleBenchmarkPass {
                         pixel_format: OutputPixelFormat::YUV420P,
                         raw_options: vec![("threads".into(), "0".into())],
                         bitstream_format: H264BitstreamFormat::AnnexB,
+                        low_latency: false,
                     })),
                 },
             },

@@ -113,6 +113,7 @@ mod main_module {
                         ("thread_type".into(), "slice".into()),
                     ],
                     bitstream_format: H264BitstreamFormat::Avcc,
+                    low_latency: false,
                 })),
                 audio: None,
                 connection: RtmpConnectionOptions::from_url(&format!("rtmp://127.0.0.1:{PORT}"))

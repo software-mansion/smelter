@@ -99,7 +99,8 @@ impl Mp4VideoEncoderOptions {
                     .unwrap_or_default()
                     .into_iter()
                     .collect(),
-                bitstream_format: core::H264BitstreamFormat::AnnexB,
+                bitstream_format: core::H264BitstreamFormat::Avcc,
+                low_latency: false,
             }),
             Mp4VideoEncoderOptions::VulkanH264 {
                 bitrate,
@@ -115,7 +116,7 @@ impl Mp4VideoEncoderOptions {
                     .transpose()?,
                 keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
                 preset: core::VulkanH264EncoderPreset::HighQuality,
-                bitstream_format: core::H264BitstreamFormat::AnnexB,
+                bitstream_format: core::H264BitstreamFormat::Avcc,
             }),
         };
         Ok(encoder_options)

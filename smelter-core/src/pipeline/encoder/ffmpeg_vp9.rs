@@ -10,7 +10,10 @@ use tracing::{error, info, trace, warn};
 use crate::pipeline::{
     PipelineCtx,
     encoder::{
-        ffmpeg_utils::{create_av_frame, encoded_chunk_from_av_packet, into_ffmpeg_pixel_format},
+        ffmpeg_utils::{
+            create_av_frame, encoded_chunk_from_av_packet, into_ffmpeg_pixel_format,
+            open_video_encoder,
+        },
         utils::gop_size_from_ms_framerate,
     },
     ffmpeg_utils::FfmpegOptions,
@@ -41,7 +44,7 @@ impl VideoEncoder for FfmpegVp9Encoder {
 
         let codec = ffmpeg_next::codec::encoder::find(Id::VP9).ok_or(EncoderInitError::NoCodec)?;
 
-        let mut encoder = Context::new().encoder().video()?;
+        let mut encoder = Context::new_with_codec(codec).encoder().video()?;
 
         let pts_unit_secs = Rational::new(1, TIME_BASE);
         encoder.set_time_base(pts_unit_secs);
@@ -70,11 +73,9 @@ impl VideoEncoder for FfmpegVp9Encoder {
             ("frame-parallel", "1"),
             // Auto number of threads to use.
             ("threads", "0"),
-            // Min QP. QP represents the video quality.
+            // Min QP, libvpx default is 0. Prevents near-lossless frames from spending too many bits
+            // on static content in CRF mode.
             ("qmin", "4"),
-            // Max QP. Range increased compared to defaults
-            // to allow low bitrate without dropping frames.
-            ("qmax", "63"),
             // Enable row-multithreading. Allows use of up to 2x thread as tile columns. 0 = off, 1 = on.
             ("row-mt", "1"),
             // Enable error resiliency features.
@@ -118,7 +119,7 @@ impl VideoEncoder for FfmpegVp9Encoder {
 
         ffmpeg_options.append(&options.raw_options);
 
-        let encoder = encoder.open_as_with(codec, ffmpeg_options.into_dictionary())?;
+        let encoder = open_video_encoder(encoder, codec, ffmpeg_options)?;
 
         Ok((
             Self {

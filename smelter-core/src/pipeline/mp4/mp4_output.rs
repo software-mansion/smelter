@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf, ptr, sync::Arc};
+use std::{fs, path::PathBuf, sync::Arc};
 
 use crossbeam_channel::{Receiver, Sender, bounded};
 use ffmpeg_next::{self as ffmpeg, Rational, Rescale};
@@ -19,7 +19,10 @@ use crate::{
             ffmpeg_h264::FfmpegH264Encoder,
             vulkan_h264::VulkanH264Encoder,
         },
-        ffmpeg_utils::{FfmpegOptions, StreamMutExt, TimestampOffset, write_extradata},
+        ffmpeg_utils::{
+            EosState, FfmpegOptions, StreamMutExt, TimestampOffset, warn_unused_options,
+            write_extradata,
+        },
         output::{Output, OutputAudio, OutputVideo},
     },
     utils::InitializableThread,
@@ -30,7 +33,10 @@ use crate::prelude::*;
 #[derive(Debug, Clone)]
 struct StreamState {
     index: usize,
+    // Duration of single tick in seconds
     time_base: Rational,
+    // Duration of single packet/frame in seconds
+    packet_duration: Rational,
 }
 
 pub struct Mp4Output {
@@ -103,27 +109,32 @@ impl Mp4Output {
         let mut ffmpeg_options = FfmpegOptions::from(&[("movflags", "faststart")]);
         ffmpeg_options.append(&options.raw_options);
 
-        output_ctx
-            .write_header_with(ffmpeg_options.into_dictionary())
-            .map_err(OutputInitError::FfmpegError)?;
+        warn_unused_options(
+            &output_ctx
+                .write_header_with(ffmpeg_options.into_dictionary())
+                .map_err(OutputInitError::FfmpegError)?,
+            "MP4 muxer",
+        );
 
         let (video_encoder, video_stream) = match video {
-            Some((encoder, index)) => (
+            Some((encoder, index, packet_duration)) => (
                 Some(encoder),
                 Some(StreamState {
                     index,
                     time_base: output_ctx.stream(index).unwrap().time_base(),
+                    packet_duration,
                 }),
             ),
             None => (None, None),
         };
 
         let (audio_encoder, audio_stream) = match audio {
-            Some((encoder, index)) => (
+            Some((encoder, index, packet_duration)) => (
                 Some(encoder),
                 Some(StreamState {
                     index,
                     time_base: output_ctx.stream(index).unwrap().time_base(),
+                    packet_duration,
                 }),
             ),
             None => (None, None),
@@ -172,7 +183,7 @@ impl Mp4Output {
         options: VideoEncoderOptions,
         output_ctx: &mut ffmpeg::format::context::Output,
         encoded_chunks_sender: Sender<EncodedOutputEvent>,
-    ) -> Result<(VideoEncoderThreadHandle, usize), OutputInitError> {
+    ) -> Result<(VideoEncoderThreadHandle, usize, Rational), OutputInitError> {
         let resolution = options.resolution();
 
         let encoder = match &options {
@@ -209,15 +220,19 @@ impl Mp4Output {
             }
         };
 
+        // Packets are AVCC, without an avcC record movenc would treat them as Annex B.
+        let extradata = encoder
+            .encoder_context()
+            .filter(|extradata| !extradata.is_empty())
+            .ok_or(OutputInitError::MissingH264DecoderConfig)?;
+
         let mut stream = output_ctx
             .add_stream(ffmpeg::codec::Id::H264)
             .map_err(OutputInitError::FfmpegError)?;
 
         stream.set_time_base(VIDEO_TIME_BASE);
         stream.update_codecpar(|codecpar| {
-            if let Some(extradata) = encoder.encoder_context() {
-                write_extradata(codecpar, extradata);
-            }
+            write_extradata(codecpar, extradata);
 
             codecpar.codec_id = ffmpeg::codec::Id::H264.into();
             codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_VIDEO;
@@ -225,7 +240,9 @@ impl Mp4Output {
             codecpar.height = resolution.height as i32;
         });
 
-        Ok((encoder, stream.index()))
+        let framerate = ctx.output_framerate;
+        let packet_duration = Rational(framerate.den as i32, framerate.num as i32);
+        Ok((encoder, stream.index(), packet_duration))
     }
 
     fn init_audio_track(
@@ -234,7 +251,7 @@ impl Mp4Output {
         options: AudioEncoderOptions,
         output_ctx: &mut ffmpeg::format::context::Output,
         encoded_chunks_sender: Sender<EncodedOutputEvent>,
-    ) -> Result<(AudioEncoderThreadHandle, usize), OutputInitError> {
+    ) -> Result<(AudioEncoderThreadHandle, usize, Rational), OutputInitError> {
         let channel_count = match options.channels() {
             AudioChannels::Mono => 1,
             AudioChannels::Stereo => 2,
@@ -266,18 +283,16 @@ impl Mp4Output {
             codecpar.codec_id = ffmpeg::codec::Id::AAC.into();
             codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_AUDIO;
             codecpar.sample_rate = sample_rate as i32;
+            codecpar.frame_size = encoder.config.samples_per_frame as i32;
             codecpar.profile = ffmpeg::ffi::FF_PROFILE_AAC_LOW;
-            codecpar.ch_layout = ffmpeg::ffi::AVChannelLayout {
-                nb_channels: channel_count,
-                order: ffmpeg::ffi::AVChannelOrder::AV_CHANNEL_ORDER_UNSPEC,
-                // This value is ignored when order is AV_CHANNEL_ORDER_UNSPEC
-                u: ffmpeg::ffi::AVChannelLayout__bindgen_ty_1 { mask: 0 },
-                // Field doc: "For some private data of the user."
-                opaque: ptr::null_mut(),
+            // Native mono/stereo layout
+            unsafe {
+                ffmpeg::ffi::av_channel_layout_default(&mut codecpar.ch_layout, channel_count)
             };
         });
 
-        Ok((encoder, stream.index()))
+        let packet_duration = Rational(encoder.config.samples_per_frame as i32, sample_rate as i32);
+        Ok((encoder, stream.index(), packet_duration))
     }
 }
 
@@ -361,7 +376,10 @@ fn run_ffmpeg_output_thread(
                     severity: ErrorSeverity::Critical,
                 });
                 match try_write_trailer {
-                    true => eos_state.mark_for_abort(),
+                    true => {
+                        eos_state.mark_for_abort();
+                        break;
+                    }
                     false => return,
                 }
             }
@@ -407,6 +425,13 @@ fn write_chunk(
         NS_TIME_BASE,
         stream.time_base,
     )));
+    // Convert from timeline when single packet is a single tick, to stream time
+    // base timeline. Returns duration of single packet in time_base units.
+    packet.set_duration(Rescale::rescale(
+        &1,
+        stream.packet_duration,
+        stream.time_base,
+    ));
     packet.set_time_base(stream.time_base);
     packet.set_stream(stream.index);
 
@@ -414,68 +439,20 @@ fn write_chunk(
         packet.set_flags(ffmpeg::packet::Flags::KEY)
     }
 
-    packet.write(output_ctx).map_err(|err| match err {
-        ffmpeg_next::Error::Other {
-            errno: ffmpeg::error::ENOSPC,
-        } => OutputMp4RuntimeError::NoSpaceLeftOnDevice,
-        err => OutputMp4RuntimeError::PacketWriteError(err),
-    })?;
+    // Encoders deliver packets in their own output order (video lags behind audio by the
+    // encoder delay), interleave by dts so the tracks are not far apart in the file.
+    //
+    // After one track's EOS, the interleaver holds the other track's packets until the
+    // buffered dts span exceeds `max_interleave_delta` (10s by default).
+    packet
+        .write_interleaved(output_ctx)
+        .map_err(|err| match err {
+            ffmpeg_next::Error::Other {
+                errno: ffmpeg::error::ENOSPC,
+            } => OutputMp4RuntimeError::NoSpaceLeftOnDevice,
+            err => OutputMp4RuntimeError::PacketWriteError(err),
+        })?;
     Ok(())
-}
-
-struct EosState {
-    received_video_eos: Option<bool>,
-    received_audio_eos: Option<bool>,
-    should_abort: bool,
-}
-
-impl EosState {
-    fn new(has_video: bool, has_audio: bool) -> Self {
-        Self {
-            received_video_eos: match has_video {
-                true => Some(false),
-                false => None,
-            },
-            received_audio_eos: match has_audio {
-                true => Some(false),
-                false => None,
-            },
-            should_abort: false,
-        }
-    }
-
-    fn on_audio_eos(&mut self) {
-        match self.received_audio_eos {
-            Some(false) => self.received_audio_eos = Some(true),
-            Some(true) => {
-                error!("Received multiple audio EOS events.");
-            }
-            None => {
-                error!("Received audio EOS event on non audio output.");
-            }
-        }
-    }
-
-    fn on_video_eos(&mut self) {
-        match self.received_video_eos {
-            Some(false) => self.received_video_eos = Some(true),
-            Some(true) => {
-                error!("Received multiple video EOS events.");
-            }
-            None => {
-                error!("Received video EOS event on non video output.");
-            }
-        }
-    }
-
-    fn mark_for_abort(&mut self) {
-        self.should_abort = true
-    }
-
-    fn is_complete(&self) -> bool {
-        (self.received_video_eos.unwrap_or(true) && self.received_audio_eos.unwrap_or(true))
-            || self.should_abort
-    }
 }
 
 struct Mp4OutputStatsSender {

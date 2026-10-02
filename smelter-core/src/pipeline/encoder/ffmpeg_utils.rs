@@ -1,8 +1,33 @@
-use ffmpeg_next::{format::Pixel, frame};
+use ffmpeg_next::{
+    Codec, Dictionary, Rational, Rescale, codec::encoder, ffi::avcodec_open2, format::Pixel, frame,
+};
 
 use smelter_render::FrameData;
 
+use crate::pipeline::ffmpeg_utils::{FfmpegOptions, warn_unused_options};
+
 use crate::prelude::*;
+
+const NS_TIME_BASE: Rational = Rational(1, 1_000_000_000);
+
+/// Same as `open_as_with`, but logs options that the encoder ignored.
+pub(super) fn open_video_encoder(
+    mut encoder: encoder::video::Video,
+    codec: Codec,
+    options: FfmpegOptions,
+) -> Result<encoder::Video, ffmpeg_next::Error> {
+    let unused = unsafe {
+        let mut options = options.into_dictionary().disown();
+        let result = avcodec_open2(encoder.as_mut_ptr(), codec.as_ptr(), &mut options);
+        let unused = Dictionary::own(options);
+        if result < 0 {
+            return Err(ffmpeg_next::Error::from(result));
+        }
+        unused
+    };
+    warn_unused_options(&unused, codec.name());
+    Ok(encoder::Video(encoder))
+}
 
 #[derive(Debug, thiserror::Error)]
 #[error("Failed to create libav frame: {0}")]
@@ -63,7 +88,11 @@ pub(super) fn create_av_frame(
         )));
     }
 
-    av_frame.set_pts(Some((frame.pts.as_secs_f64() * time_base as f64) as i64));
+    av_frame.set_pts(Some(Rescale::rescale(
+        &frame.pts.as_nanos(),
+        NS_TIME_BASE,
+        Rational(1, time_base),
+    )));
 
     write_plane_to_av_frame(&mut av_frame, 0, &data.y_plane);
     write_plane_to_av_frame(&mut av_frame, 1, &data.u_plane);
@@ -91,7 +120,8 @@ pub(super) fn encoded_chunk_from_av_packet(
         None => return Err(ChunkFromFfmpegError::NoData),
     };
 
-    let rescale = |v: i64| Timestamp::from_secs_f64((v as f64) * (1.0 / time_base as f64));
+    let rescale =
+        |v: i64| Timestamp::from_nanos(Rescale::rescale(&v, Rational(1, time_base), NS_TIME_BASE));
 
     let Some(pts) = packet.pts().map(rescale) else {
         return Err(ChunkFromFfmpegError::NoPts);

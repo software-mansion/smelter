@@ -10,7 +10,7 @@ use tracing::{error, info, trace, warn};
 
 use crate::pipeline::{
     encoder::{
-        ffmpeg_utils::{create_av_frame, encoded_chunk_from_av_packet},
+        ffmpeg_utils::{create_av_frame, encoded_chunk_from_av_packet, open_video_encoder},
         utils::{bitrate_from_resolution_framerate, gop_size_from_ms_framerate},
     },
     ffmpeg_utils::FfmpegOptions,
@@ -41,7 +41,7 @@ impl VideoEncoder for FfmpegVp8Encoder {
 
         let codec = ffmpeg_next::codec::encoder::find(Id::VP8).ok_or(EncoderInitError::NoCodec)?;
 
-        let mut encoder = Context::new().encoder().video()?;
+        let mut encoder = Context::new_with_codec(codec).encoder().video()?;
 
         let pts_unit_secs = Rational::new(1, TIME_BASE);
         encoder.set_time_base(pts_unit_secs);
@@ -60,18 +60,13 @@ impl VideoEncoder for FfmpegVp8Encoder {
 
         let mut ffmpeg_options = FfmpegOptions::from(&[
             // Quality/Speed ratio modifier
-            ("cpu-used", "0"),
+            ("cpu-used", "4"),
             // Time to spend encoding.
             ("deadline", "realtime"),
             // Auto threads number used.
             ("threads", "0"),
             // Zero-latency. Disables frame reordering.
             ("lag-in-frames", "0"),
-            // Min QP. QP represents the video quality.
-            ("qmin", "4"),
-            // Max QP. Range increased compared to defaults
-            // to allow low bitrate without dropping frames.
-            ("qmax", "63"),
         ]);
 
         let bitrate = options.bitrate.unwrap_or_else(|| {
@@ -97,7 +92,7 @@ impl VideoEncoder for FfmpegVp8Encoder {
         ]);
         ffmpeg_options.append(&options.raw_options);
 
-        let encoder = encoder.open_as_with(codec, ffmpeg_options.into_dictionary())?;
+        let encoder = open_video_encoder(encoder, codec, ffmpeg_options)?;
 
         Ok((
             Self {

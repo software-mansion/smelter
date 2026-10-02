@@ -48,6 +48,8 @@ pub(crate) trait VideoEncoder: Sized {
 pub(crate) struct AudioEncoderConfig {
     pub extradata: Option<bytes::Bytes>,
     pub initial_padding: Option<Duration>,
+    /// Number of samples (per channel) in each encoded packet.
+    pub samples_per_frame: u32,
 }
 
 pub(crate) trait AudioEncoder: Sized {

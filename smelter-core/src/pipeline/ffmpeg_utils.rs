@@ -1,7 +1,7 @@
 use std::{collections::HashMap, slice, time::Duration};
 
 use ffmpeg_next::{Dictionary, Stream, StreamMut, codec::encoder, ffi::AVCodecParameters};
-use tracing::warn;
+use tracing::{error, warn};
 
 use crate::{prelude::*, queue::QueueContext};
 
@@ -167,6 +167,61 @@ impl TimestampOffset {
     }
 }
 
+pub(super) struct EosState {
+    received_video_eos: Option<bool>,
+    received_audio_eos: Option<bool>,
+    should_abort: bool,
+}
+
+impl EosState {
+    pub fn new(has_video: bool, has_audio: bool) -> Self {
+        Self {
+            received_video_eos: match has_video {
+                true => Some(false),
+                false => None,
+            },
+            received_audio_eos: match has_audio {
+                true => Some(false),
+                false => None,
+            },
+            should_abort: false,
+        }
+    }
+
+    pub fn on_audio_eos(&mut self) {
+        match self.received_audio_eos {
+            Some(false) => self.received_audio_eos = Some(true),
+            Some(true) => {
+                error!("Received multiple audio EOS events.");
+            }
+            None => {
+                error!("Received audio EOS event on non audio output.");
+            }
+        }
+    }
+
+    pub fn on_video_eos(&mut self) {
+        match self.received_video_eos {
+            Some(false) => self.received_video_eos = Some(true),
+            Some(true) => {
+                error!("Received multiple video EOS events.");
+            }
+            None => {
+                error!("Received video EOS event on non video output.");
+            }
+        }
+    }
+
+    pub fn mark_for_abort(&mut self) {
+        self.should_abort = true
+    }
+
+    pub fn is_complete(&self) -> bool {
+        (self.received_video_eos.unwrap_or(true) && self.received_audio_eos.unwrap_or(true))
+            || self.should_abort
+    }
+}
+
 #[derive(Debug, Default)]
 pub(super) struct FfmpegOptions(HashMap<String, String>);
 
@@ -188,6 +243,14 @@ impl<T: AsRef<str>, const N: usize> From<&[(T, T); N]> for FfmpegOptions {
         let mut options = FfmpegOptions::default();
         options.append(value);
         options
+    }
+}
+
+/// FFmpeg leaves options it did not recognize in the dictionary and silently ignores them.
+pub(super) fn warn_unused_options(unused: &Dictionary, component: &str) {
+    let keys: Vec<&str> = unused.iter().map(|(key, _)| key).collect();
+    if !keys.is_empty() {
+        warn!(?keys, "{component} ignored unknown FFmpeg options.");
     }
 }
 

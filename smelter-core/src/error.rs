@@ -138,6 +138,9 @@ pub enum OutputInitError {
     #[error("Failed to register output. FFmpeg error: {0}.")]
     FfmpegError(ffmpeg_next::Error),
 
+    #[error("Missing H264 decoder config")]
+    MissingH264DecoderConfig,
+
     #[error("WHIP init timeout exceeded")]
     WhipInitTimeout,
 
@@ -161,6 +164,9 @@ pub enum OutputRuntimeError {
     Mp4(#[from] OutputMp4RuntimeError),
 
     #[error(transparent)]
+    Hls(#[from] OutputHlsRuntimeError),
+
+    #[error(transparent)]
     Whip(#[from] OutputWhipRuntimeError),
 }
 
@@ -177,12 +183,25 @@ pub enum OutputMp4RuntimeError {
     #[error("Failed to write packet to mp4 file.")]
     PacketWriteError(#[source] ffmpeg_next::Error),
 
-    #[error("Failed to write MP4 header")]
+    #[error("Failed to write MP4 trailer")]
     TrailerWriteError(#[source] ffmpeg_next::Error),
 
     /// If this error is returned it is most likely a bug.
     #[error("Internal error: {0}")]
     InternalError(String),
+
+    #[error("No space left on device")]
+    NoSpaceLeftOnDevice,
+}
+
+/// Error that can happen after registration
+#[derive(Debug, thiserror::Error, Clone)]
+pub enum OutputHlsRuntimeError {
+    #[error("Failed to write packet to HLS output.")]
+    PacketWriteError(#[source] ffmpeg_next::Error),
+
+    #[error("Failed to write HLS trailer.")]
+    TrailerWriteError(#[source] ffmpeg_next::Error),
 
     #[error("No space left on device")]
     NoSpaceLeftOnDevice,

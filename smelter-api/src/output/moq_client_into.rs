@@ -120,6 +120,7 @@ impl MoqClientVideoEncoderOptions {
                     .into_iter()
                     .collect(),
                 bitstream_format: h264_bitstream_format,
+                low_latency: true,
             }),
             MoqClientVideoEncoderOptions::VulkanH264 {
                 bitrate,

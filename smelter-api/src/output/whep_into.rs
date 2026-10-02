@@ -94,6 +94,7 @@ impl WhepVideoEncoderOptions {
                     .into_iter()
                     .collect(),
                 bitstream_format: core::H264BitstreamFormat::AnnexB,
+                low_latency: true,
             }),
             WhepVideoEncoderOptions::VulkanH264 {
                 bitrate,
