@@ -29,8 +29,9 @@ const MAX_STRETCH_RATIO: f64 = 0.04 + 0.001;
 ///   rebuilds us on a sample-rate or channel change.
 /// - Mono or Stereo `f64` PCM samples.
 ///
-/// Batches generally arrive in PTS order but may have small gaps or overlaps; the queue does
-/// *not* pad gaps.
+/// Batches generally arrive in PTS order but may have gaps or overlaps; the queue does *not* pad
+/// gaps. `write_batch` pads gaps of at least `SEAM_THRESHOLD` with zeros. Smaller gaps and
+/// overlaps are left to drift control.
 ///
 /// ## Outputs (what `get_samples` produces)
 /// Exactly the number of frames at `output_sample_rate` that fit the requested `pts_range`,
@@ -38,7 +39,8 @@ const MAX_STRETCH_RATIO: f64 = 0.04 + 0.001;
 /// pts ranges that is multiple of whole samples.
 ///
 /// ## Data flow
-/// 1. Incoming batches are appended to `resampler_input_buffer` (with overlap drop).
+/// 1. Incoming batches are appended to `resampler_input_buffer` (with gap padding and overlap
+///    drop).
 /// 2. `get_samples` runs `resample()` in a loop, each call moves a fixed `samples_in_batch`
 ///    worth of *output* frames from the rubato resampler into `output_buffer`, until
 ///    `output_buffer` has enough to satisfy the requested range.
@@ -74,8 +76,8 @@ pub(super) struct InputResampler {
 
     /// Pending input PCM that hasn't been fed to rubato yet. Frames are consumed (drained) from
     /// the front each time `resample()` runs. May also have zeros pushed to the front (gap-fill
-    /// before first resample, or in the `get_samples` gap branch) or samples drained from the
-    /// front (drop branch).
+    /// before first resample, or in the `get_samples` gap branch), zeros pushed to the back (gap
+    /// between batches in `write_batch`) or samples drained from the front (drop branch).
     resampler_input_buffer: AudioSamplesBuffer,
     /// Fixed-size scratch buffer that rubato writes one batch of output frames into. Owns its
     /// own `samples_to_drop` counter for warmup discarding.
@@ -91,9 +93,6 @@ pub(super) struct InputResampler {
     /// Subtracted from `input_buffer_start_pts()` to get the PTS of the first warmup output
     /// sample in the input timeline.
     original_output_delay: Duration,
-    /// Nominal ratio = `output_sample_rate / input_sample_rate`. We multiply it by a "relative"
-    /// factor in [1/(1+MAX), 1+MAX] when correcting drift.
-    original_resampler_ratio: f64,
 
     /// PTS just past the last sample currently held in `resampler_input_buffer`. Updated only in
     /// `write_batch`. Combined with the buffer's frame count, it lets us compute
@@ -148,6 +147,11 @@ const SQUASH_THRESHOLD: Duration = Duration::from_millis(500);
 /// branch. Smaller than `SQUASH_THRESHOLD` because stretching beyond a small fraction of a frame
 /// is audibly bad.
 const STRETCH_THRESHOLD: Duration = Duration::from_millis(40);
+
+/// Minimal gap between consecutive batches that `write_batch` pads with zeros. Smaller gaps are
+/// treated as timestamp jitter and left to drift control. Matches the shortest realistic packet
+/// loss (10ms Opus packet).
+const SEAM_THRESHOLD: Duration = Duration::from_millis(10);
 
 impl InputResampler {
     pub fn new(
@@ -212,7 +216,6 @@ impl InputResampler {
             output_buffer: AudioSamplesBuffer::new(channels),
 
             original_output_delay: default_output_delay,
-            original_resampler_ratio,
             input_buffer_end_pts: Timestamp::ZERO,
 
             needs_input_resync: true,
@@ -245,22 +248,18 @@ impl InputResampler {
             )
     }
 
-    /// Adjust rubato's resample ratio by a multiplicative factor relative to
-    /// `original_resampler_ratio`. `rel_ratio == 1.0` means "no correction".
+    /// Adjust rubato's resample ratio by a multiplicative factor relative to the nominal
+    /// `output_sample_rate / input_sample_rate`. `rel_ratio == 1.0` means "no correction".
     fn set_resample_ratio_relative(&mut self, rel_ratio: f64) {
         let rel_ratio = rel_ratio.clamp(1.0 / (1.0 + MAX_STRETCH_RATIO), 1.0 + MAX_STRETCH_RATIO);
-        let desired = self.original_resampler_ratio * rel_ratio;
-        let current = self.resampler.resample_ratio();
-        let should_update = (current == 1.0 && desired != 1.0) || (desired - current).abs() > 0.01;
-        if should_update
-            && let Err(err) = self.resampler.set_resample_ratio_relative(rel_ratio, true)
-        {
+        if let Err(err) = self.resampler.set_resample_ratio_relative(rel_ratio, true) {
             warn!(%err, "Failed to update resampler ratio.");
             let _ = self.resampler.set_resample_ratio_relative(1.0, true);
         }
     }
 
-    /// Append a newly arrived input batch to `resampler_input_buffer`.
+    /// Append a newly arrived input batch to `resampler_input_buffer`. A gap of at least
+    /// `SEAM_THRESHOLD` after the buffered input is padded with zeros.
     pub fn write_batch(&mut self, batch: InputAudioSamples) {
         let (start_pts, end_pts) = batch.pts_range();
         trace!(
@@ -270,11 +269,23 @@ impl InputResampler {
             "Resampler received a new batch"
         );
 
-        // If samples overlap to much drop, for lower overlap than 80ms we let
-        // squashing handle that
+        // If samples overlap too much drop, for lower overlap than 80ms we let squashing handle
+        // that.
         if start_pts + Duration::from_millis(80) < self.input_buffer_end_pts {
             debug!("Detected overlapping batches, dropping.");
             return;
+        }
+
+        // With an empty buffer `input_buffer_end_pts` might be stale, `get_samples` positions
+        // the batch in that case.
+        let gap = start_pts - self.input_buffer_end_pts;
+        if self.resampler_input_buffer.frames() > 0 && gap >= Timestamp::from(SEAM_THRESHOLD) {
+            let gap_samples = (gap.as_secs_f64() * self.input_sample_rate as f64).round() as usize;
+            debug!(?gap, gap_samples, "Gap between batches, padding with zeros.");
+            self.resampler_input_buffer.push_back(match self.channels {
+                AudioChannels::Mono => AudioSamples::Mono(vec![0.0; gap_samples]),
+                AudioChannels::Stereo => AudioSamples::Stereo(vec![(0.0, 0.0); gap_samples]),
+            });
         }
 
         // This defines `input_buffer_end_pts()` results
@@ -396,11 +407,21 @@ impl InputResampler {
             return None;
         }
 
+        // If entire input buffer is in the past
+        // Then drop it, so it is handled like an empty buffer below
+        if self.resampler_input_buffer.frames() > 0 && self.input_buffer_end_pts <= pts_range.0 {
+            trace!(
+                end_pts = ?self.input_buffer_end_pts,
+                "Drop input buffer before first resample"
+            );
+            self.resampler_input_buffer.clear();
+        }
+
         let input_buffer_start_pts = self.input_buffer_start_pts();
 
         // If entire input buffer is in the future or input buffer is empty
         // Then flush output buffer (or return zeros)
-        if self.resampler_input_buffer.frames() == 0 || pts_range.1 < input_buffer_start_pts {
+        if self.resampler_input_buffer.frames() == 0 || pts_range.1 <= input_buffer_start_pts {
             let batch_size = ((pts_range.1 - pts_range.0).as_secs_f64()
                 * self.output_sample_rate as f64)
                 .round() as usize;
