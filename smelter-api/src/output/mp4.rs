@@ -44,10 +44,12 @@ pub struct OutputMp4VideoOptions {
 pub enum Mp4VideoEncoderOptions {
     #[serde(rename = "ffmpeg_h264")]
     FfmpegH264 {
-        /// Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
+        /// Name of the FFmpeg H264 encoder, e.g. `"h264_nvenc"`. It has to be available in the
+        /// FFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options`
+        /// to configure encoder specific options.
         ///
-        /// Defaults to `"fast"`.
-        preset: Option<H264EncoderPreset>,
+        /// Defaults to the H264 encoder that FFmpeg selects by default.
+        encoder_name: Option<Arc<str>>,
 
         /// Encoding bitrate. Default value depends on chosen encoder.
         bitrate: Option<VideoEncoderBitrate>,

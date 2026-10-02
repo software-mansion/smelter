@@ -29,11 +29,13 @@ export type HlsVideoEncoderOptions =
        */
       keyframeIntervalMs?: number;
       /**
-       * Preset for an encoder. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
+       * Name of the FFmpeg H264 encoder, e.g. `"h264_nvenc"`. It has to be available in the
+       * FFmpeg build used by Smelter and accept frames from system memory. Use `ffmpegOptions`
+       * to configure encoder specific options.
        *
-       * Defaults to `"fast"`.
+       * Defaults to the H264 encoder that FFmpeg selects by default.
        */
-      preset?: Api.H264EncoderPreset;
+      encoderName?: string;
       /**
        * Encoder pixel format. Defaults to `"yuv420p"`.
        */

@@ -38,8 +38,8 @@ class SmelterManager {
           //   type: 'vulkan_h264',
           // }
           type: 'ffmpeg_h264',
-          preset: 'ultrafast',
           ffmpegOptions: {
+            preset: 'ultrafast',
             tune: 'zerolatency',
             thread_type: 'slice',
           },

@@ -150,7 +150,7 @@ async function run() {
         type: 'ffmpeg_h264',
         // 'ultrafast' is good for development. For production render select
         // slower (higher quality) preset e.g. 'medium'.
-        preset: 'ultrafast',
+        ffmpegOptions: { preset: 'ultrafast' },
       },
       resolution: {
         width: 1920,

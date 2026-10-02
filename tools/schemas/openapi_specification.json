@@ -1633,21 +1633,6 @@
           }
         ]
       },
-      "H264EncoderPreset": {
-        "type": "string",
-        "enum": [
-          "ultrafast",
-          "superfast",
-          "veryfast",
-          "faster",
-          "fast",
-          "medium",
-          "slow",
-          "slower",
-          "veryslow",
-          "placebo"
-        ]
-      },
       "HlsAudioEncoderOptions": {
         "oneOf": [
           {
@@ -1889,16 +1874,12 @@
               "type"
             ],
             "properties": {
-              "preset": {
-                "oneOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "$ref": "#/components/schemas/H264EncoderPreset",
-                    "description": "Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.\n\nDefaults to `\"fast\"`."
-                  }
-                ]
+              "encoder_name": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Name of the FFmpeg H264 encoder, e.g. `\"h264_nvenc\"`. It has to be available in the\nFFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options`\nto configure encoder specific options.\n\nDefaults to the H264 encoder that FFmpeg selects by default."
               },
               "bitrate": {
                 "oneOf": [
@@ -3168,16 +3149,12 @@
               "type"
             ],
             "properties": {
-              "preset": {
-                "oneOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "$ref": "#/components/schemas/H264EncoderPreset",
-                    "description": "Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.\n\nDefaults to `\"fast\"`."
-                  }
-                ]
+              "encoder_name": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Name of the FFmpeg H264 encoder, e.g. `\"h264_nvenc\"`. It has to be available in the\nFFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options`\nto configure encoder specific options.\n\nDefaults to the H264 encoder that FFmpeg selects by default."
               },
               "bitrate": {
                 "oneOf": [
@@ -3725,16 +3702,12 @@
               "type"
             ],
             "properties": {
-              "preset": {
-                "oneOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "$ref": "#/components/schemas/H264EncoderPreset",
-                    "description": "Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.\n\nDefaults to `\"fast\"`."
-                  }
-                ]
+              "encoder_name": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Name of the FFmpeg H264 encoder, e.g. `\"h264_nvenc\"`. It has to be available in the\nFFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options`\nto configure encoder specific options.\n\nDefaults to the H264 encoder that FFmpeg selects by default."
               },
               "bitrate": {
                 "oneOf": [
@@ -5420,16 +5393,12 @@
               "type"
             ],
             "properties": {
-              "preset": {
-                "oneOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "$ref": "#/components/schemas/H264EncoderPreset",
-                    "description": "Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.\n\nDefaults to `\"fast\"`."
-                  }
-                ]
+              "encoder_name": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Name of the FFmpeg H264 encoder, e.g. `\"h264_nvenc\"`. It has to be available in the\nFFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options`\nto configure encoder specific options.\n\nDefaults to the H264 encoder that FFmpeg selects by default."
               },
               "bitrate": {
                 "oneOf": [
@@ -6195,16 +6164,12 @@
               "type"
             ],
             "properties": {
-              "preset": {
-                "oneOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "$ref": "#/components/schemas/H264EncoderPreset",
-                    "description": "Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.\n\nDefaults to `\"fast\"`."
-                  }
-                ]
+              "encoder_name": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Name of the FFmpeg H264 encoder, e.g. `\"h264_nvenc\"`. It has to be available in the\nFFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options`\nto configure encoder specific options.\n\nDefaults to the H264 encoder that FFmpeg selects by default."
               },
               "bitrate": {
                 "oneOf": [
@@ -7711,16 +7676,12 @@
               "type"
             ],
             "properties": {
-              "preset": {
-                "oneOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "$ref": "#/components/schemas/H264EncoderPreset",
-                    "description": "Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.\n\nDefaults to `\"fast\"`."
-                  }
-                ]
+              "encoder_name": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Name of the FFmpeg H264 encoder, e.g. `\"h264_nvenc\"`. It has to be available in the\nFFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options`\nto configure encoder specific options.\n\nDefaults to the H264 encoder that FFmpeg selects by default."
               },
               "bitrate": {
                 "oneOf": [
@@ -8143,16 +8104,12 @@
               "type"
             ],
             "properties": {
-              "preset": {
-                "oneOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "$ref": "#/components/schemas/H264EncoderPreset",
-                    "description": "Preset for an encoder. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.\n\nDefaults to `\"fast\"`."
-                  }
-                ]
+              "encoder_name": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Name of the FFmpeg H264 encoder, e.g. `\"h264_nvenc\"`. It has to be available in the\nFFmpeg build used by Smelter and accept frames from system memory. Use `ffmpeg_options`\nto configure encoder specific options.\n\nDefaults to the H264 encoder that FFmpeg selects by default."
               },
               "bitrate": {
                 "oneOf": [

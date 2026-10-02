@@ -3,7 +3,7 @@ use std::{iter, sync::Arc};
 use ffmpeg_next::codec::Id;
 use ffmpeg_next::{Rational, codec::Context};
 use smelter_render::OutputFrameFormat;
-use tracing::{debug, error, info, trace, warn};
+use tracing::{error, info, trace, warn};
 
 use crate::pipeline::encoder::ffmpeg_utils::{
     create_av_frame, encoded_chunk_from_av_packet, into_ffmpeg_pixel_format, open_video_encoder,
@@ -35,9 +35,14 @@ impl VideoEncoder for FfmpegH264Encoder {
         options: FfmpegH264EncoderOptions,
     ) -> Result<(Self, VideoEncoderConfig), EncoderInitError> {
         info!(?options, "Initialize FFmpeg H264 encoder");
-        let codec = ffmpeg_next::codec::encoder::find(Id::H264).ok_or(EncoderInitError::NoCodec)?;
+        let codec = match &options.encoder_name {
+            Some(name) => ffmpeg_next::codec::encoder::find_by_name(name)
+                .filter(|codec| codec.id() == Id::H264)
+                .ok_or_else(|| EncoderInitError::NoH264CodecWithName(name.clone()))?,
+            None => ffmpeg_next::codec::encoder::find(Id::H264).ok_or(EncoderInitError::NoCodec)?,
+        };
         let codec_name = codec.name();
-        debug!(h264_encoder = codec_name);
+        info!(h264_encoder = codec_name, "Selected FFmpeg H264 encoder");
 
         // Allocating with the codec applies its own defaults, generic AVCodecContext defaults would
         // override x264 presets.
@@ -155,21 +160,6 @@ impl FfmpegH264Encoder {
     }
 }
 
-fn preset_to_str(preset: FfmpegH264EncoderPreset) -> &'static str {
-    match preset {
-        FfmpegH264EncoderPreset::Ultrafast => "ultrafast",
-        FfmpegH264EncoderPreset::Superfast => "superfast",
-        FfmpegH264EncoderPreset::Veryfast => "veryfast",
-        FfmpegH264EncoderPreset::Faster => "faster",
-        FfmpegH264EncoderPreset::Fast => "fast",
-        FfmpegH264EncoderPreset::Medium => "medium",
-        FfmpegH264EncoderPreset::Slow => "slow",
-        FfmpegH264EncoderPreset::Slower => "slower",
-        FfmpegH264EncoderPreset::Veryslow => "veryslow",
-        FfmpegH264EncoderPreset::Placebo => "placebo",
-    }
-}
-
 fn initialize_ffmpeg_h264_options(
     ctx: &Arc<PipelineCtx>,
     options: &FfmpegH264EncoderOptions,
@@ -225,8 +215,8 @@ fn initialize_ffmpeg_h264_options(
                 ("maxrate", &maxrate.to_string()),
             ]);
         }
-        _ => {
-            ffmpeg_options.append(&[("preset", preset_to_str(options.preset))]);
+        "libx264" => {
+            ffmpeg_options.append(&[("preset", "fast")]);
             if options.low_latency {
                 ffmpeg_options.append(&[
                     ("tune", "zerolatency"),
@@ -254,6 +244,20 @@ fn initialize_ffmpeg_h264_options(
                     // Quality-based VBR (0-51), default if bitrate is not set
                     ffmpeg_options.append(&[("crf", "23")]);
                 }
+            }
+        }
+        _ => {
+            if options.low_latency {
+                // Disable b frames
+                ffmpeg_options.append(&[("bf", "0")]);
+            }
+            if let Some(bitrate) = options.bitrate {
+                ffmpeg_options.append(&[
+                    // Bitrate in b/s
+                    ("b", &bitrate.average_bitrate.to_string()),
+                    // Maximum bitrate. Higher values allow short spikes of bitrate.
+                    ("maxrate", &bitrate.max_bitrate.to_string()),
+                ]);
             }
         }
     }

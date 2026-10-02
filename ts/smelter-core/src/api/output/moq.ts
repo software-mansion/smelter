@@ -38,7 +38,7 @@ function intoMoqClientVideoEncoderOptions(
     case 'ffmpeg_h264':
       return {
         type: 'ffmpeg_h264',
-        preset: encoder.preset,
+        encoder_name: encoder.encoderName,
         bitrate: encoder.bitrate && intoVideoEncoderBitrate(encoder.bitrate),
         keyframe_interval_ms: encoder.keyframeIntervalMs,
         pixel_format: encoder.pixelFormat,

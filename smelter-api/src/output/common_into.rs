@@ -49,23 +49,6 @@ impl TryFrom<OutputEndCondition> for core::PipelineOutputEndCondition {
     }
 }
 
-impl From<H264EncoderPreset> for core::FfmpegH264EncoderPreset {
-    fn from(value: H264EncoderPreset) -> Self {
-        match value {
-            H264EncoderPreset::Ultrafast => core::FfmpegH264EncoderPreset::Ultrafast,
-            H264EncoderPreset::Superfast => core::FfmpegH264EncoderPreset::Superfast,
-            H264EncoderPreset::Veryfast => core::FfmpegH264EncoderPreset::Veryfast,
-            H264EncoderPreset::Faster => core::FfmpegH264EncoderPreset::Faster,
-            H264EncoderPreset::Fast => core::FfmpegH264EncoderPreset::Fast,
-            H264EncoderPreset::Medium => core::FfmpegH264EncoderPreset::Medium,
-            H264EncoderPreset::Slow => core::FfmpegH264EncoderPreset::Slow,
-            H264EncoderPreset::Slower => core::FfmpegH264EncoderPreset::Slower,
-            H264EncoderPreset::Veryslow => core::FfmpegH264EncoderPreset::Veryslow,
-            H264EncoderPreset::Placebo => core::FfmpegH264EncoderPreset::Placebo,
-        }
-    }
-}
-
 impl From<OpusEncoderPreset> for core::OpusEncoderPreset {
     fn from(value: OpusEncoderPreset) -> Self {
         match value {

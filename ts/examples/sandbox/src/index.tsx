@@ -28,8 +28,8 @@ async function run() {
     video: {
       encoder: {
         type: 'ffmpeg_h264',
-        preset: 'ultrafast',
         ffmpegOptions: {
+          preset: 'ultrafast',
           tune: 'zerolatency',
           thread_type: 'slice',
         },

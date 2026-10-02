@@ -37,7 +37,7 @@ function intoMp4VideoEncoderOptions(
         type: 'ffmpeg_h264',
         bitrate: encoder.bitrate && intoVideoEncoderBitrate(encoder.bitrate),
         keyframe_interval_ms: encoder.keyframeIntervalMs,
-        preset: encoder.preset,
+        encoder_name: encoder.encoderName,
         pixel_format: encoder.pixelFormat,
         ffmpeg_options: encoder.ffmpegOptions,
       };

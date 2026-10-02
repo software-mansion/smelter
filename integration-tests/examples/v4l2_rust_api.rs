@@ -105,10 +105,11 @@ mod main_module {
                 video: Some(VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
                     bitrate: None,
                     keyframe_interval: Duration::from_millis(5000),
-                    preset: FfmpegH264EncoderPreset::Ultrafast,
+                    encoder_name: None,
                     resolution: VIDEO_RESOLUTION,
                     pixel_format: OutputPixelFormat::YUV420P,
                     raw_options: vec![
+                        ("preset".into(), "ultrafast".into()),
                         ("tune".into(), "zerolatency".into()),
                         ("thread_type".into(), "slice".into()),
                     ],
