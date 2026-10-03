@@ -34,6 +34,11 @@ HResult input_supports_video_mode(IDeckLinkInput *, VideoConnection,
                                   bool &);
 HResult input_enable_video(IDeckLinkInput *input, DisplayModeType mode,
                            PixelFormat format, VideoInputFlags flags);
+HResult input_enable_video_with_allocator(IDeckLinkInput *input,
+                                          DisplayModeType mode,
+                                          PixelFormat format,
+                                          VideoInputFlags flags,
+                                          rust::Box<DynFrameAllocator> allocator);
 HResult input_enable_audio(IDeckLinkInput *input, uint32_t sample_rate,
                            AudioSampleType sample_type, uint32_t channels);
 HResult input_set_callback(IDeckLinkInput *input,
@@ -79,6 +84,7 @@ long video_input_frame_width(IDeckLinkVideoInputFrame *frame);
 long video_input_frame_height(IDeckLinkVideoInputFrame *frame);
 long video_input_frame_row_bytes(IDeckLinkVideoInputFrame *frame);
 VideoBufferAccess video_input_frame_start_access(IDeckLinkVideoInputFrame *frame);
+const DynFrameBuffer *video_input_frame_buffer(IDeckLinkVideoInputFrame *frame);
 PixelFormat video_input_frame_pixel_format(IDeckLinkVideoInputFrame *frame);
 BMDTimeValue video_input_frame_stream_time(IDeckLinkVideoInputFrame *frame,
                                            BMDTimeScale time_scale);

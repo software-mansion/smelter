@@ -1,6 +1,6 @@
-use std::time::Duration;
+use std::{any::Any, ptr::null_mut, time::Duration};
 
-use crate::{DeckLinkError, InputCallback, InputCallbackResult};
+use crate::{DeckLinkError, FrameAllocator, FrameBuffer, InputCallback, InputCallbackResult};
 
 use super::{
     DisplayMode, HResult,
@@ -35,13 +35,27 @@ impl Input {
         }
         Ok((is_supported, actual_mode))
     }
+    /// Without an `allocator`, DeckLink captures into memory it allocates itself.
     pub fn enable_video(
         &self,
         mode: ffi::DisplayModeType,
         format: ffi::PixelFormat,
         flags: ffi::VideoInputFlags,
+        allocator: Option<Box<dyn FrameAllocator>>,
     ) -> Result<(), DeckLinkError> {
-        match unsafe { ffi::input_enable_video(self.0, mode, format, flags)? } {
+        let result = match allocator {
+            Some(allocator) => unsafe {
+                ffi::input_enable_video_with_allocator(
+                    self.0,
+                    mode,
+                    format,
+                    flags,
+                    Box::new(DynFrameAllocator(allocator)),
+                )?
+            },
+            None => unsafe { ffi::input_enable_video(self.0, mode, format, flags)? },
+        };
+        match result {
             HResult::Ok => Ok(()),
             hresult => Err(DeckLinkError::DeckLinkCallFailed(
                 "IDeckLinkInput::EnableVideoInput",
@@ -123,10 +137,23 @@ unsafe impl Sync for Input {}
 pub struct VideoInputFrame(*mut ffi::IDeckLinkVideoInputFrame);
 
 impl VideoInputFrame {
+    /// A view over DeckLink's own buffer, or a copy when an allocator lent
+    /// the buffer: DeckLink captures into lent buffers again whatever
+    /// references them.
     pub fn bytes(&self) -> Result<bytes::Bytes, DeckLinkError> {
         let len = self.height() * self.bytes_per_row();
         let access = unsafe { ffi::video_input_frame_start_access(self.0)? };
-        Ok(bytes::Bytes::from_owner(VideoBuffer { access, len }))
+        let view = bytes::Bytes::from_owner(VideoBuffer { access, len });
+        match unsafe { ffi::video_input_frame_buffer(self.0) }.is_null() {
+            true => Ok(view),
+            false => Ok(bytes::Bytes::copy_from_slice(&view)),
+        }
+    }
+    /// The buffer the frame was captured into, when an allocator of type `B`
+    /// lent it.
+    pub fn buffer<B: FrameBuffer>(&self) -> Option<&B> {
+        let buffer = unsafe { ffi::video_input_frame_buffer(self.0).as_ref()? };
+        (buffer.0.as_ref() as &dyn Any).downcast_ref()
     }
     pub fn width(&self) -> usize {
         unsafe { ffi::video_input_frame_width(self.0) as usize }
@@ -219,6 +246,26 @@ impl AudioInputPacket {
     pub fn packet_time(&self) -> Result<Duration, DeckLinkError> {
         let time_value = unsafe { ffi::audio_input_packet_packet_time(self.0, 1_000_000_000)? };
         Ok(Duration::from_nanos(time_value as u64))
+    }
+}
+
+pub(crate) struct DynFrameAllocator(Box<dyn FrameAllocator>);
+
+impl DynFrameAllocator {
+    pub(crate) fn allocate(&self, size: u32, row_bytes: u32) -> *mut DynFrameBuffer {
+        self.0
+            .allocate(size as usize, row_bytes as usize)
+            .map_or(null_mut(), |buffer| {
+                Box::into_raw(Box::new(DynFrameBuffer(buffer)))
+            })
+    }
+}
+
+pub(crate) struct DynFrameBuffer(Box<dyn FrameBuffer>);
+
+impl DynFrameBuffer {
+    pub(crate) fn bytes(&self) -> *mut u8 {
+        self.0.bytes().as_ptr()
     }
 }
 

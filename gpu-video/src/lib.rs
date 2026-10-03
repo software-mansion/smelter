@@ -24,6 +24,10 @@ pub(crate) mod encoders;
 mod frame_sorter;
 #[cfg(all(supported, feature = "wgpu"))]
 mod global_registry;
+#[cfg(all(vulkan, feature = "wgpu"))]
+mod host_memory;
+#[cfg(all(vulkan, feature = "wgpu"))]
+pub use host_memory::{HostMemoryBuffer, HostMemoryError};
 #[cfg(supported)]
 mod instance;
 #[cfg(all(supported, feature = "transcoder"))]

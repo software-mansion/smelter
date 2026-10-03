@@ -7,7 +7,7 @@ use self::{
     input::Input,
     profile::{ProfileAttributes, ProfileManager},
 };
-use input::DynInputCallback;
+use input::{DynFrameAllocator, DynFrameBuffer, DynInputCallback};
 
 pub(super) mod device;
 pub(super) mod input;
@@ -79,7 +79,15 @@ mod ffi {
             display_mode: *mut IDeckLinkDisplayMode,
             flags: DetectedVideoInputFormatFlags,
         ) -> HResult;
+
+        pub type DynFrameAllocator;
+        fn allocate(self: &DynFrameAllocator, size: u32, row_bytes: u32) -> *mut DynFrameBuffer;
+
+        pub type DynFrameBuffer;
+        fn bytes(self: &DynFrameBuffer) -> *mut u8;
     }
+
+    impl Box<DynFrameBuffer> {}
 
     unsafe extern "C++" {
         include!("decklink/cpp/api.h");
@@ -186,6 +194,13 @@ mod ffi {
             format: PixelFormat,
             flags: VideoInputFlags,
         ) -> Result<HResult>;
+        unsafe fn input_enable_video_with_allocator(
+            input: *mut IDeckLinkInput,
+            mode: DisplayModeType,
+            format: PixelFormat,
+            flags: VideoInputFlags,
+            allocator: Box<DynFrameAllocator>,
+        ) -> Result<HResult>;
         unsafe fn input_enable_audio(
             input: *mut IDeckLinkInput,
             sample_rate: u32,
@@ -276,6 +291,9 @@ mod ffi {
         unsafe fn video_input_frame_start_access(
             input: *mut IDeckLinkVideoInputFrame,
         ) -> Result<VideoBufferAccess>;
+        unsafe fn video_input_frame_buffer(
+            input: *mut IDeckLinkVideoInputFrame,
+        ) -> *const DynFrameBuffer;
         unsafe fn video_input_frame_pixel_format(
             input: *mut IDeckLinkVideoInputFrame,
         ) -> Result<PixelFormat>;

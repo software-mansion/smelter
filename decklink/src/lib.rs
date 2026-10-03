@@ -34,6 +34,8 @@ mod lib {
     pub use api::input::AudioInputPacket;
     pub use api::input::Input;
     pub use api::input::VideoInputFrame;
+    pub use input_callback::FrameAllocator;
+    pub use input_callback::FrameBuffer;
     pub use input_callback::InputCallback;
     pub use input_callback::InputCallbackResult;
 

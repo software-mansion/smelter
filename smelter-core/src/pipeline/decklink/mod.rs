@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use smelter_render::FramePreProcessor;
 use tracing::{Level, error, span};
 
 use crate::pipeline::input::Input;
@@ -8,11 +9,16 @@ use crate::{pipeline::decklink::format::Format, queue::QueueInput};
 
 use crate::prelude::*;
 
-use self::{capture::ChannelCallbackAdapter, find_device::find_decklink};
+use self::{
+    capture::{ChannelCallbackAdapter, PreProcessing},
+    find_device::find_decklink,
+    zero_copy::ZeroCopy,
+};
 
 mod capture;
 mod find_device;
 mod format;
+mod zero_copy;
 
 // sample rate returned from DeckLink
 const AUDIO_SAMPLE_RATE: u32 = 48_000;
@@ -67,25 +73,24 @@ impl DeckLink {
             .pixel_format
             .unwrap_or(decklink::PixelFormat::Format8BitYUV);
 
-        // Initial options, real config should be set based on detected format, thanks
-        // to the `enable_format_detection` option. When enabled it will call
-        // `video_input_format_changed` method with a detected format.
-        input
-            .enable_video(
-                initial_mode,
-                initial_pixel_format,
-                decklink::VideoInputFlags {
-                    enable_format_detection: true,
-                    ..Default::default()
-                },
-            )
-            .map_err(DeckLinkInputError::DecklinkError)?;
         input
             .enable_audio(AUDIO_SAMPLE_RATE, decklink::AudioSampleType::Sample32bit, 2)
             .map_err(DeckLinkInputError::DecklinkError)?;
 
         let side_channel_enabled =
             opts.queue_options.video_side_channel != InputSideChannel::Disabled;
+        let zero_copy = match opts.zero_copy {
+            false => None,
+            true if !side_channel_enabled => Err(DeckLinkInputError::ZeroCopyWithoutSideChannel)?,
+            true if zero_copy::buffer_format(initial_pixel_format).is_none() => Err(
+                DeckLinkInputError::ZeroCopyUnsupportedPixelFormat(initial_pixel_format),
+            )?,
+            true => Some(ZeroCopy::new(&ctx.wgpu_ctx.device)?),
+        };
+        let pre_processing = side_channel_enabled.then(|| PreProcessing {
+            pre_processor: FramePreProcessor::new(ctx.wgpu_ctx.clone()),
+            zero_copy,
+        });
 
         let queue_input = QueueInput::new(&ctx, &input_ref, opts.queue_options);
         queue_input.set_stale_frame_timeout(ctx.stale_frame_timeout);
@@ -99,10 +104,13 @@ impl DeckLink {
             span,
             video_sender,
             audio_sender,
-            side_channel_enabled,
+            pre_processing,
             Arc::<decklink::Input>::downgrade(&input),
             Format::new(initial_mode, initial_pixel_format),
         );
+        callback
+            .enable_video(&input, initial_mode, initial_pixel_format)
+            .map_err(DeckLinkInputError::DecklinkError)?;
         input
             .set_callback(Box::new(callback))
             .map_err(DeckLinkInputError::DecklinkError)?;
