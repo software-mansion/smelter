@@ -32,6 +32,7 @@ impl TryFrom<DeckLink> for core::RegisterInputOptions {
                 persistent_id,
                 enable_audio: value.enable_audio.unwrap_or(true),
                 pixel_format: Some(core::DeckLinkPixelFormat::Format8BitYUV),
+                zero_copy: false,
                 queue_options: {
                     let side_channel = value.side_channel.unwrap_or_default();
                     let side_channel_delay = side_channel.delay()?;

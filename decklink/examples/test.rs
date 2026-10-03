@@ -56,6 +56,7 @@ mod example {
                 enable_format_detection: true,
                 ..Default::default()
             },
+            None,
         )?;
         input.enable_audio(48_000, AudioSampleType::Sample32bit, 2)?;
         Ok(())

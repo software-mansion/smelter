@@ -4,7 +4,7 @@ use planar_yuv::PlanarYuvInput;
 use rgba_texture::RgbaTextureInput;
 
 use crate::{
-    Frame, FrameData, Resolution,
+    BufferFormat, BufferLayout, Frame, FrameData, Resolution,
     state::input_texture::{
         argb::ArgbInput, bgra::BgraInput, interleaved_yuyv422::InterleavedYuyv422Input,
     },
@@ -196,6 +196,35 @@ impl InputTexture {
                         *state = Some(InputTextureState::Argb(input));
                     }
                 };
+            }
+        }
+    }
+
+    /// [`wgpu::Queue::submit`] has to be called afterwards
+    pub fn copy_from_buffer(
+        &mut self,
+        ctx: &WgpuCtx,
+        encoder: &mut wgpu::CommandEncoder,
+        buffer: &wgpu::Buffer,
+        layout: BufferLayout,
+    ) {
+        match (layout.format, &mut self.0) {
+            (
+                BufferFormat::InterleavedUyvy422,
+                Some(InputTextureState::InterleavedUyvy422(input)),
+            ) => input.copy_from_buffer(ctx, encoder, buffer, layout),
+            (BufferFormat::Bgra, Some(InputTextureState::Bgra(input))) => {
+                input.copy_from_buffer(ctx, encoder, buffer, layout)
+            }
+            (BufferFormat::InterleavedUyvy422, state) => {
+                let mut input = InterleavedUyvy422Input::new(ctx);
+                input.copy_from_buffer(ctx, encoder, buffer, layout);
+                *state = Some(InputTextureState::InterleavedUyvy422(input));
+            }
+            (BufferFormat::Bgra, state) => {
+                let mut input = BgraInput::new(ctx);
+                input.copy_from_buffer(ctx, encoder, buffer, layout);
+                *state = Some(InputTextureState::Bgra(input));
             }
         }
     }

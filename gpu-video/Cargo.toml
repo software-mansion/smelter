@@ -36,6 +36,7 @@ default = ["wgpu"]
 bytemuck = { version = "1.19.0", features = ["derive"], optional = true }
 bytes = "1"
 h264-reader = { workspace = true }
+libc = { version = "0.2.186" }
 memchr = "2.7.4"
 rustc-hash = "2.1.1"
 thiserror = "2"
@@ -106,7 +107,6 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
 ], optional = true }
 objc2 = { version = "0.6.4" }
 block2 = { version = "0.6.2" }
-libc = { version = "0.2.186" }
 pollster = { workspace = true }
 
 [dev-dependencies]

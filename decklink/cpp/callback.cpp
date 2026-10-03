@@ -2,19 +2,6 @@
 #include "api.h"
 #include "enums.h"
 
-ULONG InputCallbackWrapper::AddRef(void) {
-  return __sync_add_and_fetch(&refcount, 1);
-}
-
-ULONG InputCallbackWrapper::Release(void) {
-  int32_t new_refcount = __sync_sub_and_fetch(&refcount, 1);
-  if (new_refcount == 0) {
-    delete this;
-    return 0;
-  }
-  return new_refcount;
-}
-
 HRESULT InputCallbackWrapper::VideoInputFrameArrived(
     IDeckLinkVideoInputFrame *video_frame,
     IDeckLinkAudioInputPacket *audio_packet) {

@@ -1,9 +1,12 @@
 use tracing::error;
 
 use crate::{
-    RenderingMode, Resolution,
+    BufferLayout, RenderingMode, Resolution,
     state::node_texture::NodeTextureState,
-    wgpu::{WgpuCtx, texture::InterleavedUyvy422Texture},
+    wgpu::{
+        WgpuCtx,
+        texture::{InterleavedUyvy422Texture, TextureExt},
+    },
 };
 
 use super::convert_linear_to_srgb::RgbToSrgbConverter;
@@ -33,6 +36,19 @@ impl InterleavedUyvy422Input {
     pub fn upload(&mut self, ctx: &WgpuCtx, data: &[u8], resolution: Resolution) {
         self.maybe_recreate(ctx, resolution);
         self.upload_textures.upload(ctx, data);
+    }
+
+    pub fn copy_from_buffer(
+        &mut self,
+        ctx: &WgpuCtx,
+        encoder: &mut wgpu::CommandEncoder,
+        buffer: &wgpu::Buffer,
+        layout: BufferLayout,
+    ) {
+        self.maybe_recreate(ctx, layout.resolution);
+        self.upload_textures
+            .texture()
+            .copy_from_buffer(encoder, buffer, layout.bytes_per_row);
     }
 
     pub fn convert(&mut self, ctx: &WgpuCtx, dest: &NodeTextureState) {
