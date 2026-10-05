@@ -138,7 +138,7 @@ pub use crate::encoders::{EncodeTexture, WgpuTexturesEncoderH264, WgpuTexturesEn
 pub use crate::instance::VideoInstance;
 pub use crate::parser::{h264::H264ParserError, reference_manager::ReferenceManagementError};
 #[cfg(feature = "transcoder")]
-pub use crate::transcoder::{VideoTranscoder, VideoTranscoderError};
+pub use crate::transcoder::{TranscodedChunk, VideoTranscoder, VideoTranscoderError};
 #[cfg(feature = "wgpu")]
 pub use crate::video_texture::{VideoTexture, VideoTexturePlane};
 
@@ -237,14 +237,27 @@ impl VideoDevice {
         )
     }
 
-    /// Create a single-input multiple-output transcoder.
+    /// Creates a single-input multiple-output transcoder.
+    ///
     /// Each item in `parameters.output_parameters` corresponds to one output.
+    /// The `on_chunk` callback receives each transcoded frame as a [`TranscodedChunk`].
+    ///
+    /// Heavy work in the callback can delay the delivery of chunks and block [`VideoTranscoder::transcode`].
+    /// Depending on the backend, the callback is invoked either from the thread calling the decoder
+    /// or from background thread. On vulkan that thread is shared between all decoders and
+    /// encoders, so a slow callback would affect them all.
+    ///
+    /// Prefer to use the callback only to pass the chunk (e.g. through a channel) to another thread
+    /// and do the heavy work there.
     #[cfg(feature = "transcoder")]
     pub fn create_transcoder(
         &self,
         parameters: crate::parameters::TranscoderParameters,
+        on_chunk: impl FnMut(TranscodedChunk) + Send + 'static,
     ) -> Result<crate::transcoder::VideoTranscoder, crate::transcoder::VideoTranscoderError> {
-        self.inner.clone().create_transcoder(parameters)
+        self.inner
+            .clone()
+            .create_transcoder(parameters, Box::new(on_chunk))
     }
 
     /// Creates an H.264 encoder that sends each encoded frame via callback.
