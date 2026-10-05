@@ -97,9 +97,6 @@ impl From<VulkanEncoderError> for VideoEncoderError {
             VulkanEncoderError::WgpuTextureEncoderError(err) => {
                 VideoEncoderError::WgpuTextureEncoderError(err)
             }
-            VulkanEncoderError::VulkanCommonError(VulkanCommonError::SubmissionWaitTimeout) => {
-                VideoEncoderError::EncodeSubmissionTimeout
-            }
             VulkanEncoderError::VkError(_)
             | VulkanEncoderError::NoMemory
             | VulkanEncoderError::VulkanCommonError(_)

@@ -136,6 +136,7 @@ impl CoreVideoDeviceBackend for VTDevice {
     fn create_transcoder(
         self: Arc<Self>,
         _parameters: crate::parameters::TranscoderParameters,
+        _on_chunk_callback: Box<dyn FnMut(crate::transcoder::TranscodedChunk) + Send>,
     ) -> Result<crate::transcoder::VideoTranscoder, crate::transcoder::VideoTranscoderError> {
         Err(crate::transcoder::VideoTranscoderError::TranscoderUnsupported)
     }

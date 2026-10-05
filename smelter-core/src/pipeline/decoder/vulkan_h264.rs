@@ -73,7 +73,7 @@ impl VideoDecoderInstance for VulkanH264Decoder {
             EncodedInputEvent::Discontinuity => H264DecoderEvent::Flush,
         };
 
-        if let Err(err) = self.decoder.process_event(decoder_event, None) {
+        if let Err(err) = self.decoder.process_event(decoder_event) {
             match err {
                 VideoDecoderError::ReferenceManagementError(
                     ReferenceManagementError::CorruptedState,

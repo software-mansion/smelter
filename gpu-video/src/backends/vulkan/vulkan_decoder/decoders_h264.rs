@@ -137,14 +137,13 @@ impl VideoDecoderBackend for VulkanBytesDecoderH264 {
     fn process_event_bytes(
         &mut self,
         event: DecoderEvent<'_, AccessUnit>,
-        timeout: Duration,
     ) -> Result<(), VideoDecoderError> {
         let flush = matches!(event, DecoderEvent::Flush);
         let instructions = self.decoder.process_event(event)?;
 
         for instruction in instructions {
             self.submission_tracker
-                .wait_if_full(timeout)
+                .wait_if_full(Duration::MAX)
                 .map_err(VulkanDecoderError::from)?;
 
             let Some(submission) = self.decoder.decode(instruction)? else {
@@ -176,7 +175,7 @@ impl VideoDecoderBackend for VulkanBytesDecoderH264 {
 
         if flush {
             self.submission_tracker
-                .wait_for_all(timeout)
+                .wait_for_all(Duration::MAX)
                 .map_err(VulkanDecoderError::from)?;
 
             let mut output = self.output.lock().unwrap();
@@ -251,7 +250,6 @@ impl crate::decoders::WgpuVideoDecoderBackend for VulkanWgpuTexturesDecoderH264 
     fn process_event_textures(
         &mut self,
         event: DecoderEvent<'_, AccessUnit>,
-        timeout: Duration,
     ) -> Result<(), VideoDecoderError> {
         let flush = matches!(event, DecoderEvent::Flush);
         let instructions = self.decoder.process_event(event)?;
@@ -259,7 +257,7 @@ impl crate::decoders::WgpuVideoDecoderBackend for VulkanWgpuTexturesDecoderH264 
         let mut unordered_frames = Vec::new();
         for instruction in instructions {
             self.submission_tracker
-                .wait_if_full(timeout)
+                .wait_if_full(Duration::MAX)
                 .map_err(VulkanDecoderError::from)?;
 
             let Some(submission) = self.decoder.decode(instruction)? else {

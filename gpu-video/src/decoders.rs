@@ -1,9 +1,6 @@
-use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
-    time::Duration,
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
 };
 
 use crate::{
@@ -25,7 +22,6 @@ pub(crate) trait VideoDecoderBackend: Send {
     fn process_event_bytes(
         &mut self,
         event: DecoderEvent<'_, AccessUnit>,
-        timeout: Duration,
     ) -> Result<(), VideoDecoderError>;
 }
 
@@ -94,7 +90,7 @@ impl BytesDecoderH264 {
     ///
     /// Calling this from within the provided callback can lead to a deadlock.
     pub fn decode(&mut self, frame: EncodedInputChunk<'_>) -> Result<(), VideoDecoderError> {
-        self.process_event(DecoderEvent::DecodeChunk(frame), None)
+        self.process_event(DecoderEvent::DecodeChunk(frame))
     }
 
     /// Flush all frames from the decoder.
@@ -105,23 +101,21 @@ impl BytesDecoderH264 {
     ///
     /// Calling this from within the provided callback can lead to a deadlock.
     pub fn flush(&mut self) -> Result<(), VideoDecoderError> {
-        self.process_event(DecoderEvent::Flush, None)
+        self.process_event(DecoderEvent::Flush)
     }
 
     /// Process a [`DecoderEvent`]. For most use cases, using [`Self::decode`] and [`Self::flush`] is enough.
     /// Use this only when you need more fine-grained control.
     ///
     /// If the provided event does any decoding operation and [`DecoderParameters::max_in_flight_submissions`](crate::parameters::DecoderParameters::max_in_flight_submissions)
-    /// decode submissions are already in flight, this blocks until all submissions above the limit finish, or times out after `timeout`.
+    /// decode submissions are already in flight, this blocks until all submissions above the limit finish.
     ///
     /// Calling this from within the provided callback can lead to a deadlock.
     pub fn process_event(
         &mut self,
         event: DecoderEvent<'_, AccessUnit>,
-        timeout: Option<Duration>,
     ) -> Result<(), VideoDecoderError> {
-        self.backend
-            .process_event_bytes(event, timeout.unwrap_or(Duration::MAX))
+        self.backend.process_event_bytes(event)
     }
 }
 

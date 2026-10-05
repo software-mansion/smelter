@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use crate::{
     InputFrame, VideoEncoderError, VideoTexture,
     encoders::{VideoEncoderParametersInfoH264, VideoEncoderParametersInfoH265},
@@ -40,10 +38,9 @@ pub(crate) trait WgpuVideoEncoderBackend: Send {
         wgpu_queue: &wgpu::Queue,
         frame: InputFrame<EncodeTexture>,
         force_idr: bool,
-        timeout: Duration,
     ) -> Result<(), VideoEncoderError>;
 
-    fn flush(&mut self, timeout: Duration) -> Result<(), VideoEncoderError>;
+    fn flush(&mut self) -> Result<(), VideoEncoderError>;
 
     fn next_input_texture(
         &mut self,
@@ -93,25 +90,8 @@ impl WgpuTexturesEncoderH264 {
         frame: InputFrame<EncodeTexture>,
         force_keyframe: bool,
     ) -> Result<(), VideoEncoderError> {
-        self.encode_timeout(frame, force_keyframe, Duration::MAX)
-    }
-
-    /// Same as [`Self::encode`], but if [`EncoderOutputParameters::max_in_flight_submissions`](crate::parameters::EncoderOutputParameters::max_in_flight_submissions)
-    /// encode submissions are already in flight, this blocks until all submissions above the limit finish,
-    /// or times out after `timeout`.
-    pub fn encode_timeout(
-        &mut self,
-        frame: InputFrame<EncodeTexture>,
-        force_keyframe: bool,
-        timeout: Duration,
-    ) -> Result<(), VideoEncoderError> {
-        self.backend.encode_texture(
-            &self.wgpu_device,
-            &self.wgpu_queue,
-            frame,
-            force_keyframe,
-            timeout,
-        )
+        self.backend
+            .encode_texture(&self.wgpu_device, &self.wgpu_queue, frame, force_keyframe)
     }
 
     /// Flush all chunks from the encoder.
@@ -119,13 +99,7 @@ impl WgpuTexturesEncoderH264 {
     ///
     /// Calling this from within the provided callback can lead to a deadlock.
     pub fn flush(&mut self) -> Result<(), VideoEncoderError> {
-        self.flush_timeout(Duration::MAX)
-    }
-
-    /// Flush all chunks from the encoder.
-    /// This blocks until all chunks have been sent via the provided callback, or times out after `timeout`.
-    pub fn flush_timeout(&mut self, timeout: Duration) -> Result<(), VideoEncoderError> {
-        self.backend.flush(timeout)
+        self.backend.flush()
     }
 
     /// Retrieve encoded SPS NAL units from the video session parameters, in Annex B.
@@ -176,25 +150,8 @@ impl WgpuTexturesEncoderH265 {
         frame: InputFrame<EncodeTexture>,
         force_keyframe: bool,
     ) -> Result<(), VideoEncoderError> {
-        self.encode_timeout(frame, force_keyframe, Duration::MAX)
-    }
-
-    /// Same as [`Self::encode`], but if [`EncoderOutputParameters::max_in_flight_submissions`](crate::parameters::EncoderOutputParameters::max_in_flight_submissions)
-    /// encode submissions are already in flight, this blocks until all submissions above the limit finish,
-    /// or times out after `timeout`.
-    pub fn encode_timeout(
-        &mut self,
-        frame: InputFrame<EncodeTexture>,
-        force_keyframe: bool,
-        timeout: Duration,
-    ) -> Result<(), VideoEncoderError> {
-        self.backend.encode_texture(
-            &self.wgpu_device,
-            &self.wgpu_queue,
-            frame,
-            force_keyframe,
-            timeout,
-        )
+        self.backend
+            .encode_texture(&self.wgpu_device, &self.wgpu_queue, frame, force_keyframe)
     }
 
     /// Flush all chunks from the encoder.
@@ -202,13 +159,7 @@ impl WgpuTexturesEncoderH265 {
     ///
     /// Calling this from within the provided callback can lead to a deadlock.
     pub fn flush(&mut self) -> Result<(), VideoEncoderError> {
-        self.flush_timeout(Duration::MAX)
-    }
-
-    /// Flush all chunks from the encoder.
-    /// This blocks until all chunks have been sent via the provided callback, or times out after `timeout`.
-    pub fn flush_timeout(&mut self, timeout: Duration) -> Result<(), VideoEncoderError> {
-        self.backend.flush(timeout)
+        self.backend.flush()
     }
 
     /// Retrieve encoded VPS NAL units from the video session parameters, in Annex B.

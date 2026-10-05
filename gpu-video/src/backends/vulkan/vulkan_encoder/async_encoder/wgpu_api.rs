@@ -92,10 +92,9 @@ impl<'a, C: EncodeCodec + 'a> WgpuVideoEncoderBackend for AsyncVulkanEncoder<'a,
         wgpu_queue: &wgpu::Queue,
         frame: InputFrame<EncodeTexture>,
         force_idr: bool,
-        timeout: Duration,
     ) -> Result<(), VideoEncoderError> {
         self.submission_tracker
-            .wait_if_full(timeout)
+            .wait_if_full(Duration::MAX)
             .map_err(VulkanEncoderError::from)?;
 
         let encode_image =
@@ -105,8 +104,8 @@ impl<'a, C: EncodeCodec + 'a> WgpuVideoEncoderBackend for AsyncVulkanEncoder<'a,
         Ok(())
     }
 
-    fn flush(&mut self, timeout: Duration) -> Result<(), VideoEncoderError> {
-        Ok(AsyncVulkanEncoder::flush(self, timeout)?)
+    fn flush(&mut self) -> Result<(), VideoEncoderError> {
+        Ok(AsyncVulkanEncoder::flush(self)?)
     }
 
     fn next_input_texture(
