@@ -115,7 +115,7 @@ impl VulkanDevice {
                     &required_extensions,
                     wgpu_features,
                     &wgpu_limits,
-                    &wgpu::MemoryHints::default(),
+                    &wgpu::MemoryHints::MemoryUsage,
                     wgpu_queue_family_index,
                     0,
                 )
@@ -128,7 +128,7 @@ impl VulkanDevice {
                     wgpu_device,
                     &wgpu::DeviceDescriptor {
                         label: Some("wgpu device created by the vulkan video decoder"),
-                        memory_hints: wgpu::MemoryHints::default(),
+                        memory_hints: wgpu::MemoryHints::MemoryUsage,
                         required_limits: wgpu_limits,
                         required_features: wgpu_features,
                         trace: wgpu::Trace::Off,

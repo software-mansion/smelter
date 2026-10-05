@@ -84,7 +84,7 @@ pub fn create_wgpu_graphics_ctx(
         label: None,
         required_limits: set_required_wgpu_limits(limits),
         required_features,
-        memory_hints: wgpu::MemoryHints::default(),
+        memory_hints: wgpu::MemoryHints::MemoryUsage,
         trace: wgpu::Trace::Off,
         experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
     }))?;
