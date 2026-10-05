@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{collections::VecDeque, time::Duration};
 
 use audioadapter::{Adapter, AdapterMut};
 use rubato::{
@@ -30,55 +30,58 @@ const MAX_STRETCH_RATIO: f64 = 0.04 + 0.001;
 /// - Mono or Stereo `f64` PCM samples.
 ///
 /// Batches generally arrive in PTS order but may have gaps or overlaps; the queue does *not* pad
-/// gaps. `write_batch` pads gaps of at least `SEAM_THRESHOLD` with zeros. Smaller gaps and
-/// overlaps are left to drift control.
+/// gaps.
 ///
 /// ## Outputs (what `get_samples` produces)
 /// Exactly the number of frames at `output_sample_rate` that fit the requested `pts_range`,
 /// padded with silence if the input cannot keep up. We assume that caller will request
 /// pts ranges that is multiple of whole samples.
 ///
-/// ## Data flow
-/// 1. Incoming batches are appended to `resampler_input_buffer` (with gap padding and overlap
-///    drop).
-/// 2. `get_samples` runs `resample()` in a loop, each call moves a fixed `samples_in_batch`
-///    worth of *output* frames from the rubato resampler into `output_buffer`, until
-///    `output_buffer` has enough to satisfy the requested range.
-/// 3. The leading frames of the very first resample (or first after discontinuity) correspond
-///    to filter warmup (samples the resampler hasn't fully "seen" yet); they're discarded via
-///    `ResamplerOutputBuffer::samples_to_drop`.
+/// ## Segments
+/// Input is stored as a list of segments, each one a gap-free run of input. A new batch extends
+/// the last segment, unless there is a gap of at least `SEAM_THRESHOLD` before it, then it starts
+/// a new segment. Smaller gaps and overlaps are left to drift control. Writes never change state.
+///
+/// ## States
+/// Output is produced in batches of `samples_in_batch` frames (one rubato run).
+/// - `Running` — the front segment is played through rubato with drift control. Switches to
+///   `ShouldSync` when the segment has less than 2 batches of input left (a gap follows or input
+///   stopped arriving), or when drift is too large to correct. The last batch is faded out and
+///   rubato is reset.
+/// - `ShouldSync` — nothing is played, output is silent. Input older than the output position is
+///   dropped. Switches to `Running` when the front segment starts within the requested range and
+///   has at least 2 batches of input. Output is padded with zeros up to the segment start and the
+///   first batch is faded in.
+///
+/// Requiring 2 batches of input guarantees that the fade-out always has a full batch.
+///
+/// After a reset, the leading frames of the first batch correspond to filter warmup; they're
+/// discarded via `ResamplerOutputBuffer::samples_to_drop`.
 ///
 /// ## Drift control
-/// Input batches may arrive slightly early or late relative to the output timeline, so the
-/// resampler adjusts its rate to compensate.
+/// Input batches may arrive slightly early or late relative to the output timeline, so while
+/// `Running` the resampler adjusts its rate to compensate.
 ///
-/// Two timestamps drive the stretch/squash decision in `get_samples`:
-/// - `requested_start_pts` — where the next output sample should land (in the mixing clock),
-///   computed from `pts_range.0` plus what's already in `output_buffer`.
-/// - `input_start_pts` — the mixing-clock PTS that the *next* output sample would actually
-///   have if we ran rubato right now. Derived from `input_buffer_start_pts()` minus
-///   `original_output_delay`.
+/// Two timestamps drive the stretch/squash decision:
+/// - `output_pts` — where the next output sample should land (in the mixing clock), computed
+///   from `pts_range.0` plus what's already in `output_buffer`.
+/// - `input_pts` — the mixing-clock PTS that the *next* output sample would actually have if we
+///   ran rubato right now. Derived from the front segment start minus `original_output_delay`.
 ///
-/// Their difference (the "drift") selects one of five branches:
-/// - **gap-fill** — input is far behind: prepend zeros to the input buffer.
+/// Their difference (the "drift") selects one of three branches:
 /// - **stretch** — input is slightly behind: increase the resample ratio.
 /// - **on-time** — drift within dead-band: ratio stays at 1.0.
 /// - **squash** — input is slightly ahead: decrease the resample ratio.
-/// - **drop** — input is far ahead: discard excess input samples.
 ///
-/// Note: because we make the decision per-resample-iteration (not per-batch), we can decide
-/// to squash even if `resampler_input_buffer` doesn't yet contain a full batch — rubato's
-/// partial-resample path handles that.
+/// Drift beyond `STRETCH_THRESHOLD` or `SQUASH_THRESHOLD` switches to `ShouldSync`.
 pub(super) struct InputResampler {
     input_sample_rate: u32,
     output_sample_rate: u32,
     channels: AudioChannels,
 
-    /// Pending input PCM that hasn't been fed to rubato yet. Frames are consumed (drained) from
-    /// the front each time `resample()` runs. May also have zeros pushed to the front (gap-fill
-    /// before first resample, or in the `get_samples` gap branch), zeros pushed to the back (gap
-    /// between batches in `write_batch`) or samples drained from the front (drop branch).
-    resampler_input_buffer: AudioSamplesBuffer,
+    /// Input that hasn't been fed to rubato yet, one entry per gap-free run of input. Only the
+    /// front segment is consumed.
+    segments: VecDeque<InputSegment>,
     /// Fixed-size scratch buffer that rubato writes one batch of output frames into. Owns its
     /// own `samples_to_drop` counter for warmup discarding.
     resampler_output_buffer: ResamplerOutputBuffer,
@@ -94,18 +97,25 @@ pub(super) struct InputResampler {
     /// sample in the input timeline.
     original_output_delay: Duration,
 
-    /// PTS just past the last sample currently held in `resampler_input_buffer`. Updated only in
-    /// `write_batch`. Combined with the buffer's frame count, it lets us compute
-    /// `input_buffer_start_pts()` on demand.
-    input_buffer_end_pts: Timestamp,
+    state: ResamplerState,
+}
 
-    /// Synchronization gate. While true, `get_samples` either serves any frames already in
-    /// `output_buffer` (padded with zeros) when the input is entirely in the future, or aligns
-    /// the input buffer to the requested range (via `maybe_prepare_before_resample`) and *does
-    /// not* engage the stretch/squash logic. Cleared by `resample()`; re-armed by
-    /// `reset_after_discontinuity` so the next `get_samples` re-runs the gate against fresh
-    /// input.
-    needs_input_resync: bool,
+enum ResamplerState {
+    Running,
+    ShouldSync,
+}
+
+struct InputSegment {
+    /// PTS just past the last sample. Start PTS is derived from the frame count, so timestamp
+    /// jitter inside a segment shows up as drift.
+    end_pts: Timestamp,
+    samples: AudioSamplesBuffer,
+}
+
+impl InputSegment {
+    fn start_pts(&self, sample_rate: u32) -> Timestamp {
+        self.end_pts - Duration::from_secs_f64(self.samples.frames() as f64 / sample_rate as f64)
+    }
 }
 
 /// Should be on par with FFT resampler, but more CPU intensive.
@@ -148,9 +158,9 @@ const SQUASH_THRESHOLD: Duration = Duration::from_millis(500);
 /// is audibly bad.
 const STRETCH_THRESHOLD: Duration = Duration::from_millis(40);
 
-/// Minimal gap between consecutive batches that `write_batch` pads with zeros. Smaller gaps are
-/// treated as timestamp jitter and left to drift control. Matches the shortest realistic packet
-/// loss (10ms Opus packet).
+/// Minimal gap between consecutive batches that starts a new segment. Smaller gaps are treated as
+/// timestamp jitter and left to drift control. Matches the shortest realistic packet loss (10ms
+/// Opus packet).
 const SEAM_THRESHOLD: Duration = Duration::from_millis(10);
 
 impl InputResampler {
@@ -211,14 +221,13 @@ impl InputResampler {
             channels,
 
             resampler,
-            resampler_input_buffer: AudioSamplesBuffer::new(channels),
+            segments: VecDeque::new(),
             resampler_output_buffer,
             output_buffer: AudioSamplesBuffer::new(channels),
 
             original_output_delay: default_output_delay,
-            input_buffer_end_pts: Timestamp::ZERO,
 
-            needs_input_resync: true,
+            state: ResamplerState::ShouldSync,
         })
     }
 
@@ -241,13 +250,6 @@ impl InputResampler {
         self.input_sample_rate
     }
 
-    fn input_buffer_start_pts(&self) -> Timestamp {
-        self.input_buffer_end_pts
-            - Duration::from_secs_f64(
-                self.resampler_input_buffer.frames() as f64 / self.input_sample_rate as f64,
-            )
-    }
-
     /// Adjust rubato's resample ratio by a multiplicative factor relative to the nominal
     /// `output_sample_rate / input_sample_rate`. `rel_ratio == 1.0` means "no correction".
     fn set_resample_ratio_relative(&mut self, rel_ratio: f64) {
@@ -258,8 +260,8 @@ impl InputResampler {
         }
     }
 
-    /// Append a newly arrived input batch to `resampler_input_buffer`. A gap of at least
-    /// `SEAM_THRESHOLD` after the buffered input is padded with zeros.
+    /// Append a newly arrived input batch to the last segment, or start a new segment if there
+    /// is a gap of at least `SEAM_THRESHOLD`.
     pub fn write_batch(&mut self, batch: InputAudioSamples) {
         let (start_pts, end_pts) = batch.pts_range();
         trace!(
@@ -269,213 +271,189 @@ impl InputResampler {
             "Resampler received a new batch"
         );
 
-        // If samples overlap too much drop, for lower overlap than 80ms we let squashing handle
-        // that.
-        if start_pts + Duration::from_millis(80) < self.input_buffer_end_pts {
-            debug!("Detected overlapping batches, dropping.");
-            return;
+        if let Some(last) = self.segments.back_mut() {
+            // If samples overlap too much drop, for lower overlap than 80ms we let squashing
+            // handle that.
+            if start_pts + Duration::from_millis(80) < last.end_pts {
+                debug!("Detected overlapping batches, dropping.");
+                return;
+            }
+            if start_pts < last.end_pts + SEAM_THRESHOLD {
+                last.end_pts = end_pts;
+                last.samples.push_back(batch.samples);
+                return;
+            }
+            debug!(gap = ?(start_pts - last.end_pts), "Gap between batches, new segment.");
         }
 
-        // With an empty buffer `input_buffer_end_pts` might be stale, `get_samples` positions
-        // the batch in that case.
-        let gap = start_pts - self.input_buffer_end_pts;
-        if self.resampler_input_buffer.frames() > 0 && gap >= Timestamp::from(SEAM_THRESHOLD) {
-            let gap_samples = (gap.as_secs_f64() * self.input_sample_rate as f64).round() as usize;
-            debug!(?gap, gap_samples, "Gap between batches, padding with zeros.");
-            self.resampler_input_buffer.push_back(match self.channels {
-                AudioChannels::Mono => AudioSamples::Mono(vec![0.0; gap_samples]),
-                AudioChannels::Stereo => AudioSamples::Stereo(vec![(0.0, 0.0); gap_samples]),
-            });
-        }
-
-        // This defines `input_buffer_end_pts()` results
-        self.input_buffer_end_pts = end_pts;
-        self.resampler_input_buffer.push_back(batch.samples);
+        let mut samples = AudioSamplesBuffer::new(self.channels);
+        samples.push_back(batch.samples);
+        self.segments.push_back(InputSegment { end_pts, samples });
     }
 
     /// Produce exactly the number of output frames that fit `pts_range` at `output_sample_rate`.
-    /// The decision-loop body runs once per `samples_in_batch` worth of output frames produced
-    /// (because rubato emits a fixed-output-size batch per call).
     pub fn get_samples(&mut self, pts_range: (Timestamp, Timestamp)) -> AudioSamples {
-        // Initial synchronization on init or after reset
-        if let Some(batch) = self.maybe_prepare_before_resample(pts_range) {
-            return batch; // zeros or flush `self.output_buffer`
-        };
-
         let batch_size = ((pts_range.1 - pts_range.0).as_secs_f64()
             * self.output_sample_rate as f64)
             .round() as usize;
 
         while self.output_buffer.frames() < batch_size {
-            // Where the *next* output sample we still owe should land, accounting for what
-            // we've already produced into `output_buffer`.
-            let requested_start_pts = pts_range.0
+            // Where the *next* output sample should land, accounting for what we've already
+            // produced into `output_buffer`.
+            let output_pts = pts_range.0
                 + Duration::from_secs_f64(
                     self.output_buffer.frames() as f64 / self.output_sample_rate as f64,
                 );
 
-            // PTS of the first timestamp that would be produced from resampler if current input
-            // buffer was resampled. It takes into account that something is already in the
-            // internal buffer.
-            let input_start_pts = self.input_buffer_start_pts() - self.original_output_delay;
-
-            if input_start_pts > requested_start_pts + STRETCH_THRESHOLD {
-                // === GAP-FILL ===
-                // `self.input_buffer_start_pts()` is too much in the future. Too much to try
-                // to stretch, so prepend zeros to input buffer.
-
-                // NOTE: In current implementation this should never happen, because queue
-                // does not allow sending too much ahead. This case will be relevant if we
-                // move resampler to the queue.
-                let gap = input_start_pts - requested_start_pts;
-                let sample_count = (gap.as_secs_f64() * self.input_sample_rate as f64) as usize;
-                let samples = match self.channels {
-                    AudioChannels::Mono => AudioSamples::Mono(vec![0.0; sample_count]),
-                    AudioChannels::Stereo => AudioSamples::Stereo(vec![(0.0, 0.0); sample_count]),
-                };
-                self.resampler_input_buffer.push_front(samples);
-                self.set_resample_ratio_relative(1.0);
-                debug!(
-                    sample_count,
-                    ?gap,
-                    "Input buffer behind, writing zeroes samples"
-                )
-            } else if input_start_pts > requested_start_pts + SHIFT_THRESHOLD {
-                // === STRETCH ===
-                let drift = input_start_pts - requested_start_pts;
-                let drift_ratio = drift.as_secs_f64() / STRETCH_THRESHOLD.as_secs_f64();
-                // multiply by 2.0 so max resampling is reached at the half point
-                // of the stretch limit
-                let ratio = 2.0 * MAX_STRETCH_RATIO * drift_ratio;
-
-                self.set_resample_ratio_relative(1.0 + ratio);
-                trace!(ratio, ?drift, "Input buffer behind, stretching");
-            } else if input_start_pts + SHIFT_THRESHOLD > requested_start_pts {
-                // === ON-TIME (dead-band) ===
-                // |drift| < SHIFT_THRESHOLD; leave the ratio alone.
-                self.set_resample_ratio_relative(1.0);
-                trace!("Input buffer on time");
-            } else if input_start_pts + SQUASH_THRESHOLD > requested_start_pts {
-                // === SQUASH ===
-                let drift = requested_start_pts - input_start_pts;
-                let drift_ratio = drift.as_secs_f64() / SQUASH_THRESHOLD.as_secs_f64();
-                // multiply by 2.0 so max resampling is reached at the half point
-                // of the squash limit
-                let ratio = 2.0 * MAX_STRETCH_RATIO * drift_ratio;
-
-                self.set_resample_ratio_relative(1.0 - ratio);
-                trace!(ratio, ?drift, "Input buffer ahead, squashing");
-            } else {
-                // === DROP ===
-                // `self.input_buffer_start_pts()` is too much "behind" to recover by squashing.
-
-                // TODO: handle discontinuity (same caveat as gap-fill — the filter state is
-                // now stale relative to the post-drop signal).
-                let duration_to_drop = requested_start_pts - input_start_pts;
-                let samples_to_drop =
-                    (duration_to_drop.as_secs_f64() * self.input_sample_rate as f64) as usize;
-                self.resampler_input_buffer.drain_samples(samples_to_drop);
-                self.set_resample_ratio_relative(1.0);
-                debug!(
-                    samples_to_drop,
-                    ?duration_to_drop,
-                    "Input buffer ahead, dropping samples"
-                );
-            }
-
-            // One rubato batch's worth of output frames lands in `output_buffer`. Loop continues
-            // until we have enough — unless the run was partial (input ran out and rubato was
-            // fed zero-padding), in which case we reset the FIR state on this side of the
-            // discontinuity and let `read_samples` pad the shortfall with zeros. The next
-            // `get_samples` re-aligns via the gate.
-            if let ResampleResult::Partial = self.resample() {
-                self.reset_after_discontinuity();
-                break;
+            match self.state {
+                ResamplerState::Running => self.run(output_pts),
+                ResamplerState::ShouldSync => {
+                    if !self.sync(output_pts, pts_range.1) {
+                        break; // `read_samples` pads the rest with zeros
+                    }
+                }
             }
         }
         self.output_buffer.read_samples(batch_size)
     }
 
-    /// Pre-resample synchronization gate. Active while `needs_input_resync` is set
-    /// (initially, and after `reset_after_discontinuity`). Aligns `resampler_input_buffer`
-    /// so its earliest sample's PTS equals `pts_range.0`:
-    fn maybe_prepare_before_resample(
-        &mut self,
-        pts_range: (Timestamp, Timestamp),
-    ) -> Option<AudioSamples> {
-        if !self.needs_input_resync {
-            return None;
+    /// `Running` step: resample one batch with drift control, or switch to `ShouldSync`.
+    fn run(&mut self, output_pts: Timestamp) {
+        let Some(segment) = self.segments.front() else {
+            error!("No input segment while running.");
+            self.switch_to_sync();
+            return;
+        };
+        let input_frames = segment.samples.frames();
+        // PTS of the first sample that would be produced from resampler if current input was
+        // resampled. It takes into account that something is already in the internal buffer.
+        let input_pts = segment.start_pts(self.input_sample_rate) - self.original_output_delay;
+
+        if input_frames < 2 * self.resampler.input_frames_next() {
+            debug!(input_frames, "Input segment ending, switching to sync.");
+            self.switch_to_sync();
+            return;
+        }
+        if input_pts > output_pts + STRETCH_THRESHOLD || input_pts + SQUASH_THRESHOLD < output_pts {
+            debug!(drift = ?(input_pts - output_pts), "Drift too large, switching to sync.");
+            self.switch_to_sync();
+            return;
         }
 
-        // If entire input buffer is in the past
-        // Then drop it, so it is handled like an empty buffer below
-        if self.resampler_input_buffer.frames() > 0 && self.input_buffer_end_pts <= pts_range.0 {
-            trace!(
-                end_pts = ?self.input_buffer_end_pts,
-                "Drop input buffer before first resample"
-            );
-            self.resampler_input_buffer.clear();
+        if input_pts > output_pts + SHIFT_THRESHOLD {
+            // === STRETCH ===
+            let drift = input_pts - output_pts;
+            let drift_ratio = drift.as_secs_f64() / STRETCH_THRESHOLD.as_secs_f64();
+            // multiply by 2.0 so max resampling is reached at the half point
+            // of the stretch limit
+            let ratio = 2.0 * MAX_STRETCH_RATIO * drift_ratio;
+
+            self.set_resample_ratio_relative(1.0 + ratio);
+            trace!(ratio, ?drift, "Input buffer behind, stretching");
+        } else if input_pts + SHIFT_THRESHOLD > output_pts {
+            // === ON-TIME (dead-band) ===
+            self.set_resample_ratio_relative(1.0);
+            trace!("Input buffer on time");
+        } else {
+            // === SQUASH ===
+            let drift = output_pts - input_pts;
+            let drift_ratio = drift.as_secs_f64() / SQUASH_THRESHOLD.as_secs_f64();
+            // multiply by 2.0 so max resampling is reached at the half point
+            // of the squash limit
+            let ratio = 2.0 * MAX_STRETCH_RATIO * drift_ratio;
+
+            self.set_resample_ratio_relative(1.0 - ratio);
+            trace!(ratio, ?drift, "Input buffer ahead, squashing");
         }
 
-        let input_buffer_start_pts = self.input_buffer_start_pts();
+        let batch = self.resample();
+        self.output_buffer.push_back(batch);
+    }
 
-        // If entire input buffer is in the future or input buffer is empty
-        // Then flush output buffer (or return zeros)
-        if self.resampler_input_buffer.frames() == 0 || pts_range.1 <= input_buffer_start_pts {
-            let batch_size = ((pts_range.1 - pts_range.0).as_secs_f64()
-                * self.output_sample_rate as f64)
-                .round() as usize;
-
-            // on first run it will just return zeros, but after discontinuity
-            // it might flush rest of previous run
-            return Some(self.output_buffer.read_samples(batch_size));
+    /// `ShouldSync` step: drop input older than `output_pts` and switch to `Running` if the front
+    /// segment can start before `end_pts`. Returns false if there is nothing to play yet.
+    fn sync(&mut self, output_pts: Timestamp, end_pts: Timestamp) -> bool {
+        while let Some(segment) = self.segments.front_mut() {
+            if segment.end_pts <= output_pts {
+                trace!(end_pts = ?segment.end_pts, "Drop input segment from the past");
+                self.segments.pop_front();
+                continue;
+            }
+            let start_pts = segment.start_pts(self.input_sample_rate);
+            if start_pts < output_pts {
+                let duration = output_pts - start_pts;
+                let samples = (duration.as_secs_f64() * self.input_sample_rate as f64) as usize;
+                trace!(samples, ?duration, "Drop input samples from the past");
+                segment.samples.drain_samples(samples);
+            }
+            break;
         }
 
-        // If input buffer starts in the middle of requested ranges
-        // Then pad with zeros at the front of input buffer
-        if pts_range.0 < input_buffer_start_pts && input_buffer_start_pts < pts_range.1 {
-            let duration = input_buffer_start_pts - pts_range.0;
-            let samples = (duration.as_secs_f64() * self.input_sample_rate as f64) as usize;
-            let batch = match self.channels {
-                AudioChannels::Mono => AudioSamples::Mono(vec![0.0; samples]),
-                AudioChannels::Stereo => AudioSamples::Stereo(vec![(0.0, 0.0); samples]),
-            };
+        let Some(segment) = self.segments.front() else {
+            return false;
+        };
+        let start_pts = segment.start_pts(self.input_sample_rate);
+        if start_pts >= end_pts || segment.samples.frames() < 2 * self.resampler.input_frames_next()
+        {
+            return false;
+        }
+
+        // Pad output with zeros, so the first sample of the segment lands at its PTS.
+        if start_pts > output_pts {
+            let duration = start_pts - output_pts;
+            let samples =
+                (duration.as_secs_f64() * self.output_sample_rate as f64).round() as usize;
             trace!(
                 samples,
                 ?duration,
-                "Add zero samples at the initial resample"
+                "Pad output up to the input segment start"
             );
-            self.resampler_input_buffer.push_front(batch);
-            return None;
+            self.output_buffer.push_back(match self.channels {
+                AudioChannels::Mono => AudioSamples::Mono(vec![0.0; samples]),
+                AudioChannels::Stereo => AudioSamples::Stereo(vec![(0.0, 0.0); samples]),
+            });
         }
-
-        // If input buffer start before requested range
-        // Then drop samples that are too older
-        if pts_range.0 > input_buffer_start_pts {
-            // Drop too-old samples so the buffer starts at `pts_range.0`.
-            let duration = pts_range.0 - input_buffer_start_pts;
-            let samples = (duration.as_secs_f64() * self.input_sample_rate as f64) as usize;
-            trace!(samples, ?duration, "Drain samples before first resample");
-            self.resampler_input_buffer.drain_samples(samples);
-            return None;
-        }
-
-        None
+        self.switch_to_running();
+        true
     }
 
-    /// Run rubato once: feed input from `resampler_input_buffer`, push a batch of output frames
-    /// onto `output_buffer`, and clear `needs_input_resync`.
-    fn resample(&mut self) -> ResampleResult {
-        self.needs_input_resync = false;
+    /// Rubato was reset, so the first batch is faded in.
+    fn switch_to_running(&mut self) {
+        let mut batch = self.resample();
+        fade(&mut batch, Fade::In);
+        self.output_buffer.push_back(batch);
+        self.state = ResamplerState::Running;
+    }
+
+    /// The last batch is faded out, so dropping rubato's internal state is silent.
+    fn switch_to_sync(&mut self) {
+        let mut batch = self.resample();
+        fade(&mut batch, Fade::Out);
+        self.output_buffer.push_back(batch);
+        self.resampler.reset();
+        self.resampler_output_buffer.samples_to_drop = self.resampler.output_delay();
+        self.state = ResamplerState::ShouldSync;
+    }
+
+    /// Run rubato once on the front segment and return one batch of output frames.
+    fn resample(&mut self) -> AudioSamples {
+        let Some(segment) = self.segments.front_mut() else {
+            error!("No input segment to resample.");
+            return match self.channels {
+                AudioChannels::Mono => AudioSamples::Mono(Vec::new()),
+                AudioChannels::Stereo => AudioSamples::Stereo(Vec::new()),
+            };
+        };
         let missing_input_samples = self
             .resampler
             .input_frames_next()
-            .saturating_sub(self.resampler_input_buffer.frames());
+            .saturating_sub(segment.samples.frames());
 
+        // Should not happen, states switch before input runs out.
         let indexing = match missing_input_samples > 0 {
             true => {
-                let partial_len = self.resampler_input_buffer.frames();
-                debug!(partial_len, "Input buffer to small, partial resampling");
+                let partial_len = segment.samples.frames();
+                warn!(partial_len, "Input buffer to small, partial resampling");
                 Some(Indexing {
                     input_offset: 0,
                     output_offset: 0,
@@ -486,7 +464,7 @@ impl InputResampler {
             false => None,
         };
         let (consumed_samples, generated_samples) = match self.resampler.process_into_buffer(
-            &self.resampler_input_buffer,
+            &segment.samples,
             &mut self.resampler_output_buffer,
             indexing.as_ref(),
         ) {
@@ -500,7 +478,7 @@ impl InputResampler {
             }
         };
 
-        self.resampler_input_buffer.drain_samples(consumed_samples);
+        segment.samples.drain_samples(consumed_samples);
         if generated_samples != self.resampler_output_buffer.frames() {
             error!(
                 expected = self.resampler_output_buffer.frames(),
@@ -508,35 +486,35 @@ impl InputResampler {
                 "Resampler generated wrong amount of samples"
             )
         }
-        self.output_buffer
-            .push_back(self.resampler_output_buffer.get_samples());
-
-        if missing_input_samples > 0 {
-            ResampleResult::Partial
-        } else {
-            ResampleResult::Full
-        }
-    }
-
-    /// Reset state that becomes invalid across an input discontinuity
-    /// - `resampler` — clears rubato's internal sample buffer and FIR history so the next batch
-    ///   isn't convolved against pre-gap audio. `reset()` also restores rubato's ratio to its
-    ///   original value;
-    /// - `resampler_output_buffer.samples_to_drop` — re-arm the warmup discard so the next read
-    ///   skips the freshly re-introduced `output_delay` worth of meaningless filter prefix.
-    /// - `needs_input_resync` — re-engage `maybe_prepare_before_resample` so the next
-    ///   `get_samples` call realigns the (now empty) input buffer against the requested PTS
-    ///   range before resampling.
-    fn reset_after_discontinuity(&mut self) {
-        self.resampler.reset();
-        self.resampler_output_buffer.samples_to_drop = self.resampler.output_delay();
-        self.needs_input_resync = true;
+        self.resampler_output_buffer.get_samples()
     }
 }
 
-enum ResampleResult {
-    Full,
-    Partial,
+enum Fade {
+    In,
+    Out,
+}
+
+/// Multiply samples by a linear ramp, 0 to 1 for `Fade::In`, 1 to 0 for `Fade::Out`.
+fn fade(samples: &mut AudioSamples, fade: Fade) {
+    let len = samples.len() as f64;
+    let gain = |i: usize| match fade {
+        Fade::In => i as f64 / len,
+        Fade::Out => 1.0 - (i + 1) as f64 / len,
+    };
+    match samples {
+        AudioSamples::Mono(samples) => {
+            for (i, sample) in samples.iter_mut().enumerate() {
+                *sample *= gain(i);
+            }
+        }
+        AudioSamples::Stereo(samples) => {
+            for (i, (l, r)) in samples.iter_mut().enumerate() {
+                *l *= gain(i);
+                *r *= gain(i);
+            }
+        }
+    }
 }
 
 /// Fixed-size scratch buffer that rubato writes into.
@@ -546,8 +524,8 @@ enum ResampleResult {
 /// calls into.
 ///
 /// `samples_to_drop` is non-zero whenever the *next* read should skip a leading prefix — set on
-/// construction (initial filter warmup) and again after partial-resample runs (effective
-/// re-warming).
+/// construction (initial filter warmup) and again after every rubato reset (switch to
+/// `ShouldSync`).
 #[derive(Debug)]
 struct ResamplerOutputBuffer {
     buffer: AudioSamples,
