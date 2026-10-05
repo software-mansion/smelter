@@ -563,10 +563,17 @@ impl Image {
         allocator: Arc<Allocator>,
         image_create_info: &vk::ImageCreateInfo,
         tracker: Arc<Mutex<ImageLayoutTracker>>,
+        use_dedicated_memory_block: bool,
     ) -> Result<Self, VulkanCommonError> {
         let extent = image_create_info.extent;
+        let alloc_flags = if use_dedicated_memory_block {
+            vk_mem::AllocationCreateFlags::DEDICATED_MEMORY
+        } else {
+            vk_mem::AllocationCreateFlags::empty()
+        };
         let alloc_info = vk_mem::AllocationCreateInfo {
             usage: vk_mem::MemoryUsage::Auto,
+            flags: alloc_flags,
             ..Default::default()
         };
 
@@ -617,7 +624,7 @@ impl Image {
             .flags(vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE)
             .push_next(&mut profile_list_info);
 
-        Self::new(device.allocator.clone(), &encode_image_info, tracker)
+        Self::new(device.allocator.clone(), &encode_image_info, tracker, false)
     }
 
     pub(crate) fn transition_layout_raw(
