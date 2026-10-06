@@ -252,7 +252,9 @@ fn encoders_from_params(
     let create_output_callback = move |output_index| {
         let on_chunk_callback = on_chunk_callback.clone();
         Box::new(move |chunk| {
-            let mut callback = on_chunk_callback.lock().unwrap();
+            let Ok(mut callback) = on_chunk_callback.lock() else {
+                return;
+            };
             (callback)(TranscodedChunk {
                 output_index,
                 chunk,

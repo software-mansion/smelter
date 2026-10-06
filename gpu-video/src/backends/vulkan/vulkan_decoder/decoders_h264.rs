@@ -158,7 +158,9 @@ impl VideoDecoderBackend for VulkanBytesDecoderH264 {
             self.submission_tracker
                 .add_wait_request(semaphore_wait_value, move || {
                     command_buffer_pools.mark_submitted_as_free(semaphore_wait_value);
-                    let mut output = output.lock().unwrap();
+                    let Ok(mut output) = output.lock() else {
+                        return;
+                    };
                     let frame = match VulkanBytesDecoderH264::download_frame(frame) {
                         Ok(frame) => frame,
                         Err(err) => {
