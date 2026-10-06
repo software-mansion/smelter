@@ -250,7 +250,7 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
         let encode_failed = self.encode_failed.clone();
 
         self.submission_tracker
-            .add_wait_request(decode_wait_value, move || {
+            .submit(Duration::MAX, decode_wait_value, move || {
                 // ugh
                 command_buffer_pools
                     .encode

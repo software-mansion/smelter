@@ -24,6 +24,8 @@ pub(crate) mod encoders;
 mod frame_sorter;
 #[cfg(all(supported, feature = "wgpu"))]
 mod global_registry;
+#[cfg(vulkan)]
+mod in_flight_tracker;
 #[cfg(supported)]
 mod instance;
 #[cfg(all(supported, feature = "transcoder"))]

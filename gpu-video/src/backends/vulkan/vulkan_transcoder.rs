@@ -165,7 +165,7 @@ impl VulkanTranscoder {
                     .run(&mut frame, cropped_extent, &mut self.encoders)?;
 
             self.resize_submission_tracker
-                .add_wait_request(output.wait_value, move || {
+                .submit(Duration::MAX, output.wait_value, move || {
                     if let Some(query) = frame.result_query.take()
                         && let Err(err) = query.check_results_blocking()
                     {
