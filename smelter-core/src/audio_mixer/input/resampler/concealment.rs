@@ -10,7 +10,10 @@ const HISTORY_DURATION: Duration = Duration::from_millis(20);
 const LPC_ORDER: usize = 16;
 
 /// Generated signal fades to silence over this duration.
-const DECAY_DURATION: Duration = Duration::from_millis(10);
+const DECAY_DURATION: Duration = Duration::from_millis(5);
+
+/// History ending below this level (about -100 dBFS) is treated as silence.
+const SILENCE_THRESHOLD: f64 = 1e-5;
 
 /// Last `HISTORY_DURATION` of real input samples. Never contains padding or generated samples,
 /// so it has to be cleared on every discontinuity.
@@ -63,72 +66,40 @@ impl ConcealmentHistory {
             HistorySamples::Stereo(history) => history.clear(),
         }
     }
-}
 
-/// Continues the signal from `ConcealmentHistory` by running an LPC synthesis filter with zero
-/// excitation, faded out to silence over `DECAY_DURATION`.
-pub(super) struct Concealment {
-    predictors: Predictors,
-    /// Frames generated so far, position in the decay window.
-    generated: usize,
-    decay_len: usize,
-}
-
-enum Predictors {
-    Mono(LpcPredictor),
-    Stereo(LpcPredictor, LpcPredictor),
-}
-
-impl Concealment {
-    /// Returns `None` if history is too short to fit the model.
-    pub fn new(history: &ConcealmentHistory) -> Option<Self> {
-        let predictors = match &history.samples {
+    /// Extrapolate the signal past the end of history by running an LPC synthesis filter with
+    /// zero excitation, faded out over `DECAY_DURATION`. The last generated frame is exactly
+    /// zero.
+    ///
+    /// Returns `None` if history is too short to fit the model or ends in silence.
+    pub fn conceal(&self) -> Option<AudioSamples> {
+        let len = (DECAY_DURATION.as_secs_f64() * self.sample_rate as f64).round() as usize;
+        // Half of a raised cosine, reaches 0.0 at the last frame.
+        let gain = |i: usize| 0.5 * (1.0 + (PI * (i + 1) as f64 / len as f64).cos());
+        match &self.samples {
             HistorySamples::Mono(samples) => {
-                Predictors::Mono(LpcPredictor::fit(samples.iter().copied().collect())?)
+                let mut predictor = LpcPredictor::fit(samples.iter().copied().collect())?;
+                if predictor.is_silent() {
+                    return None;
+                }
+                Some(AudioSamples::Mono(
+                    (0..len).map(|i| predictor.next() * gain(i)).collect(),
+                ))
             }
-            HistorySamples::Stereo(samples) => Predictors::Stereo(
-                LpcPredictor::fit(samples.iter().map(|(l, _)| *l).collect())?,
-                LpcPredictor::fit(samples.iter().map(|(_, r)| *r).collect())?,
-            ),
-        };
-        let decay_len =
-            (DECAY_DURATION.as_secs_f64() * history.sample_rate as f64).round() as usize;
-        Some(Self {
-            predictors,
-            generated: 0,
-            decay_len,
-        })
-    }
-
-    /// Generate next `frames` frames. Returns zeros once the decay is finished.
-    pub fn next(&mut self, frames: usize) -> AudioSamples {
-        let start = self.generated;
-        let decay_len = self.decay_len;
-        self.generated += frames;
-        let gain = |i: usize| decay_gain(start + i, decay_len);
-        match &mut self.predictors {
-            Predictors::Mono(predictor) => {
-                AudioSamples::Mono((0..frames).map(|i| predictor.next() * gain(i)).collect())
+            HistorySamples::Stereo(samples) => {
+                let mut left = LpcPredictor::fit(samples.iter().map(|(l, _)| *l).collect())?;
+                let mut right = LpcPredictor::fit(samples.iter().map(|(_, r)| *r).collect())?;
+                if left.is_silent() && right.is_silent() {
+                    return None;
+                }
+                Some(AudioSamples::Stereo(
+                    (0..len)
+                        .map(|i| (left.next() * gain(i), right.next() * gain(i)))
+                        .collect(),
+                ))
             }
-            Predictors::Stereo(left, right) => AudioSamples::Stereo(
-                (0..frames)
-                    .map(|i| (left.next() * gain(i), right.next() * gain(i)))
-                    .collect(),
-            ),
         }
     }
-
-    pub fn is_exhausted(&self) -> bool {
-        self.generated >= self.decay_len
-    }
-}
-
-/// Half of a raised cosine, from 1.0 at frame 0 to 0.0 at `decay_len`.
-fn decay_gain(frame: usize, decay_len: usize) -> f64 {
-    if frame >= decay_len {
-        return 0.0;
-    }
-    0.5 * (1.0 + (PI * frame as f64 / decay_len as f64).cos())
 }
 
 struct LpcPredictor {
@@ -169,6 +140,11 @@ impl LpcPredictor {
             coefficients,
             memory,
         })
+    }
+
+    /// With zero excitation silent memory produces silent output.
+    fn is_silent(&self) -> bool {
+        self.memory.iter().all(|s| s.abs() < SILENCE_THRESHOLD)
     }
 
     fn next(&mut self) -> f64 {
