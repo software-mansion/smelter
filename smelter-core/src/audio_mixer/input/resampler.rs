@@ -324,14 +324,29 @@ impl InputResampler {
             } else {
                 // === DROP ===
                 // `self.input_buffer_start_pts()` is too much "behind" to recover by squashing.
-
-                // TODO: handle discontinuity (same caveat as gap-fill — the filter state is
-                // now stale relative to the post-drop signal).
+                // Skip input to catch up, joining both sides of the cut with a crossfade.
                 let samples_to_drop =
                     (drift.as_secs_f64().abs() * self.input_sample_rate as f64) as usize;
-                self.resampler_input_buffer.drain_samples(samples_to_drop);
+                match splice::drop_frames(
+                    &mut self.resampler_input_buffer,
+                    samples_to_drop,
+                    self.input_sample_rate,
+                ) {
+                    Some(dropped) => {
+                        debug!(
+                            samples_to_drop,
+                            dropped, "Input buffer ahead, dropping samples"
+                        )
+                    }
+                    None => {
+                        // Nothing to join with. Fade out, run-out path flushes the rest. History
+                        // isn't contiguous with the faded out input anymore.
+                        splice::fade_out(&mut self.resampler_input_buffer, self.input_sample_rate);
+                        self.history.clear();
+                        debug!(samples_to_drop, "Input buffer ahead, dropping all samples");
+                    }
+                }
                 self.resampler.set_resample_ratio_relative(1.0);
-                debug!(samples_to_drop, "Input buffer ahead, dropping samples");
             }
 
             // Input runs out, extend it with concealment and flush all of it now. Output beyond
@@ -702,6 +717,7 @@ impl Adapter<'_, f64> for ResamplerOutputBuffer {
 }
 
 mod concealment;
+mod splice;
 
 #[cfg(test)]
 mod equal_sample_rate_tests;
