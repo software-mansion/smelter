@@ -11,6 +11,8 @@ use crate::{
     AudioChannels, AudioSamples, Timestamp, prelude::InputAudioSamples, utils::AudioSamplesBuffer,
 };
 
+use concealment::ConcealmentHistory;
+
 // Maximum *relative* deviation from the nominal resample ratio that we are willing to apply
 // when stretching/squashing to correct drift. Rubato's `Async::new_sinc` is initialized with
 // a static `max_resample_ratio_relative` of `1.0 + MAX_STRETCH_RATIO` (see
@@ -98,6 +100,10 @@ pub(super) struct InputResampler {
     /// `write_batch`. Combined with the buffer's frame count, it lets us compute
     /// `input_buffer_start_pts()` on demand.
     input_buffer_end_pts: Timestamp,
+
+    /// Tail of the real input written via `write_batch`, source for concealment. Cleared on every
+    /// discontinuity.
+    history: ConcealmentHistory,
 
     /// Synchronization gate. While true, `get_samples` either serves any frames already in
     /// `output_buffer` (padded with zeros) when the input is entirely in the future, or aligns
@@ -218,6 +224,8 @@ impl InputResampler {
             original_output_delay: default_output_delay,
             input_buffer_end_pts: Timestamp::ZERO,
 
+            history: ConcealmentHistory::new(channels, input_sample_rate),
+
             needs_input_resync: true,
         })
     }
@@ -276,20 +284,29 @@ impl InputResampler {
             return;
         }
 
-        // With an empty buffer `input_buffer_end_pts` might be stale, `get_samples` positions
-        // the batch in that case.
         let gap = start_pts - self.input_buffer_end_pts;
-        if self.resampler_input_buffer.frames() > 0 && gap >= Timestamp::from(SEAM_THRESHOLD) {
-            let gap_samples = (gap.as_secs_f64() * self.input_sample_rate as f64).round() as usize;
-            debug!(?gap, gap_samples, "Gap between batches, padding with zeros.");
-            self.resampler_input_buffer.push_back(match self.channels {
-                AudioChannels::Mono => AudioSamples::Mono(vec![0.0; gap_samples]),
-                AudioChannels::Stereo => AudioSamples::Stereo(vec![(0.0, 0.0); gap_samples]),
-            });
+        if gap >= Timestamp::from(SEAM_THRESHOLD) {
+            self.history.clear();
+
+            // With an empty buffer `input_buffer_end_pts` might be stale, `get_samples` positions
+            // the batch in that case.
+            if self.resampler_input_buffer.frames() > 0 {
+                let gap_samples =
+                    (gap.as_secs_f64() * self.input_sample_rate as f64).round() as usize;
+                debug!(
+                    ?gap,
+                    gap_samples, "Gap between batches, padding with zeros."
+                );
+                self.resampler_input_buffer.push_back(match self.channels {
+                    AudioChannels::Mono => AudioSamples::Mono(vec![0.0; gap_samples]),
+                    AudioChannels::Stereo => AudioSamples::Stereo(vec![(0.0, 0.0); gap_samples]),
+                });
+            }
         }
 
         // This defines `input_buffer_end_pts()` results
         self.input_buffer_end_pts = end_pts;
+        self.history.push(&batch.samples);
         self.resampler_input_buffer.push_back(batch.samples);
     }
 
@@ -415,6 +432,7 @@ impl InputResampler {
                 "Drop input buffer before first resample"
             );
             self.resampler_input_buffer.clear();
+            self.history.clear();
         }
 
         let input_buffer_start_pts = self.input_buffer_start_pts();
@@ -527,10 +545,12 @@ impl InputResampler {
     /// - `needs_input_resync` — re-engage `maybe_prepare_before_resample` so the next
     ///   `get_samples` call realigns the (now empty) input buffer against the requested PTS
     ///   range before resampling.
+    /// - `history` — next batch won't be contiguous with recorded input.
     fn reset_after_discontinuity(&mut self) {
         self.resampler.reset();
         self.resampler_output_buffer.samples_to_drop = self.resampler.output_delay();
         self.needs_input_resync = true;
+        self.history.clear();
     }
 }
 
@@ -637,6 +657,10 @@ impl Adapter<'_, f64> for ResamplerOutputBuffer {
         self.buffer.len()
     }
 }
+
+// TODO: remove `allow` once concealment is used by the resampler.
+#[allow(dead_code)]
+mod concealment;
 
 #[cfg(test)]
 mod equal_sample_rate_tests;
