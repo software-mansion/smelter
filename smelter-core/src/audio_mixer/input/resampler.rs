@@ -240,16 +240,23 @@ impl InputResampler {
 
     /// Produce exactly the number of output frames that fit `pts_range` at `output_sample_rate`.
     pub fn get_samples(&mut self, pts_range: (Timestamp, Timestamp)) -> AudioSamples {
-        if self.needs_input_resync {
-            if let Some(samples) = self.try_resync_after_discontinuity(pts_range) {
-                return samples;
-            }
-            self.needs_input_resync = false;
-        }
-
         let batch_size = ((pts_range.1 - pts_range.0).as_secs_f64()
             * self.output_sample_rate as f64)
             .round() as usize;
+
+        if self.needs_input_resync {
+            // Output left in `output_buffer` (e.g. flushed before discontinuity) plays first,
+            // input continues after it. Unlike drift control, output delay doesn't need to be
+            // accounted for: rubato was reset, so its warmup samples are cut off.
+            let start_pts = pts_range.0
+                + Duration::from_secs_f64(
+                    self.output_buffer.frames() as f64 / self.output_sample_rate as f64,
+                );
+            if self.try_resync_after_discontinuity(start_pts, pts_range.1) {
+                self.needs_input_resync = false;
+            }
+        }
+
         // Stops early on discontinuity (gap or input ran out), the next call resyncs.
         while !self.needs_input_resync && self.output_buffer.frames() < batch_size {
             self.resample_with_drift_control(pts_range);
@@ -368,15 +375,12 @@ impl InputResampler {
 
     /// Pre-resample synchronization gate, called while `needs_input_resync` is set (initially,
     /// and after `reset_after_discontinuity`). Aligns `resampler_input_buffer` so its earliest
-    /// sample's PTS equals `pts_range.0`. Returns samples to output instead (zeros or flush of
-    /// `output_buffer`) if there is no input to align yet.
-    fn try_resync_after_discontinuity(
-        &mut self,
-        pts_range: (Timestamp, Timestamp),
-    ) -> Option<AudioSamples> {
+    /// sample's PTS equals `start_pts`, where the next output sample lands. Returns false if
+    /// there is no input to start before `end_pts` (end of the requested range) yet.
+    fn try_resync_after_discontinuity(&mut self, start_pts: Timestamp, end_pts: Timestamp) -> bool {
         // If entire input buffer is in the past
         // Then drop it, so it is handled like an empty buffer below
-        if self.resampler_input_buffer.frames() > 0 && self.input_buffer_end_pts <= pts_range.0 {
+        if self.resampler_input_buffer.frames() > 0 && self.input_buffer_end_pts <= start_pts {
             trace!(
                 end_pts = ?self.input_buffer_end_pts,
                 "Drop input buffer before first resample"
@@ -388,21 +392,15 @@ impl InputResampler {
         let input_buffer_start_pts = self.input_buffer_start_pts();
 
         // If entire input buffer is in the future or input buffer is empty
-        // Then flush output buffer (or return zeros)
-        if self.resampler_input_buffer.frames() == 0 || pts_range.1 <= input_buffer_start_pts {
-            let batch_size = ((pts_range.1 - pts_range.0).as_secs_f64()
-                * self.output_sample_rate as f64)
-                .round() as usize;
-
-            // on first run it will just return zeros, but after discontinuity
-            // it might flush rest of previous run
-            return Some(self.output_buffer.read_samples(batch_size));
+        // Then wait, caller outputs what is left in `output_buffer` (or zeros)
+        if self.resampler_input_buffer.frames() == 0 || end_pts <= input_buffer_start_pts {
+            return false;
         }
 
-        // If input buffer starts in the middle of requested ranges
+        // If input buffer starts after `start_pts` (but before `end_pts`)
         // Then pad with zeros at the front of input buffer
-        if pts_range.0 < input_buffer_start_pts && input_buffer_start_pts < pts_range.1 {
-            let duration = input_buffer_start_pts - pts_range.0;
+        if start_pts < input_buffer_start_pts {
+            let duration = input_buffer_start_pts - start_pts;
             let samples = (duration.as_secs_f64() * self.input_sample_rate as f64) as usize;
             let batch = match self.channels {
                 AudioChannels::Mono => AudioSamples::Mono(vec![0.0; samples]),
@@ -414,21 +412,20 @@ impl InputResampler {
                 "Add zero samples at the initial resample"
             );
             self.resampler_input_buffer.push_front(batch);
-            return None;
+            return true;
         }
 
-        // If input buffer start before requested range
-        // Then drop samples that are too older
-        if pts_range.0 > input_buffer_start_pts {
-            // Drop too-old samples so the buffer starts at `pts_range.0`.
-            let duration = pts_range.0 - input_buffer_start_pts;
+        // If input buffer start before `start_pts`
+        // Then drop samples that are too old
+        if start_pts > input_buffer_start_pts {
+            // Drop too-old samples so the buffer starts at `start_pts`.
+            let duration = start_pts - input_buffer_start_pts;
             let samples = (duration.as_secs_f64() * self.input_sample_rate as f64) as usize;
             trace!(samples, ?duration, "Drain samples before first resample");
             self.resampler_input_buffer.drain_samples(samples);
-            return None;
         }
 
-        None
+        true
     }
 
     /// Extend the input with concealment, flush all of it through the resampler into
