@@ -43,7 +43,7 @@ impl Drop for WaiterThreadHandle {
 
         self.shared.should_quit.store(true, Ordering::Relaxed);
         self.shared.waker_semaphore.wake().unwrap();
-        handle.join().unwrap()
+        handle.join().unwrap();
     }
 }
 
@@ -60,15 +60,13 @@ impl WaiterThread {
             waker_semaphore: WakerSemaphore::new(device.clone())?,
         });
 
-        let shared_state_clone = shared_state.clone();
         let handle = std::thread::Builder::new()
             .name("gpu-video: submission waiter thread".to_string())
-            .spawn(move || {
-                WaiterThread {
-                    shared: shared_state_clone,
-                    device,
+            .spawn({
+                let shared = shared_state.clone();
+                move || {
+                    WaiterThread { shared, device }.run();
                 }
-                .run();
             })
             .unwrap();
 
@@ -151,6 +149,12 @@ pub(crate) struct SubmissionTracker {
 
     max_in_flight: usize,
     in_flight: VecDeque<Receiver<()>>,
+}
+
+impl Drop for SubmissionTracker {
+    fn drop(&mut self) {
+        self.wait_for_all(Duration::MAX).unwrap();
+    }
 }
 
 impl SubmissionTracker {
