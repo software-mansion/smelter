@@ -8,7 +8,9 @@ use rubato::{
 use tracing::{debug, error, trace, warn};
 
 use crate::{
-    AudioChannels, AudioSamples, Timestamp, prelude::InputAudioSamples, utils::AudioSamplesBuffer,
+    AudioChannels, AudioSamples, Timestamp,
+    audio_mixer::input::resampler::splice::CROSSFADE_DURATION, prelude::InputAudioSamples,
+    utils::AudioSamplesBuffer,
 };
 
 use concealment::ConcealmentHistory;
@@ -250,130 +252,130 @@ impl InputResampler {
             }
             self.needs_input_resync = false;
         }
-        self.resample_with_drift_control(pts_range)
-    }
 
-    /// The decision-loop body runs once per `samples_in_batch` worth of output frames produced
-    /// (because rubato emits a fixed-output-size batch per call).
-    fn resample_with_drift_control(&mut self, pts_range: (Timestamp, Timestamp)) -> AudioSamples {
         let batch_size = ((pts_range.1 - pts_range.0).as_secs_f64()
             * self.output_sample_rate as f64)
             .round() as usize;
-
-        while self.output_buffer.frames() < batch_size {
-            // Where the *next* output sample we still owe should land, accounting for what
-            // we've already produced into `output_buffer`.
-            let requested_start_pts = pts_range.0
-                + Duration::from_secs_f64(
-                    self.output_buffer.frames() as f64 / self.output_sample_rate as f64,
-                );
-
-            // PTS of the first timestamp that would be produced from resampler if current input
-            // buffer was resampled. It takes into account that something is already in the
-            // internal buffer.
-            let input_start_pts = self.input_buffer_start_pts() - self.resampler.output_delay();
-
-            // Positive if input starts after the requested point (stretch), negative if before
-            // (squash).
-            let drift = input_start_pts - requested_start_pts;
-
-            if drift > STRETCH_THRESHOLD {
-                // === GAP-FILL ===
-                // `self.input_buffer_start_pts()` is too much in the future. Too much to try
-                // to stretch, so prepend zeros to input buffer.
-
-                // NOTE: In current implementation this should never happen, because queue
-                // does not allow sending too much ahead. This case will be relevant if we
-                // move resampler to the queue.
-                let sample_count = (drift.as_secs_f64() * self.input_sample_rate as f64) as usize;
-                let samples = match self.channels {
-                    AudioChannels::Mono => AudioSamples::Mono(vec![0.0; sample_count]),
-                    AudioChannels::Stereo => AudioSamples::Stereo(vec![(0.0, 0.0); sample_count]),
-                };
-                self.resampler_input_buffer.push_front(samples);
-                self.resampler.set_resample_ratio_relative(1.0);
-                debug!(
-                    sample_count,
-                    ?drift,
-                    "Input buffer behind, writing zeroes samples"
-                )
-            } else if drift > SHIFT_THRESHOLD {
-                // === STRETCH ===
-                let drift_ratio = drift.as_secs_f64() / STRETCH_THRESHOLD.as_secs_f64();
-                // multiply by 2.0 so max resampling is reached at the half point
-                // of the stretch limit
-                let ratio = 2.0 * MAX_STRETCH_RATIO * drift_ratio;
-
-                self.resampler.set_resample_ratio_relative(1.0 + ratio);
-                trace!(ratio, ?drift, "Input buffer behind, stretching");
-            } else if drift > -SHIFT_THRESHOLD {
-                // === ON-TIME (dead-band) ===
-                // |drift| < SHIFT_THRESHOLD; leave the ratio alone.
-                self.resampler.set_resample_ratio_relative(1.0);
-                trace!("Input buffer on time");
-            } else if drift > -SQUASH_THRESHOLD {
-                // === SQUASH ===
-                // `drift` is negative, so is the ratio.
-                let drift_ratio = drift.as_secs_f64() / SQUASH_THRESHOLD.as_secs_f64();
-                // multiply by 2.0 so max resampling is reached at the half point
-                // of the squash limit
-                let ratio = 2.0 * MAX_STRETCH_RATIO * drift_ratio;
-
-                self.resampler.set_resample_ratio_relative(1.0 + ratio);
-                trace!(ratio, ?drift, "Input buffer ahead, squashing");
-            } else {
-                // === DROP ===
-                // `self.input_buffer_start_pts()` is too much "behind" to recover by squashing.
-                // Skip input to catch up, joining both sides of the cut with a crossfade.
-                let samples_to_drop =
-                    (drift.as_secs_f64().abs() * self.input_sample_rate as f64) as usize;
-                match splice::drop_frames(
-                    &mut self.resampler_input_buffer,
-                    samples_to_drop,
-                    self.input_sample_rate,
-                ) {
-                    Some(dropped) => {
-                        debug!(
-                            samples_to_drop,
-                            dropped, "Input buffer ahead, dropping samples"
-                        )
-                    }
-                    None => {
-                        // Nothing to join with. Fade out, run-out path flushes the rest. History
-                        // isn't contiguous with the faded out input anymore.
-                        splice::fade_out(&mut self.resampler_input_buffer, self.input_sample_rate);
-                        self.history.clear();
-                        debug!(samples_to_drop, "Input buffer ahead, dropping all samples");
-                    }
-                }
-                self.resampler.set_resample_ratio_relative(1.0);
-            }
-
-            // Input runs out, extend it with concealment and flush all of it now. Output beyond
-            // this request stays in `output_buffer`, `read_samples` pads the shortfall with
-            // zeros. Leftover input would be misplaced by the gate, `input_buffer_end_pts`
-            // doesn't cover concealment.
-            if self.resampler_input_buffer.frames() < self.resampler.input_frames_next() {
-                if let Some(samples) = self.history.conceal() {
-                    trace!(len = samples.len(), "Input buffer too small, concealing");
-                    self.resampler_input_buffer.push_back(samples);
-                }
-                debug!(
-                    frames = self.resampler_input_buffer.frames(),
-                    "Input buffer too small, flushing"
-                );
-                let samples = self.resampler.flush(&mut self.resampler_input_buffer);
-                self.output_buffer.push_back(samples);
-                self.reset_after_discontinuity();
-                break;
-            }
-
-            // One rubato batch's worth of output frames lands in `output_buffer`. Loop continues
-            // until we have enough.
-            let samples = self.resampler.resample(&mut self.resampler_input_buffer);
-            self.output_buffer.push_back(samples);
+        // Stops early on discontinuity (gap or input ran out), the next call resyncs.
+        while !self.needs_input_resync && self.output_buffer.frames() < batch_size {
+            self.resample_with_drift_control(pts_range);
         }
+        // Pads with zeros if `output_buffer` doesn't have enough, e.g. after the input ran out.
         self.output_buffer.read_samples(batch_size)
+    }
+
+    /// Produce one rubato batch of output frames into `output_buffer`, correcting drift first.
+    /// On discontinuity (gap or input ran out) flushes the resampler and re-arms
+    /// `needs_input_resync` instead.
+    fn resample_with_drift_control(&mut self, pts_range: (Timestamp, Timestamp)) {
+        // Where the *next* output sample we still owe should land, accounting for what
+        // we've already produced into `output_buffer`.
+        let requested_start_pts = pts_range.0
+            + Duration::from_secs_f64(
+                self.output_buffer.frames() as f64 / self.output_sample_rate as f64,
+            );
+
+        // PTS of the first timestamp that would be produced from resampler if current input
+        // buffer was resampled. It takes into account that something is already in the
+        // internal buffer.
+        let input_start_pts = self.input_buffer_start_pts() - self.resampler.output_delay();
+
+        // Positive if input starts after the requested point (stretch), negative if before
+        // (squash).
+        let drift = input_start_pts - requested_start_pts;
+
+        if drift > STRETCH_THRESHOLD {
+            // === GAP-FILL ===
+            // Drift is too much to try to stretch, so treat it as a discontinuity: fade out the
+            // front of the input into the gap and let the resync gate place the rest at its PTS.
+            let crossfade_samples =
+                (CROSSFADE_DURATION.as_secs_f64() * self.input_sample_rate as f64).round() as usize;
+            let fade_out_samples = self.resampler_input_buffer.read_samples(usize::min(
+                crossfade_samples,
+                self.resampler_input_buffer.frames(),
+            ));
+
+            let mut fade_out = AudioSamplesBuffer::from(fade_out_samples);
+            splice::fade_out(&mut fade_out, self.input_sample_rate);
+            let samples = self.resampler.flush(&mut fade_out);
+            self.output_buffer.push_back(samples);
+            self.reset_after_discontinuity();
+            debug!(?drift, "Input buffer behind, restarting after the gap");
+            return;
+        } else if drift > SHIFT_THRESHOLD {
+            // === STRETCH ===
+            let drift_ratio = drift.as_secs_f64() / STRETCH_THRESHOLD.as_secs_f64();
+            // multiply by 2.0 so max resampling is reached at the half point
+            // of the stretch limit
+            let ratio = 2.0 * MAX_STRETCH_RATIO * drift_ratio;
+
+            self.resampler.set_resample_ratio_relative(1.0 + ratio);
+            trace!(ratio, ?drift, "Input buffer behind, stretching");
+        } else if drift > -SHIFT_THRESHOLD {
+            // === ON-TIME (dead-band) ===
+            // |drift| < SHIFT_THRESHOLD; leave the ratio alone.
+            self.resampler.set_resample_ratio_relative(1.0);
+            trace!("Input buffer on time");
+        } else if drift > -SQUASH_THRESHOLD {
+            // === SQUASH ===
+            // `drift` is negative, so is the ratio.
+            let drift_ratio = drift.as_secs_f64() / SQUASH_THRESHOLD.as_secs_f64();
+            // multiply by 2.0 so max resampling is reached at the half point
+            // of the squash limit
+            let ratio = 2.0 * MAX_STRETCH_RATIO * drift_ratio;
+
+            self.resampler.set_resample_ratio_relative(1.0 + ratio);
+            trace!(ratio, ?drift, "Input buffer ahead, squashing");
+        } else {
+            // === DROP ===
+            // `self.input_buffer_start_pts()` is too much "behind" to recover by squashing.
+            // Skip input to catch up, joining both sides of the cut with a crossfade.
+            let samples_to_drop =
+                (drift.as_secs_f64().abs() * self.input_sample_rate as f64) as usize;
+            match splice::drop_frames(
+                &mut self.resampler_input_buffer,
+                samples_to_drop,
+                self.input_sample_rate,
+            ) {
+                Some(dropped) => {
+                    debug!(
+                        samples_to_drop,
+                        dropped, "Input buffer ahead, dropping samples"
+                    )
+                }
+                None => {
+                    // Nothing to join with. Fade out, run-out path flushes the rest. History
+                    // isn't contiguous with the faded out input anymore.
+                    splice::fade_out(&mut self.resampler_input_buffer, self.input_sample_rate);
+                    self.history.clear();
+                    debug!(samples_to_drop, "Input buffer ahead, dropping all samples");
+                }
+            }
+            self.resampler.set_resample_ratio_relative(1.0);
+        }
+
+        // Input runs out, extend it with concealment and flush all of it now. Output beyond
+        // this request stays in `output_buffer`, `read_samples` pads the shortfall with
+        // zeros. Leftover input would be misplaced by the gate, `input_buffer_end_pts`
+        // doesn't cover concealment.
+        if self.resampler_input_buffer.frames() < self.resampler.input_frames_next() {
+            if let Some(samples) = self.history.conceal() {
+                trace!(len = samples.len(), "Input buffer too small, concealing");
+                self.resampler_input_buffer.push_back(samples);
+            }
+            debug!(
+                frames = self.resampler_input_buffer.frames(),
+                "Input buffer too small, flushing"
+            );
+            let samples = self.resampler.flush(&mut self.resampler_input_buffer);
+            self.output_buffer.push_back(samples);
+            self.reset_after_discontinuity();
+            return;
+        }
+
+        // One rubato batch's worth of output frames lands in `output_buffer`.
+        let samples = self.resampler.resample(&mut self.resampler_input_buffer);
+        self.output_buffer.push_back(samples);
     }
 
     /// Pre-resample synchronization gate, called while `needs_input_resync` is set (initially,

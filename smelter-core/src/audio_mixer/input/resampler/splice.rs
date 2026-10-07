@@ -14,7 +14,7 @@ const SEARCH_DURATION: Duration = Duration::from_millis(5);
 
 /// Length of the crossfade joining both sides of the cut. Has to be shorter than
 /// `CORRELATION_DURATION`.
-const CROSSFADE_DURATION: Duration = Duration::from_millis(5);
+pub(super) const CROSSFADE_DURATION: Duration = Duration::from_millis(5);
 
 /// Remove about `frames` frames from the front of `buffer`. The cut point is moved by up to
 /// `SEARCH_DURATION` to where the waveform best matches the front of `buffer`, and both sides of
