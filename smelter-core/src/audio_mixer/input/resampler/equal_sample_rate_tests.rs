@@ -30,7 +30,7 @@ fn dump_test_signal() {
 
 /// First `get_samples` call on a freshly-constructed resampler — the
 /// `before_first_resample` gate is still set, so every test in this module
-/// exercises one branch of `maybe_prepare_before_resample`. Tests are
+/// exercises one branch of `try_resync_after_discontinuity`. Tests are
 /// ordered by the position of the buffered input relative to the request
 /// window: way before → straddling start → covering → straddling end →
 /// way after.
@@ -169,7 +169,7 @@ mod fresh {
 
     /// Same as [`input_starts_at_request_start`] but the input is shifted
     /// **backward by 0.5ms** (still well below `SHIFT_THRESHOLD = 2ms`).
-    /// `maybe_prepare_before_resample` drains 24 too-old samples from
+    /// `try_resync_after_discontinuity` drains 24 too-old samples from
     /// the front of the buffer, restoring alignment; the main loop
     /// stays in the on-time dead-band.
     ///
@@ -209,7 +209,7 @@ mod fresh {
     /// Input starts exactly at request start: input [20ms, 60ms),
     /// request [20ms, 40ms). `input_buffer_start_pts == pts_range.0`, so
     /// neither the drain nor the pad branch in
-    /// `maybe_prepare_before_resample` fires. The whole resample loop
+    /// `try_resync_after_discontinuity` fires. The whole resample loop
     /// runs in the on-time dead-band.
     #[test]
     fn input_starts_at_request_start() {
@@ -239,7 +239,7 @@ mod fresh {
 
     /// Same as [`input_starts_at_request_start`] but the input is shifted
     /// **forward by 0.5ms** (still well below `SHIFT_THRESHOLD = 2ms`).
-    /// `maybe_prepare_before_resample` pads 24 silent samples at the
+    /// `try_resync_after_discontinuity` pads 24 silent samples at the
     /// front of the buffer to align the timeline; the main loop stays
     /// in the on-time dead-band (no stretch/squash applied).
     ///
@@ -283,7 +283,7 @@ mod fresh {
     }
 
     /// Input [30ms, 70ms), request [20ms, 40ms). Input overlaps only the
-    /// end of the request — `maybe_prepare_before_resample` pads the
+    /// end of the request — `try_resync_after_discontinuity` pads the
     /// front of the buffer with silence so the timeline lines up.
     ///
     /// Ideal output:
@@ -322,7 +322,7 @@ mod fresh {
     }
 
     /// Input [60ms, 80ms), request [20ms, 40ms). Input entirely after the
-    /// request — `maybe_prepare_before_resample` returns silence directly
+    /// request — `try_resync_after_discontinuity` returns silence directly
     /// without engaging the resampler.
     #[test]
     fn input_after_request() {
