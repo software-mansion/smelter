@@ -34,8 +34,8 @@ const MAX_STRETCH_RATIO: f64 = 0.04 + 0.001;
 /// - Mono or Stereo `f64` PCM samples.
 ///
 /// Batches generally arrive in PTS order but may have gaps or overlaps; the queue does *not* pad
-/// gaps. `write_batch` pads gaps of at least `SEAM_THRESHOLD` with zeros. Smaller gaps and
-/// overlaps are left to drift control.
+/// gaps. `write_batch` treats gaps of at least `SEAM_THRESHOLD` as a discontinuity. Smaller gaps
+/// and overlaps are left to drift control.
 ///
 /// ## Outputs (what `get_samples` produces)
 /// Exactly the number of frames at `output_sample_rate` that fit the requested `pts_range`,
@@ -81,10 +81,9 @@ pub(super) struct InputResampler {
     channels: AudioChannels,
 
     /// Pending input PCM that hasn't been fed to rubato yet. Frames are consumed (drained) from
-    /// the front each time `resampler` runs. May also have zeros pushed to the front (gap-fill
-    /// before first resample, or in the `get_samples` gap branch), zeros pushed to the back (gap
-    /// between batches in `write_batch`), concealment pushed to the back (input ran out in
-    /// `get_samples`) or samples drained from the front (drop branch).
+    /// the front each time `resampler` runs. May also have zeros pushed to the front (before
+    /// first resample), concealment pushed to the back (before flush on discontinuity) or
+    /// samples dropped from the front (drop branch).
     resampler_input_buffer: AudioSamplesBuffer,
 
     /// Holds resampled output frames between rubato runs. We drain from this to satisfy each
@@ -151,8 +150,8 @@ const SQUASH_THRESHOLD: Timestamp = Timestamp::from_millis(500);
 /// is audibly bad.
 const STRETCH_THRESHOLD: Timestamp = Timestamp::from_millis(40);
 
-/// Minimal gap between consecutive batches that `write_batch` pads with zeros. Smaller gaps are
-/// treated as timestamp jitter and left to drift control. Matches the shortest realistic packet
+/// Minimal gap between consecutive batches that `write_batch` treats as a discontinuity. Smaller
+/// gaps are treated as timestamp jitter and left to drift control. Matches the shortest realistic packet
 /// loss (10ms Opus packet).
 const SEAM_THRESHOLD: Duration = Duration::from_millis(10);
 
@@ -201,7 +200,8 @@ impl InputResampler {
     }
 
     /// Append a newly arrived input batch to `resampler_input_buffer`. A gap of at least
-    /// `SEAM_THRESHOLD` after the buffered input is padded with zeros.
+    /// `SEAM_THRESHOLD` after the buffered input is a discontinuity: buffered input is flushed
+    /// and the batch is placed by the resync gate.
     pub fn write_batch(&mut self, batch: InputAudioSamples) {
         let (start_pts, end_pts) = batch.pts_range();
         trace!(
@@ -220,21 +220,15 @@ impl InputResampler {
 
         let gap = start_pts - self.input_buffer_end_pts;
         if gap >= Timestamp::from(SEAM_THRESHOLD) {
-            self.history.clear();
-
-            // While resyncing `input_buffer_end_pts` might be stale,
-            // `try_resync_after_discontinuity` positions the batch in that case.
-            if !self.needs_input_resync {
-                let gap_samples =
-                    (gap.as_secs_f64() * self.input_sample_rate as f64).round() as usize;
-                debug!(
-                    ?gap,
-                    gap_samples, "Gap between batches, padding with zeros."
-                );
-                self.resampler_input_buffer.push_back(match self.channels {
-                    AudioChannels::Mono => AudioSamples::Mono(vec![0.0; gap_samples]),
-                    AudioChannels::Stereo => AudioSamples::Stereo(vec![(0.0, 0.0); gap_samples]),
-                });
+            if self.needs_input_resync {
+                // Input isn't positioned yet, `input_buffer_end_pts` might be stale.
+                // `try_resync_after_discontinuity` positions the batch.
+                self.history.clear();
+            } else {
+                // Play out the buffered input, `try_resync_after_discontinuity` places the new
+                // batch at its PTS.
+                debug!(?gap, "Gap between batches, flushing.");
+                self.flush_with_concealment();
             }
         }
 
@@ -359,17 +353,11 @@ impl InputResampler {
         // zeros. Leftover input would be misplaced by the gate, `input_buffer_end_pts`
         // doesn't cover concealment.
         if self.resampler_input_buffer.frames() < self.resampler.input_frames_next() {
-            if let Some(samples) = self.history.conceal() {
-                trace!(len = samples.len(), "Input buffer too small, concealing");
-                self.resampler_input_buffer.push_back(samples);
-            }
             debug!(
                 frames = self.resampler_input_buffer.frames(),
                 "Input buffer too small, flushing"
             );
-            let samples = self.resampler.flush(&mut self.resampler_input_buffer);
-            self.output_buffer.push_back(samples);
-            self.reset_after_discontinuity();
+            self.flush_with_concealment();
             return;
         }
 
@@ -441,6 +429,18 @@ impl InputResampler {
         }
 
         None
+    }
+
+    /// Extend the input with concealment, flush all of it through the resampler into
+    /// `output_buffer` and reset after discontinuity.
+    fn flush_with_concealment(&mut self) {
+        if let Some(samples) = self.history.conceal() {
+            trace!(len = samples.len(), "Concealing end of input");
+            self.resampler_input_buffer.push_back(samples);
+        }
+        let samples = self.resampler.flush(&mut self.resampler_input_buffer);
+        self.output_buffer.push_back(samples);
+        self.reset_after_discontinuity();
     }
 
     /// Reset state that becomes invalid across an input discontinuity. Called after
