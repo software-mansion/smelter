@@ -97,6 +97,19 @@ impl AudioSamplesBuffer {
     }
 }
 
+impl From<AudioSamples> for AudioSamplesBuffer {
+    fn from(batch: AudioSamples) -> Self {
+        let channels = match batch {
+            AudioSamples::Mono(_) => AudioChannels::Mono,
+            AudioSamples::Stereo(_) => AudioChannels::Stereo,
+        };
+        Self {
+            buffer: VecDeque::from([(batch, 0)]),
+            channels,
+        }
+    }
+}
+
 impl Adapter<'_, f64> for AudioSamplesBuffer {
     unsafe fn read_sample_unchecked(&self, channel: usize, frame: usize) -> f64 {
         let mut samples_skipped: usize = 0;
