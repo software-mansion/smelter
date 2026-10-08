@@ -96,6 +96,26 @@ pub(super) fn fade_out(buffer: &mut AudioSamplesBuffer, sample_rate: u32) {
     });
 }
 
+/// Fade in the front `CROSSFADE_DURATION` of `samples`.
+pub(super) fn fade_in(samples: &mut AudioSamples, sample_rate: u32) {
+    let crossfade = (CROSSFADE_DURATION.as_secs_f64() * sample_rate as f64).round() as usize;
+    let len = usize::min(crossfade, samples.len());
+    match samples {
+        AudioSamples::Mono(samples) => {
+            for (i, s) in samples[..len].iter_mut().enumerate() {
+                *s *= fade_in_gain(i, len);
+            }
+        }
+        AudioSamples::Stereo(samples) => {
+            for (i, (l, r)) in samples[..len].iter_mut().enumerate() {
+                let gain = fade_in_gain(i, len);
+                *l *= gain;
+                *r *= gain;
+            }
+        }
+    }
+}
+
 /// Crossfade from `from` to `to` (both of the same length) with complementary raised cosine
 /// gains.
 fn crossfade_samples(from: AudioSamples, to: AudioSamples) -> AudioSamples {
