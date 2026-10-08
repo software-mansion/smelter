@@ -177,7 +177,7 @@ impl<C: EncodeCodec> VTEncoder<C> {
         let flush_in_progress = self.flush_in_progress.clone();
 
         let state = self.wgpu.as_ref().unwrap();
-        self.in_flight.submit(Duration::MAX, |submission_token| {
+        let submitted = self.in_flight.submit(Duration::MAX, |submission_token| {
             let frame_output = FrameOutput::new(
                 &self.output_state,
                 &self.encode_failed,
@@ -238,7 +238,10 @@ impl<C: EncodeCodec> VTEncoder<C> {
             };
 
             Ok::<(), VTEncoderError>(())
-        })?;
+        });
+
+        self.check_for_panic();
+        submitted?;
 
         Ok(())
     }
