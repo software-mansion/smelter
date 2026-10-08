@@ -7,11 +7,73 @@ const RATE: u32 = 48_000;
 const FIR_WINDOW: usize = 8;
 const SAMPLE48: Duration = Duration::from_nanos(1_000_000_000 / 48_000);
 
+/// Frames faded in after every resync, `CROSSFADE_DURATION` at `RATE`.
+const FADE_IN: usize = 240;
+
 fn mono(samples: AudioSamples) -> Vec<f64> {
     let AudioSamples::Mono(s) = samples else {
         panic!("expected Mono output");
     };
     s
+}
+
+/// Read `count` consecutive 20ms chunks starting at `start` and concatenate them.
+fn read_chunks(r: &mut InputResampler, start: Timestamp, count: u32) -> Vec<f64> {
+    let mut output = Vec::new();
+    for i in 0..count {
+        let chunk_start = start + Duration::from_millis(20) * i;
+        let chunk = mono(r.get_samples((chunk_start, chunk_start + Duration::from_millis(20))));
+        assert_eq!(chunk.len(), 960);
+        output.extend_from_slice(&chunk);
+    }
+    output
+}
+
+/// Assert that drift control corrects `drift` (positive if input is placed later than the output
+/// timeline) like the proportional controller, with time constant `tau`: after `t` of correction
+/// the output is `drift * (1 - e^(-t / tau))` behind its original alignment. Measured on a 1ms
+/// window in every 20ms chunk after correction starts at output frame `start`. The ratio ramps
+/// in, so early on the output lags the model; allowed error is 20% of the expected offset plus
+/// 30µs.
+///
+/// `output[i]` is aligned with `source` at `base_pts + (i + 1) / RATE` before the drift.
+fn assert_drift_converges(
+    output: &[f64],
+    source: &SignalSource,
+    base_pts: Timestamp,
+    start: usize,
+    drift: Duration,
+    tau: Duration,
+    is_stretch: bool,
+) {
+    let sign = match is_stretch {
+        true => -1.0,
+        false => 1.0,
+    };
+    let mut window = (start / 960 + 1) * 960 + 300;
+    while window + 48 <= output.len() {
+        let elapsed = (window + 24 - start) as f64 / RATE as f64;
+        let expected = sign * drift.as_secs_f64() * (1.0 - f64::exp(-elapsed / tau.as_secs_f64()));
+        let tolerance = expected.abs() * 0.2 + 30e-6;
+        // `SAMPLE48` is truncated to whole nanoseconds, too imprecise to multiply by a frame
+        // index this large.
+        let reference = source.shifted(
+            base_pts + Timestamp::from_secs_f64((window + 1) as f64 / RATE as f64 + expected),
+        );
+        let (offset, rms) = measure_offset(
+            &output[window..(window + 48)],
+            &reference,
+            Duration::from_secs_f64(tolerance),
+        );
+        assert!(
+            rms < 0.05 && offset.abs() < tolerance,
+            "window @ {window}: expected offset {:.1}us ± {:.1}us, measured {:.1}us (rms {rms:.4})",
+            expected * 1e6,
+            tolerance * 1e6,
+            (expected + offset) * 1e6,
+        );
+        window += 960;
+    }
 }
 
 /// Not a real test — just dumps 5 seconds of the default `test_signal()`
@@ -29,28 +91,26 @@ fn dump_test_signal() {
 }
 
 /// First `get_samples` call on a freshly-constructed resampler — the
-/// `before_first_resample` gate is still set, so every test in this module
-/// exercises one branch of `try_resync_after_discontinuity`. Tests are
-/// ordered by the position of the buffered input relative to the request
-/// window: way before → straddling start → covering → straddling end →
-/// way after.
+/// resync gate is still armed, so every test in this module exercises one
+/// branch of `try_resync_after_discontinuity`. Tests are ordered by the
+/// position of the buffered input relative to the request window: way
+/// before → straddling start → covering → straddling end → way after.
+///
+/// Unless a test is about a short buffer, input reaches ~80ms past the
+/// request end, like the queue delivers it. The gate only starts once real
+/// input reaches one chunk plus `RESYNC_LEAD` past the request end.
 ///
 /// All PTS values are perturbed by [`D`] so we don't accidentally rely on
 /// round-millisecond timestamps.
 ///
-/// Every test's *first* assertion skips the leading 5 output samples. On
-/// the very first resample the rubato FIR filter is fed against either
-/// zero-padded history (warmup) or the freshly-prepared input buffer, and
-/// the first handful of samples carry a small transient that
-/// `samples_to_drop` doesn't fully hide. After ~5 samples the output has
-/// settled and matches the source (or silence) cleanly. Subsequent
-/// asserts in the same test compare windows further into the buffer and
-/// don't need this guard.
+/// The first `FADE_IN` frames after the resync are faded in. Assertions on
+/// the plain signal start after them, plus `FIR_WINDOW` frames for the FIR
+/// transient at the start of the filter.
 mod fresh {
     use super::*;
 
     /// Input [0, 20ms), request [40ms, 60ms). Input entirely before the
-    /// request window — drain consumes the full buffer; output is silence.
+    /// request window — the gate drops it; output is silence.
     #[test]
     fn input_before_request() {
         try_init_logger();
@@ -67,21 +127,18 @@ mod fresh {
         dump_wav(&[&pad, &samples], RATE, "fresh_input_before_request.wav");
 
         SignalAssertion {
-            output: &samples[FIR_WINDOW..],
+            output: &samples,
             source: &SignalSource::new(RATE, silence()),
         }
         .assert();
     }
 
-    /// Input [0, 30ms), request [20ms, 40ms). Input overlaps only the
-    /// start of the request — drain shaves off [0, 20ms); the suffix
-    /// [30ms, 40ms) has no input.
-    ///
-    /// Ideal output:
-    /// - output[0..480]   = audio at input [20ms, 30ms)
-    /// - output[480..960] = silence
+    /// Input [0, 30ms), request [20ms, 40ms). Input ends inside the
+    /// request, far from the lead the gate needs, so the gate waits and
+    /// the output is silence. By the next request [40ms, 60ms) the input
+    /// is entirely in the past and gets dropped, it never plays.
     #[test]
-    fn input_overlaps_request_start() {
+    fn input_ends_within_request() {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
@@ -89,40 +146,35 @@ mod fresh {
         r.write_batch(source.batch(D, Duration::from_millis(10)));
         r.write_batch(source.batch(D + Duration::from_millis(10), Duration::from_millis(20)));
 
-        let out_start = D + Duration::from_millis(20);
-        let samples = mono(r.get_samples((out_start, D + Duration::from_millis(40))));
-        assert_eq!(samples.len(), 960);
+        let samples = read_chunks(&mut r, D + Duration::from_millis(20), 2);
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(
             &[&pad, &samples],
             RATE,
-            "fresh_input_overlaps_request_start.wav",
+            "fresh_input_ends_within_request.wav",
         );
 
         SignalAssertion {
-            output: &samples[FIR_WINDOW..(480 - FIR_WINDOW)],
-            source: &source.shifted(out_start + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
-        }
-        .assert();
-        SignalAssertion {
-            output: &samples[(480 + FIR_WINDOW)..(960 - FIR_WINDOW)],
+            output: &samples,
             source: &SignalSource::new(RATE, silence()),
         }
         .assert();
+        assert!(r.needs_input_resync);
+        assert_eq!(r.resampler_input_buffer.frames(), 0);
     }
 
-    /// Input [10ms, 50ms), request [20ms, 40ms). Input fully covers the
-    /// request — drain shaves off the [10ms, 20ms) prefix; subsequent
-    /// resample iterations sit in the on-time dead-band. Output should
-    /// reproduce the source at the requested PTS.
+    /// Input [10ms, 130ms), request [20ms, 40ms). Input fully covers the
+    /// request — the gate drains the [10ms, 20ms) prefix and fades in the
+    /// new front; subsequent resample iterations sit in the on-time
+    /// dead-band. Output should reproduce the source at the requested PTS.
     #[test]
     fn input_covers_request() {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
 
-        r.write_batch(source.batch(D + Duration::from_millis(10), Duration::from_millis(20)));
-        r.write_batch(source.batch(D + Duration::from_millis(30), Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(10), Duration::from_millis(60)));
+        r.write_batch(source.batch(D + Duration::from_millis(70), Duration::from_millis(60)));
 
         let out_start = D + Duration::from_millis(20);
         let samples = mono(r.get_samples((out_start, D + Duration::from_millis(40))));
@@ -130,25 +182,29 @@ mod fresh {
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(&[&pad, &samples], RATE, "fresh_input_covers_request.wav");
 
+        let start = FADE_IN + FIR_WINDOW;
         SignalAssertion {
-            output: &samples[FIR_WINDOW..],
-            source: &source.shifted(out_start + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+            output: &samples[start..],
+            source: &source.shifted(out_start + SAMPLE48 * (start as u32 + 1)),
         }
         .assert();
     }
 
     /// Same as [`input_covers_request`] but with the input batches aligned
-    /// exactly to the request grid: [0, 20ms), [20ms, 40ms), [40ms, 60ms).
-    /// The drain stops on a clean batch boundary instead of mid-batch.
+    /// exactly to the request grid: [0, 20ms), [20ms, 40ms), …, [100ms,
+    /// 120ms). The drain stops on a clean batch boundary instead of
+    /// mid-batch.
     #[test]
     fn input_covers_request_grid_aligned() {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
 
-        r.write_batch(source.batch(D, Duration::from_millis(20)));
-        r.write_batch(source.batch(D + Duration::from_millis(20), Duration::from_millis(20)));
-        r.write_batch(source.batch(D + Duration::from_millis(40), Duration::from_millis(20)));
+        for i in 0..6 {
+            r.write_batch(
+                source.batch(D + Duration::from_millis(20) * i, Duration::from_millis(20)),
+            );
+        }
 
         let out_start = D + Duration::from_millis(20);
         let samples = mono(r.get_samples((out_start, D + Duration::from_millis(40))));
@@ -160,9 +216,10 @@ mod fresh {
             "fresh_input_covers_request_grid_aligned.wav",
         );
 
+        let start = FADE_IN + FIR_WINDOW;
         SignalAssertion {
-            output: &samples[FIR_WINDOW..],
-            source: &source.shifted(out_start + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+            output: &samples[start..],
+            source: &source.shifted(out_start + SAMPLE48 * (start as u32 + 1)),
         }
         .assert();
     }
@@ -172,9 +229,6 @@ mod fresh {
     /// `try_resync_after_discontinuity` drains 24 too-old samples from
     /// the front of the buffer, restoring alignment; the main loop
     /// stays in the on-time dead-band.
-    ///
-    /// Output should reproduce the source. Skip the first 5 samples to
-    /// avoid the FIR transient at the buffer-prefix-drain boundary.
     #[test]
     fn input_shifted_backward_within_threshold() {
         try_init_logger();
@@ -183,10 +237,10 @@ mod fresh {
         let first_pts = D + Duration::from_millis(20) - shift;
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
 
-        r.write_batch(source.batch(first_pts, Duration::from_millis(20)));
+        r.write_batch(source.batch(first_pts, Duration::from_millis(50)));
         r.write_batch(source.batch(
-            D + Duration::from_millis(40) - shift,
-            Duration::from_millis(20),
+            D + Duration::from_millis(70) - shift,
+            Duration::from_millis(50),
         ));
 
         let out_start = D + Duration::from_millis(20);
@@ -199,26 +253,27 @@ mod fresh {
             "fresh_input_shifted_backward_within_threshold.wav",
         );
 
+        let start = FADE_IN + FIR_WINDOW;
         SignalAssertion {
-            output: &samples[FIR_WINDOW..960],
-            source: &source.shifted(out_start + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+            output: &samples[start..],
+            source: &source.shifted(out_start + SAMPLE48 * (start as u32 + 1)),
         }
         .assert();
     }
 
-    /// Input starts exactly at request start: input [20ms, 60ms),
+    /// Input starts exactly at request start: input [20ms, 120ms),
     /// request [20ms, 40ms). `input_buffer_start_pts == pts_range.0`, so
     /// neither the drain nor the pad branch in
-    /// `try_resync_after_discontinuity` fires. The whole resample loop
-    /// runs in the on-time dead-band.
+    /// `try_resync_after_discontinuity` fires. The first `FADE_IN` frames
+    /// are the faded-in source, the rest is the plain source.
     #[test]
     fn input_starts_at_request_start() {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
 
-        r.write_batch(source.batch(D + Duration::from_millis(20), Duration::from_millis(20)));
-        r.write_batch(source.batch(D + Duration::from_millis(40), Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(20), Duration::from_millis(50)));
+        r.write_batch(source.batch(D + Duration::from_millis(70), Duration::from_millis(50)));
 
         let out_start = D + Duration::from_millis(20);
         let samples = mono(r.get_samples((out_start, D + Duration::from_millis(40))));
@@ -230,9 +285,16 @@ mod fresh {
             "fresh_input_starts_at_request_start.wav",
         );
 
+        // The FIR transient at the start is negligible, the fade-in gain is ~0 there.
         SignalAssertion {
-            output: &samples[FIR_WINDOW..],
-            source: &source.shifted(out_start + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+            output: &samples[..FADE_IN],
+            source: &source.shifted(out_start + SAMPLE48).faded_in(FADE_IN),
+        }
+        .assert();
+        let start = FADE_IN + FIR_WINDOW;
+        SignalAssertion {
+            output: &samples[start..],
+            source: &source.shifted(out_start + SAMPLE48 * (start as u32 + 1)),
         }
         .assert();
     }
@@ -243,8 +305,7 @@ mod fresh {
     /// front of the buffer to align the timeline; the main loop stays
     /// in the on-time dead-band (no stretch/squash applied).
     ///
-    /// Output: 24 silent samples followed by the source signal. We skip
-    /// the FIR transition window around the silence→audio boundary.
+    /// Output: 24 silent samples followed by the faded-in source signal.
     #[test]
     fn input_shifted_forward_within_threshold() {
         try_init_logger();
@@ -253,10 +314,10 @@ mod fresh {
         let first_pts = D + Duration::from_millis(20) + shift;
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
 
-        r.write_batch(source.batch(first_pts, Duration::from_millis(20)));
+        r.write_batch(source.batch(first_pts, Duration::from_millis(50)));
         r.write_batch(source.batch(
-            D + Duration::from_millis(40) + shift,
-            Duration::from_millis(20),
+            D + Duration::from_millis(70) + shift,
+            Duration::from_millis(50),
         ));
 
         let out_start = D + Duration::from_millis(20);
@@ -275,20 +336,21 @@ mod fresh {
             source: &SignalSource::new(RATE, silence()),
         }
         .assert();
+        let start = 24 + FADE_IN + FIR_WINDOW;
         SignalAssertion {
-            output: &samples[(24 + FIR_WINDOW)..960],
-            source: &source.shifted(first_pts + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+            output: &samples[start..],
+            source: &source.shifted(first_pts + SAMPLE48 * (start as u32 - 24 + 1)),
         }
         .assert();
     }
 
-    /// Input [30ms, 70ms), request [20ms, 40ms). Input overlaps only the
+    /// Input [30ms, 110ms), request [20ms, 40ms). Input overlaps only the
     /// end of the request — `try_resync_after_discontinuity` pads the
     /// front of the buffer with silence so the timeline lines up.
     ///
     /// Ideal output:
     /// - output[0..480]   = silence
-    /// - output[480..960] = audio at input [30ms, 40ms)
+    /// - output[480..960] = audio at input [30ms, 40ms), faded in
     #[test]
     fn input_overlaps_request_end() {
         try_init_logger();
@@ -296,8 +358,8 @@ mod fresh {
         let first_pts = D + Duration::from_millis(30);
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
 
-        r.write_batch(source.batch(D + Duration::from_millis(30), Duration::from_millis(20)));
-        r.write_batch(source.batch(D + Duration::from_millis(50), Duration::from_millis(20)));
+        r.write_batch(source.batch(first_pts, Duration::from_millis(40)));
+        r.write_batch(source.batch(D + Duration::from_millis(70), Duration::from_millis(40)));
 
         let out_start = D + Duration::from_millis(20);
         let samples = mono(r.get_samples((out_start, D + Duration::from_millis(40))));
@@ -314,16 +376,17 @@ mod fresh {
             source: &SignalSource::new(RATE, silence()),
         }
         .assert();
+        let start = 480 + FADE_IN + FIR_WINDOW;
         SignalAssertion {
-            output: &samples[(480 + FIR_WINDOW)..960],
-            source: &source.shifted(first_pts + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+            output: &samples[start..960],
+            source: &source.shifted(first_pts + SAMPLE48 * (start as u32 - 480 + 1)),
         }
         .assert();
     }
 
     /// Input [60ms, 80ms), request [20ms, 40ms). Input entirely after the
-    /// request — `try_resync_after_discontinuity` returns silence directly
-    /// without engaging the resampler.
+    /// request but already far enough ahead for the gate, which pads 40ms
+    /// of silence in front of it. Output is silence.
     #[test]
     fn input_after_request() {
         try_init_logger();
@@ -340,189 +403,368 @@ mod fresh {
         dump_wav(&[&pad, &samples], RATE, "fresh_input_after_request.wav");
 
         SignalAssertion {
-            output: &samples[FIR_WINDOW..],
+            output: &samples,
             source: &SignalSource::new(RATE, silence()),
+        }
+        .assert();
+        assert!(!r.needs_input_resync);
+    }
+
+    /// The gate starts only once real input reaches one chunk plus
+    /// `RESYNC_LEAD` past the request end. Two resamplers get input
+    /// starting at the request start, one ending 1ms short of that
+    /// threshold and one 1ms past it.
+    #[test]
+    fn gate_waits_for_lead() {
+        try_init_logger();
+        let source = SignalSource::new(RATE, test_signal());
+        let out_start = D + Duration::from_millis(20);
+        let out_end = D + Duration::from_millis(40);
+
+        let mut short = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+        let threshold = out_end + short.resampler.input_frame_duration() + RESYNC_LEAD;
+        let short_len = threshold - out_start - Timestamp::from_millis(1);
+        short.write_batch(source.batch(out_start, short_len.to_duration_saturating()));
+        let samples = mono(short.get_samples((out_start, out_end)));
+        SignalAssertion {
+            output: &samples,
+            source: &SignalSource::new(RATE, silence()),
+        }
+        .assert();
+        assert!(short.needs_input_resync);
+
+        let mut long = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+        let long_len = threshold - out_start + Timestamp::from_millis(1);
+        long.write_batch(source.batch(out_start, long_len.to_duration_saturating()));
+        let samples = mono(long.get_samples((out_start, out_end)));
+        let start = FADE_IN + FIR_WINDOW;
+        SignalAssertion {
+            output: &samples[start..],
+            source: &source.shifted(out_start + SAMPLE48 * (start as u32 + 1)),
+        }
+        .assert();
+        assert!(!long.needs_input_resync);
+    }
+
+    /// The gate keeps short input instead of dropping it, so input that
+    /// keeps arriving contiguously starts as soon as it is far enough
+    /// ahead. Input [20ms, 50ms) is too short for request [20ms, 40ms);
+    /// after [50ms, 110ms) arrives, request [40ms, 60ms) drains the input
+    /// up to 40ms and plays it faded in.
+    #[test]
+    fn gate_keeps_short_input() {
+        try_init_logger();
+        let source = SignalSource::new(RATE, test_signal());
+        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+
+        r.write_batch(source.batch(D + Duration::from_millis(20), Duration::from_millis(30)));
+        let first =
+            mono(r.get_samples((D + Duration::from_millis(20), D + Duration::from_millis(40))));
+        r.write_batch(source.batch(D + Duration::from_millis(50), Duration::from_millis(60)));
+        let out_start = D + Duration::from_millis(40);
+        let second = mono(r.get_samples((out_start, D + Duration::from_millis(60))));
+        let pad = silence_samples(RATE, Duration::from_millis(20));
+        dump_wav(
+            &[&pad, &first, &second],
+            RATE,
+            "fresh_gate_keeps_short_input.wav",
+        );
+
+        SignalAssertion {
+            output: &first,
+            source: &SignalSource::new(RATE, silence()),
+        }
+        .assert();
+        let start = FADE_IN + FIR_WINDOW;
+        SignalAssertion {
+            output: &second[start..],
+            source: &source.shifted(out_start + SAMPLE48 * (start as u32 + 1)),
+        }
+        .assert();
+    }
+}
+
+/// Batches written while the resampler is resyncing, before the gate
+/// places the buffered input. `write_batch` keeps the buffered input on
+/// its timeline: gaps are padded, large overlaps are dropped.
+mod resync {
+    use super::*;
+
+    /// Input [20ms, 40ms), then [55ms, 140ms) — a 15ms gap written before
+    /// the first request. The gap is padded inside the buffer:
+    /// concealment of [20ms, 40ms) for 5ms, silence until 55ms, and the
+    /// second batch faded in at its PTS.
+    #[test]
+    fn gap_is_padded() {
+        try_init_logger();
+        let source = SignalSource::new(RATE, test_signal());
+        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+
+        r.write_batch(source.batch(D + Duration::from_millis(20), Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(55), Duration::from_millis(85)));
+
+        let out_start = D + Duration::from_millis(20);
+        let samples = read_chunks(&mut r, out_start, 3);
+        let pad = silence_samples(RATE, Duration::from_millis(20));
+        dump_wav(&[&pad, &samples], RATE, "resync_gap_is_padded.wav");
+
+        // [20ms, 40ms) — first batch, faded in by the gate
+        let start = FADE_IN + FIR_WINDOW;
+        SignalAssertion {
+            output: &samples[start..(960 - FIR_WINDOW)],
+            source: &source.shifted(out_start + SAMPLE48 * (start as u32 + 1)),
+        }
+        .assert();
+        // [45ms, 55ms) — after 5ms of concealment, silence until the second batch
+        SignalAssertion {
+            output: &samples[(1200 + FIR_WINDOW)..(1680 - FIR_WINDOW)],
+            source: &SignalSource::new(RATE, silence()),
+        }
+        .assert();
+        // [55ms, 80ms) — second batch, faded in by `write_batch`
+        let start = 1680 + FADE_IN + FIR_WINDOW;
+        SignalAssertion {
+            output: &samples[start..],
+            source: &source.shifted(out_start + SAMPLE48 * (start as u32 + 1)),
+        }
+        .assert();
+    }
+
+    /// Input [20ms, 140ms), then a batch at [40ms, 60ms) with different
+    /// content. It overlaps the buffered input by 100ms, more than 80ms,
+    /// so it is dropped and the output reproduces the first input.
+    #[test]
+    fn large_overlap_is_dropped() {
+        try_init_logger();
+        let source = SignalSource::new(RATE, test_signal());
+        let other = SignalSource::new(RATE, |_| 0.5);
+        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+
+        r.write_batch(source.batch(D + Duration::from_millis(20), Duration::from_millis(120)));
+        r.write_batch(other.batch(D + Duration::from_millis(40), Duration::from_millis(20)));
+
+        let out_start = D + Duration::from_millis(20);
+        let samples = read_chunks(&mut r, out_start, 3);
+        let pad = silence_samples(RATE, Duration::from_millis(20));
+        dump_wav(
+            &[&pad, &samples],
+            RATE,
+            "resync_large_overlap_is_dropped.wav",
+        );
+
+        let start = FADE_IN + FIR_WINDOW;
+        SignalAssertion {
+            output: &samples[start..],
+            source: &source.shifted(out_start + SAMPLE48 * (start as u32 + 1)),
+        }
+        .assert();
+    }
+
+    /// Input [20ms, 100ms), then source content [100ms, 180ms) with PTS
+    /// 10ms early (90ms). The 10ms overlap is under 80ms, so the batch is
+    /// appended as is. The buffered input's start is computed back from
+    /// its end, so everything before the overlap is placed 10ms early:
+    /// request [20ms, 40ms) plays the source from 30ms.
+    #[test]
+    fn small_overlap_places_earlier_input_early() {
+        try_init_logger();
+        let source = SignalSource::new(RATE, test_signal());
+        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+
+        r.write_batch(source.batch(D + Duration::from_millis(20), Duration::from_millis(80)));
+        let samples = source.samples(
+            D + Duration::from_millis(100),
+            D + Duration::from_millis(180),
+        );
+        r.write_batch(InputAudioSamples::new(
+            AudioSamples::Mono(samples),
+            D + Duration::from_millis(90),
+            RATE,
+        ));
+
+        let out_start = D + Duration::from_millis(20);
+        let samples = read_chunks(&mut r, out_start, 3);
+        let pad = silence_samples(RATE, Duration::from_millis(20));
+        dump_wav(
+            &[&pad, &samples],
+            RATE,
+            "resync_small_overlap_places_earlier_input_early.wav",
+        );
+
+        let start = FADE_IN + FIR_WINDOW;
+        SignalAssertion {
+            output: &samples[start..],
+            source: &source
+                .shifted(out_start + Duration::from_millis(10) + SAMPLE48 * (start as u32 + 1)),
         }
         .assert();
     }
 }
 
 /// Second `get_samples` call on a resampler that has already been driven
-/// past the `before_first_resample` gate. The common setup writes two
-/// 20ms batches ([10ms, 50ms)+D) and calls `get_samples((20ms, 40ms)+D)`,
-/// leaving the resampler with ~10ms of buffered signal ([40ms,
-/// 50ms)+D) split between `resampler_input_buffer` and `output_buffer`.
+/// past the resync gate. The common setup writes [10ms, 130ms)+D and calls
+/// `get_samples((20ms, 40ms)+D)`, leaving the resampler with ~90ms of
+/// buffered signal ([40ms, 130ms)+D) split between `resampler_input_buffer`
+/// and `output_buffer`.
 ///
-/// Each test then writes a *different* batch ahead of the previous data
-/// and calls `get_samples((40ms, 60ms)+D)`. The concatenated output of
-/// both `get_samples` calls is dumped to a WAV file for inspection.
+/// Each test then writes new input after the buffered data and keeps
+/// calling `get_samples` from (40ms, 60ms)+D on. The concatenated output
+/// of all `get_samples` calls is dumped to a WAV file for inspection.
 mod running {
     use super::*;
 
-    /// Common init: [10, 50)+D worth of input, then `get_samples((20, 40)+D)`.
+    /// Common init: [10, 130)+D worth of input, then `get_samples((20, 40)+D)`.
     fn primed() -> (SignalSource, InputResampler, Vec<f64>) {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
-        r.write_batch(source.batch(D + Duration::from_millis(10), Duration::from_millis(20)));
-        r.write_batch(source.batch(D + Duration::from_millis(30), Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(10), Duration::from_millis(60)));
+        r.write_batch(source.batch(D + Duration::from_millis(70), Duration::from_millis(60)));
         let first =
             mono(r.get_samples((D + Duration::from_millis(20), D + Duration::from_millis(40))));
         (source, r, first)
     }
 
-    /// No new data written after primed(). ~10ms of buffered signal
-    /// [40ms, 50ms)+D remains, all before the [40ms, 60ms) request end.
-    /// The resampler should produce the buffered signal followed by
-    /// silence once the buffer runs out.
+    /// No new data written after primed(). The buffered input runs out
+    /// at 130ms: it is played to its end, followed by 5ms of concealment
+    /// and silence.
     #[test]
-    fn no_new_input() {
-        let (source, mut r, out_chunk_1) = primed();
+    fn input_runs_out() {
+        let (source, mut r, mut all_output) = primed();
 
-        let out_chunk_2 =
-            mono(r.get_samples((D + Duration::from_millis(40), D + Duration::from_millis(60))));
-        assert_eq!(out_chunk_2.len(), 960);
+        all_output.extend(read_chunks(&mut r, D + Duration::from_millis(40), 6));
         let pad = silence_samples(RATE, Duration::from_millis(20));
-        dump_wav(
-            &[&pad, &out_chunk_1, &out_chunk_2],
-            RATE,
-            "running_no_new_input.wav",
-        );
+        dump_wav(&[&pad, &all_output], RATE, "running_input_runs_out.wav");
 
-        // ~10ms of buffered signal ≈ 480 samples at 48kHz
-        let boundary = 480;
+        // [20ms, 130ms) — the whole input
+        let start = FADE_IN + FIR_WINDOW;
+        let input_end = 960 * 5 + 480;
         SignalAssertion {
-            output: &out_chunk_2[0..(boundary - FIR_WINDOW)],
-            source: &source.shifted(D + Duration::from_millis(40) + SAMPLE48),
+            output: &all_output[start..(input_end - FIR_WINDOW)],
+            source: &source.shifted(D + Duration::from_millis(20) + SAMPLE48 * (start as u32 + 1)),
         }
         .assert();
+        // [135ms, 160ms) — silence after the concealment
         SignalAssertion {
-            output: &out_chunk_2[(boundary + FIR_WINDOW)..(960 - FIR_WINDOW)],
+            output: &all_output[(input_end + 240 + FIR_WINDOW)..],
             source: &SignalSource::new(RATE, silence()),
         }
         .assert();
+        assert!(r.needs_input_resync);
     }
 
-    /// Append a contiguous batch [50ms, 70ms)+D — buffer extends past the
-    /// request end. Analogous to `fresh::input_covers_request`.
+    /// Append a contiguous batch [130ms, 150ms)+D. Output should reproduce
+    /// the source across the batch boundary.
     #[test]
     fn input_covers_request() {
-        let (source, mut r, out_chunk_1) = primed();
-        r.write_batch(source.batch(D + Duration::from_millis(50), Duration::from_millis(20)));
+        let (source, mut r, mut all_output) = primed();
+        r.write_batch(source.batch(D + Duration::from_millis(130), Duration::from_millis(20)));
 
-        let out_chunk_2 =
-            mono(r.get_samples((D + Duration::from_millis(40), D + Duration::from_millis(60))));
-        assert_eq!(out_chunk_2.len(), 960);
+        all_output.extend(read_chunks(&mut r, D + Duration::from_millis(40), 5));
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(
-            &[&pad, &out_chunk_1, &out_chunk_2],
+            &[&pad, &all_output],
             RATE,
             "running_input_covers_request.wav",
         );
 
+        let start = FADE_IN + FIR_WINDOW;
         SignalAssertion {
-            output: &out_chunk_2,
-            source: &source.shifted(D + Duration::from_millis(40) + SAMPLE48),
+            output: &all_output[start..],
+            source: &source.shifted(D + Duration::from_millis(20) + SAMPLE48 * (start as u32 + 1)),
         }
         .assert();
     }
 
-    // FLAG: input_covers_request_grid_aligned — the running-state buffer
-    // has a fractional start (~40ms after init), so the
-    // batch-grid-alignment property doesn't transfer.
-
-    /// Append continuous signal [50ms, 70ms)+D with PTS shifted backward
+    /// Append continuous signal [130ms, 150ms)+D with PTS shifted backward
     /// by 0.5ms (sub-`SHIFT_THRESHOLD`). Audio content is continuous with
     /// the previous input; only the timestamp overlaps the buffer end by
     /// 0.5ms. Analogous to `fresh::input_shifted_backward_within_threshold`.
     #[test]
     fn input_shifted_backward_within_threshold() {
-        let (source, mut r, out_chunk_1) = primed();
+        let (source, mut r, mut all_output) = primed();
         let shift = Duration::from_micros(500);
-        let samples = source.samples(D + Duration::from_millis(50), D + Duration::from_millis(70));
+        let samples = source.samples(
+            D + Duration::from_millis(130),
+            D + Duration::from_millis(150),
+        );
         r.write_batch(InputAudioSamples::new(
             AudioSamples::Mono(samples),
-            D + Duration::from_millis(50) - shift,
+            D + Duration::from_millis(130) - shift,
             RATE,
         ));
 
-        let out_chunk_2 =
-            mono(r.get_samples((D + Duration::from_millis(40), D + Duration::from_millis(60))));
-        assert_eq!(out_chunk_2.len(), 960);
+        all_output.extend(read_chunks(&mut r, D + Duration::from_millis(40), 5));
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(
-            &[&pad, &out_chunk_1, &out_chunk_2],
+            &[&pad, &all_output],
             RATE,
             "running_input_shifted_backward_within_threshold.wav",
         );
 
+        let start = FADE_IN + FIR_WINDOW;
         SignalAssertion {
-            output: &out_chunk_2,
-            source: &source.shifted(D + Duration::from_millis(40) + SAMPLE48),
+            output: &all_output[start..],
+            source: &source.shifted(D + Duration::from_millis(20) + SAMPLE48 * (start as u32 + 1)),
         }
         .assert();
     }
 
-    // FLAG: input_starts_at_request_start — running buffer's start is
-    // pinned at ~40+D ms; cannot be moved exactly to the request start.
-
-    /// Append continuous signal [50ms, 70ms)+D with PTS shifted forward
-    /// by 0.5ms (sub-`CONTINUITY_THRESHOLD`). Audio content is continuous
+    /// Append continuous signal [130ms, 150ms)+D with PTS shifted forward
+    /// by 0.5ms (sub-`SEAM_THRESHOLD`). Audio content is continuous
     /// with the previous input; only the timestamp has a 0.5ms gap.
     /// Analogous to `fresh::input_shifted_forward_within_threshold`.
     #[test]
     fn input_shifted_forward_within_threshold() {
-        let (source, mut r, out_chunk_1) = primed();
+        let (source, mut r, mut all_output) = primed();
         let shift = Duration::from_micros(500);
-        let samples = source.samples(D + Duration::from_millis(50), D + Duration::from_millis(70));
+        let samples = source.samples(
+            D + Duration::from_millis(130),
+            D + Duration::from_millis(150),
+        );
         r.write_batch(InputAudioSamples::new(
             AudioSamples::Mono(samples),
-            D + Duration::from_millis(50) + shift,
+            D + Duration::from_millis(130) + shift,
             RATE,
         ));
 
-        let out_chunk_2 =
-            mono(r.get_samples((D + Duration::from_millis(40), D + Duration::from_millis(60))));
-        assert_eq!(out_chunk_2.len(), 960);
+        all_output.extend(read_chunks(&mut r, D + Duration::from_millis(40), 5));
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(
-            &[&pad, &out_chunk_1, &out_chunk_2],
+            &[&pad, &all_output],
             RATE,
             "running_input_shifted_forward_within_threshold.wav",
         );
 
+        let start = FADE_IN + FIR_WINDOW;
         SignalAssertion {
-            output: &out_chunk_2,
-            source: &source.shifted(D + Duration::from_millis(40) + SAMPLE48),
+            output: &all_output[start..],
+            source: &source.shifted(D + Duration::from_millis(20) + SAMPLE48 * (start as u32 + 1)),
         }
         .assert();
     }
 
-    /// Write 200ms of continuous signal [50ms, 250ms)+D with PTS shifted
-    /// forward by 5ms (input appears 5ms late). The resampler should
-    /// stretch the input over several chunks to fill the gap.
+    /// Write 200ms of continuous signal [130ms, 330ms)+D with PTS shifted
+    /// forward by 5ms (input appears 5ms late). The gap is below
+    /// `SEAM_THRESHOLD`, so it is appended and the whole buffered input
+    /// is placed 5ms later. The resampler should stretch the input over
+    /// several chunks to fill the gap.
     #[test]
     fn drift_shift_forward_5ms() {
         let (source, mut r, out_chunk_1) = primed();
         let shift = Duration::from_millis(5);
         let samples = source.samples(
-            D + Duration::from_millis(50),
-            D + Duration::from_millis(250),
+            D + Duration::from_millis(130),
+            D + Duration::from_millis(330),
         );
         r.write_batch(InputAudioSamples::new(
             AudioSamples::Mono(samples),
-            D + Duration::from_millis(50) + shift,
+            D + Duration::from_millis(130) + shift,
             RATE,
         ));
 
         let mut all_output = out_chunk_1;
-        for i in 0..9 {
-            let start = D + Duration::from_millis(40 + i * 20);
-            let end = start + Duration::from_millis(20);
-            let chunk = mono(r.get_samples((start, end)));
-            assert_eq!(chunk.len(), 960);
-            all_output.extend_from_slice(&chunk);
-        }
+        all_output.extend(read_chunks(&mut r, D + Duration::from_millis(40), 14));
         let pad = silence_samples(RATE, Duration::from_millis(20));
         // should be aligned at 20-40ms range with test signal
         dump_wav(
@@ -531,118 +773,52 @@ mod running {
             "running_drift_shift_forward_5ms.wav",
         );
 
-        let base_pts = D + Duration::from_millis(20) + SAMPLE48;
-
-        // How much stretching already happened at mid and endpoint
-        // For 5ms drift in 40ms (STRETCH_THRESHOLD) is 12.5%, so initial
-        // stretch ratio should be 0.125 * 0.041 * 2 = 0.01025
-
-        // Values bellow are set empirically based on previous test results,
-        // they should match approximate values from comments
-
+        // primed() produced 1024 frames (4 rubato runs of 256), so the drift is first seen when
+        // producing frame 1024.
+        let drift_start = 1024;
+        let base_pts = D + Duration::from_millis(20);
+        let start = FADE_IN + FIR_WINDOW;
         SignalAssertion {
-            output: &all_output[FIR_WINDOW..100],
-            source: &source.shifted(base_pts + SAMPLE48 * FIR_WINDOW as u32),
+            output: &all_output[start..drift_start],
+            source: &source.shifted(base_pts + SAMPLE48 * (start as u32 + 1)),
         }
         .assert();
-        // resampler is processing 256 samples at the time, so sample 960..1024 was
-        // already processed before shift
-        SignalAssertion {
-            output: &all_output[1024..(1024 + 100)],
-            source: &source
-                .shifted(base_pts + SAMPLE48 * 1024 + Duration::from_secs_f64(0.0000012)),
-        }
-        .tolerance(0.01) // larger error because of ramping (changes rate quickly)
-        .stretch(1.00281) // ramping happens here so initial stretching might be lower than expected
-        .assert();
-
-        // upper/lower bound calculation to sanity check values from tests:
-        // offset: 20ms * 0.01025 = 205us
-        // drift: 5ms-0.205ms = 4.795ms
-        // stretch ratio: (4.795ms/40ms) * 0.041 * 2 = 0.00982975
-        let batch_2_start = 960 * 2;
-        SignalAssertion {
-            output: &all_output[batch_2_start..(batch_2_start + 100)],
-            source: &source.shifted(
-                base_pts + Duration::from_secs_f64(batch_2_start as f64 / RATE as f64)
-                    - Duration::from_secs_f64(0.0001666),
-            ),
-        }
-        .tolerance(0.001)
-        .stretch(1.01026) // not sure why it is lower (maybe still ramping)
-        .assert();
-
-        let batch_3_start = 960 * 3;
-        SignalAssertion {
-            output: &all_output[batch_3_start..(batch_3_start + 100)],
-            source: &source.shifted(
-                base_pts + Duration::from_secs_f64(batch_3_start as f64 / RATE as f64)
-                    - Duration::from_secs_f64(0.0003703),
-            ),
-        }
-        .tolerance(0.001)
-        .stretch(1.010300)
-        .assert();
-
-        // upper/lower bound calculation to sanity check values from tests:
-        // offset: 80ms * 0.01025 = 820us
-        // drift: 5ms-0.82ms = 4.18ms
-        // stretch ratio: (4.18ms/40ms) * 0.041 * 2 = 0.008569
-        let batch_5_start = 960 * 5;
-        SignalAssertion {
-            output: &all_output[batch_5_start..(batch_5_start + 100)],
-            source: &source.shifted(
-                base_pts + Duration::from_secs_f64(batch_5_start as f64 / RATE as f64)
-                    - Duration::from_secs_f64(0.0007778),
-            ),
-        }
-        .tolerance(0.001)
-        .stretch(1.010310)
-        .assert();
-
-        // upper/lower bound calculation to sanity check values from tests:
-        // offset: 160ms * 0.01025 = 1640us
-        // drift: 5ms-1.64ms = 3.36ms
-        // stretch ratio: (3.36ms/40ms) * 0.041 * 2 = 0.006888 (this assume max initial stretch, so
-        // real value will be higher)
-        let batch_9_start = 960 * 9;
-        SignalAssertion {
-            output: &all_output[batch_9_start..(batch_9_start + 5)],
-            source: &source.shifted(
-                base_pts + Duration::from_secs_f64(batch_9_start as f64 / RATE as f64)
-                    - Duration::from_secs_f64(0.0015929),
-            ),
-        }
-        .tolerance(0.001)
-        .stretch(1.009240)
-        .assert();
+        // Stretch ratio is `2 * MAX_STRETCH_RATIO * drift / STRETCH_THRESHOLD`, so the drift
+        // decays with time constant `STRETCH_THRESHOLD / (2 * MAX_STRETCH_RATIO)` ≈ 488ms.
+        assert_drift_converges(
+            &all_output,
+            &source,
+            base_pts,
+            drift_start,
+            shift,
+            STRETCH_THRESHOLD
+                .to_duration_saturating()
+                .div_f64(2.0 * MAX_STRETCH_RATIO),
+            true,
+        );
     }
 
-    /// Write 200ms of continuous signal [50ms, 250ms)+D with PTS shifted
-    /// backward by 5ms (input appears 5ms early). The resampler should
-    /// compress the input over several chunks to absorb the overlap.
+    /// Write 200ms of continuous signal [130ms, 330ms)+D with PTS shifted
+    /// backward by 5ms (input appears 5ms early). The overlap is below
+    /// 80ms, so it is appended and the whole buffered input is placed 5ms
+    /// earlier. The resampler should compress the input over several
+    /// chunks to absorb the overlap.
     #[test]
     fn drift_shift_backward_5ms() {
         let (source, mut r, out_chunk_1) = primed();
         let shift = Duration::from_millis(5);
         let samples = source.samples(
-            D + Duration::from_millis(50),
-            D + Duration::from_millis(250),
+            D + Duration::from_millis(130),
+            D + Duration::from_millis(330),
         );
         r.write_batch(InputAudioSamples::new(
             AudioSamples::Mono(samples),
-            D + Duration::from_millis(50) - shift,
+            D + Duration::from_millis(130) - shift,
             RATE,
         ));
 
         let mut all_output = out_chunk_1;
-        for i in 0..9 {
-            let start = D + Duration::from_millis(40 + i * 20);
-            let end = start + Duration::from_millis(20);
-            let chunk = mono(r.get_samples((start, end)));
-            assert_eq!(chunk.len(), 960);
-            all_output.extend_from_slice(&chunk);
-        }
+        all_output.extend(read_chunks(&mut r, D + Duration::from_millis(40), 14));
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(
             &[&pad, &all_output],
@@ -650,121 +826,48 @@ mod running {
             "running_drift_shift_backward_5ms.wav",
         );
 
-        let base_pts = D + Duration::from_millis(20) + SAMPLE48;
-
-        // How much squashing already happened at mid and endpoint
-        // For -5ms drift in 500ms (SQUASH_THRESHOLD) is 1%, so initial
-        // squash ratio should be 0.01 * 0.041 * 2 = 0.00082 (ratio 0.99918)
-
-        // Values below are set empirically based on previous test results,
-        // they should match approximate values from comments
-
+        // primed() produced 1024 frames (4 rubato runs of 256), so the drift is first seen when
+        // producing frame 1024.
+        let drift_start = 1024;
+        let base_pts = D + Duration::from_millis(20);
+        let start = FADE_IN + FIR_WINDOW;
         SignalAssertion {
-            output: &all_output[FIR_WINDOW..100],
-            source: &source.shifted(base_pts + SAMPLE48 * FIR_WINDOW as u32),
+            output: &all_output[start..drift_start],
+            source: &source.shifted(base_pts + SAMPLE48 * (start as u32 + 1)),
         }
         .assert();
-        // resampler is processing 256 samples at the time, so sample 960..1024 was
-        // already processed before shift
-        SignalAssertion {
-            output: &all_output[1024..(1024 + 100)],
-            source: &source
-                .shifted(base_pts + SAMPLE48 * 1024 + Duration::from_secs_f64(0.0000003)),
-        }
-        .tolerance(0.01) // larger error because of ramping (changes rate faster)
-        .stretch(0.99967) // ramping happens here so initial squashing might be lower than expected
-        .assert();
-
-        // upper/lower bound calculation to sanity check values from tests:
-        // offset: 20ms * 0.00082 = 16.4us
-        // drift: 5ms-0.0164ms = 4.984ms
-        // squash ratio: (4.984ms/500ms) * 0.041 * 2 = 0.0008173
-        let batch_2_start = 960 * 2;
-        SignalAssertion {
-            output: &all_output[batch_2_start..(batch_2_start + 100)],
-            source: &source.shifted(
-                base_pts
-                    + Duration::from_secs_f64(batch_2_start as f64 / RATE as f64)
-                    + Duration::from_secs_f64(0.0000135),
-            ),
-        }
-        .tolerance(0.001)
-        .stretch(0.999153) // still ramping up
-        .assert();
-
-        // batch 3
-        let batch_3_start = 960 * 3;
-        SignalAssertion {
-            output: &all_output[batch_3_start..(batch_3_start + 100)],
-            source: &source.shifted(
-                base_pts
-                    + Duration::from_secs_f64(batch_3_start as f64 / RATE as f64)
-                    + Duration::from_secs_f64(0.0000299),
-            ),
-        }
-        .tolerance(0.001)
-        .stretch(0.9992)
-        .assert();
-
-        // upper/lower bound calculation to sanity check values from tests:
-        // offset: 80ms * 0.00082 = 65.6us
-        // drift: -5ms+0.0656ms = -4.934ms
-        // squash ratio: (4.934ms/500ms) * 0.041 * 2 = 0.000808
-        let batch_5_start = 960 * 5;
-        SignalAssertion {
-            output: &all_output[batch_5_start..(batch_5_start + 100)],
-            source: &source.shifted(
-                base_pts
-                    + Duration::from_secs_f64(batch_5_start as f64 / RATE as f64)
-                    + Duration::from_secs_f64(0.0000626),
-            ),
-        }
-        .tolerance(0.001)
-        .stretch(0.9992)
-        .assert();
-
-        // upper/lower bound calculation to sanity check values from tests:
-        // offset: 160ms * 0.00082 = 131.2us
-        // drift: 5ms-0.1312ms = -4.869ms
-        // squash ratio: (4.869ms/500ms) * 0.041 * 2 = 0.000798 (this assumes max initial
-        // squash, so real value will be higher)
-        let batch_9_start = 960 * 9;
-        SignalAssertion {
-            output: &all_output[batch_9_start..(batch_9_start + 100)],
-            source: &source.shifted(
-                base_pts
-                    + Duration::from_secs_f64(batch_9_start as f64 / RATE as f64)
-                    + Duration::from_secs_f64(0.000128),
-            ),
-        }
-        .tolerance(0.001)
-        .stretch(0.99922)
-        .assert();
+        // Squash ratio is `2 * MAX_STRETCH_RATIO * drift / SQUASH_THRESHOLD`, so the drift
+        // decays with time constant `SQUASH_THRESHOLD / (2 * MAX_STRETCH_RATIO)` ≈ 6.1s.
+        assert_drift_converges(
+            &all_output,
+            &source,
+            base_pts,
+            drift_start,
+            shift,
+            SQUASH_THRESHOLD
+                .to_duration_saturating()
+                .div_f64(2.0 * MAX_STRETCH_RATIO),
+            false,
+        );
     }
 
-    /// Write 200ms of continuous signal [50ms, 250ms)+D, then call
+    /// Write 200ms of continuous signal [130ms, 330ms)+D, then call
     /// `get_samples` in 20ms chunks. Input is contiguous with primed()
     /// state — baseline for drift tests.
     #[test]
     fn drift_no_shift() {
         let (source, mut r, out_chunk_1) = primed();
-        r.write_batch(source.batch(D + Duration::from_millis(50), Duration::from_millis(200)));
+        r.write_batch(source.batch(D + Duration::from_millis(130), Duration::from_millis(200)));
 
         let mut all_output = out_chunk_1;
-        for i in 0..9 {
-            let start = D + Duration::from_millis(40 + i * 20);
-            let end = start + Duration::from_millis(20);
-            let chunk = mono(r.get_samples((start, end)));
-            assert_eq!(chunk.len(), 960);
-            all_output.extend_from_slice(&chunk);
-        }
+        all_output.extend(read_chunks(&mut r, D + Duration::from_millis(40), 9));
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(&[&pad, &all_output], RATE, "running_drift_no_shift.wav");
 
+        let start = FADE_IN + FIR_WINDOW;
         SignalAssertion {
-            output: &all_output[FIR_WINDOW..],
-            source: &source
-                .shifted(D + Duration::from_millis(20) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+            output: &all_output[start..],
+            source: &source.shifted(D + Duration::from_millis(20) + SAMPLE48 * (start as u32 + 1)),
         }
         .assert();
     }
@@ -779,25 +882,19 @@ mod running {
 
         // First 100ms batch: PTS shifted forward by 5ms
         let samples_1 = source.samples(
-            D + Duration::from_millis(50),
-            D + Duration::from_millis(150),
+            D + Duration::from_millis(130),
+            D + Duration::from_millis(230),
         );
         r.write_batch(InputAudioSamples::new(
             AudioSamples::Mono(samples_1),
-            D + Duration::from_millis(50) + shift,
+            D + Duration::from_millis(130) + shift,
             RATE,
         ));
         // Second 100ms batch: no offset (contiguous with first batch's real data)
-        r.write_batch(source.batch(D + Duration::from_millis(150), Duration::from_millis(100)));
+        r.write_batch(source.batch(D + Duration::from_millis(230), Duration::from_millis(100)));
 
         let mut all_output = out_chunk_1;
-        for i in 0..9 {
-            let start = D + Duration::from_millis(40 + i * 20);
-            let end = start + Duration::from_millis(20);
-            let chunk = mono(r.get_samples((start, end)));
-            assert_eq!(chunk.len(), 960);
-            all_output.extend_from_slice(&chunk);
-        }
+        all_output.extend(read_chunks(&mut r, D + Duration::from_millis(40), 9));
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(
             &[&pad, &all_output],
@@ -805,10 +902,10 @@ mod running {
             "running_drift_first_batch_offset_forward_5ms_second_no_offset.wav",
         );
 
+        let start = FADE_IN + FIR_WINDOW;
         SignalAssertion {
-            output: &all_output[FIR_WINDOW..],
-            source: &source
-                .shifted(D + Duration::from_millis(20) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+            output: &all_output[start..],
+            source: &source.shifted(D + Duration::from_millis(20) + SAMPLE48 * (start as u32 + 1)),
         }
         .assert();
     }
@@ -823,25 +920,19 @@ mod running {
 
         // First 100ms batch: PTS shifted backward by 5ms
         let samples_1 = source.samples(
-            D + Duration::from_millis(50),
-            D + Duration::from_millis(150),
+            D + Duration::from_millis(130),
+            D + Duration::from_millis(230),
         );
         r.write_batch(InputAudioSamples::new(
             AudioSamples::Mono(samples_1),
-            D + Duration::from_millis(50) - shift,
+            D + Duration::from_millis(130) - shift,
             RATE,
         ));
         // Second 100ms batch: no offset (contiguous with first batch's real data)
-        r.write_batch(source.batch(D + Duration::from_millis(150), Duration::from_millis(100)));
+        r.write_batch(source.batch(D + Duration::from_millis(230), Duration::from_millis(100)));
 
         let mut all_output = out_chunk_1;
-        for i in 0..9 {
-            let start = D + Duration::from_millis(40 + i * 20);
-            let end = start + Duration::from_millis(20);
-            let chunk = mono(r.get_samples((start, end)));
-            assert_eq!(chunk.len(), 960);
-            all_output.extend_from_slice(&chunk);
-        }
+        all_output.extend(read_chunks(&mut r, D + Duration::from_millis(40), 9));
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(
             &[&pad, &all_output],
@@ -849,68 +940,137 @@ mod running {
             "running_drift_first_batch_offset_backward_5ms_second_no_offset.wav",
         );
 
+        let start = FADE_IN + FIR_WINDOW;
         SignalAssertion {
-            output: &all_output[FIR_WINDOW..],
-            source: &source
-                .shifted(D + Duration::from_millis(20) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+            output: &all_output[start..],
+            source: &source.shifted(D + Duration::from_millis(20) + SAMPLE48 * (start as u32 + 1)),
         }
         .assert();
     }
 
-    /// Write [100ms, 120ms)+D after primed (buffered end at 50ms). The 50ms
-    /// gap exceeds `STRETCH_THRESHOLD` so gap-fill prepends zeros. Output:
-    /// - [40, 90)+D  = silence (gap-fill zeros)
-    /// - [90, 100)+D = primed leftover (source [40, 50)+D)
-    /// - [100, 120)+D = written batch
+    /// Write [180ms, 260ms)+D after primed (buffered end at 130ms). The
+    /// 50ms gap is at least `SEAM_THRESHOLD`, so `write_batch` flushes the
+    /// buffered input with 5ms of concealment and the gate places the new
+    /// batch at its PTS once the flushed output is played. Output:
+    /// - [20, 130)+D  = primed input
+    /// - [130, 135)+D = concealment
+    /// - [135, 180)+D = silence
+    /// - [180, 240)+D = written batch, faded in
+    ///
+    /// While the flushed output still covers a request the resync is
+    /// deferred.
     #[test]
-    fn drift_shift_forward_50ms() {
-        let (source, mut r, out_chunk_1) = primed();
-        r.write_batch(source.batch(D + Duration::from_millis(100), Duration::from_millis(20)));
+    fn gap_flushes_and_restarts_at_batch_pts() {
+        let (source, mut r, mut all_output) = primed();
+        r.write_batch(source.batch(D + Duration::from_millis(180), Duration::from_millis(80)));
+        assert!(r.needs_input_resync);
 
-        let mut all_output = out_chunk_1;
-        for i in 0..4 {
-            let start = D + Duration::from_millis(40 + i * 20);
-            let end = start + Duration::from_millis(20);
-            let chunk = mono(r.get_samples((start, end)));
-            assert_eq!(chunk.len(), 960);
-            all_output.extend_from_slice(&chunk);
-        }
+        all_output.extend(read_chunks(&mut r, D + Duration::from_millis(40), 1));
+        assert!(
+            r.needs_input_resync,
+            "resync is deferred while output covers request"
+        );
+        all_output.extend(read_chunks(&mut r, D + Duration::from_millis(60), 9));
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(
             &[&pad, &all_output],
             RATE,
-            "running_drift_shift_forward_50ms.wav",
+            "running_gap_flushes_and_restarts_at_batch_pts.wav",
         );
 
-        // 480 - There is still 10ms unused from prime writes
-        // 64 - resampler is processing 256 at a time, so after prime there are
-        //   still 64 samples left
-        let silence_start = 960 + 64;
-        let silence_end = silence_start + 960 * 2 + 480;
+        let base_pts = D + Duration::from_millis(20);
+        let start = FADE_IN + FIR_WINDOW;
+        let input_end = 960 * 5 + 480;
         SignalAssertion {
-            output: &all_output[(silence_start + FIR_WINDOW)..(silence_end - FIR_WINDOW)],
+            output: &all_output[start..(input_end - FIR_WINDOW)],
+            source: &source.shifted(base_pts + SAMPLE48 * (start as u32 + 1)),
+        }
+        .assert();
+        let batch_start = 960 * 8;
+        SignalAssertion {
+            output: &all_output[(input_end + 240 + FIR_WINDOW)..(batch_start - FIR_WINDOW)],
             source: &SignalSource::new(RATE, silence()),
         }
         .assert();
-        let prime_batch_start = 960 * 3 + 480 + 64;
+        // Placement after a restart is exact to one frame. `SAMPLE48` is truncated to whole
+        // nanoseconds, too imprecise to multiply by a frame index this large.
+        let start = batch_start + FADE_IN + FIR_WINDOW;
         SignalAssertion {
-            output: &all_output
-                [(prime_batch_start + FIR_WINDOW)..(prime_batch_start + (480 - 64) - FIR_WINDOW)],
+            output: &all_output[start..(960 * 11)],
             source: &source
-                .shifted(D + Duration::from_millis(40) + SAMPLE48 * (FIR_WINDOW as u32 + 64)),
+                .shifted(base_pts + Duration::from_secs_f64((start + 1) as f64 / RATE as f64)),
+        }
+        .max_shift(SAMPLE48)
+        .assert();
+    }
+
+    /// Write [130ms, 230ms)+D as 5 batches of 20ms continuous content,
+    /// each with PTS 9ms after the previous batch's end. Each gap is below
+    /// `SEAM_THRESHOLD`, so they are appended, but together they place the
+    /// buffered input 45ms later — more than `STRETCH_THRESHOLD`. Drift
+    /// control treats that as a discontinuity when producing frame 1024
+    /// (41.33ms): it fades out the next 5ms of input and the gate restarts
+    /// the rest 45ms later, faded in. Output:
+    /// - [20, 41.33)+D    = source
+    /// - [41.33, 46.67)+D = fade out, then the filter tail
+    /// - [46.67, 91.33)+D = silence
+    /// - [91.33, 240)+D   = source 45ms late, faded in
+    #[test]
+    fn accumulated_gaps_restart_after_gap() {
+        let (source, mut r, mut all_output) = primed();
+        for i in 0..5 {
+            let content_start = D + Duration::from_millis(130) + Duration::from_millis(20) * i;
+            let samples = source.samples(content_start, content_start + Duration::from_millis(20));
+            r.write_batch(InputAudioSamples::new(
+                AudioSamples::Mono(samples),
+                content_start + Duration::from_millis(9) * (i + 1),
+                RATE,
+            ));
+        }
+
+        all_output.extend(read_chunks(&mut r, D + Duration::from_millis(40), 10));
+        let pad = silence_samples(RATE, Duration::from_millis(20));
+        dump_wav(
+            &[&pad, &all_output],
+            RATE,
+            "running_accumulated_gaps_restart_after_gap.wav",
+        );
+
+        let base_pts = D + Duration::from_millis(20);
+        let start = FADE_IN + FIR_WINDOW;
+        let drift_start = 1024;
+        SignalAssertion {
+            output: &all_output[start..drift_start],
+            source: &source.shifted(base_pts + SAMPLE48 * (start as u32 + 1)),
         }
         .assert();
-        let batch_start = 960 * 4;
+        // Faded out input plus the filter tail (`output_delay`, 16 frames) flushed after it.
+        let flush_end = drift_start + FADE_IN + 16;
+        // The gate pads the rest of the input up to its PTS, 45ms (2160 frames) after the
+        // content's original position.
+        let restart = drift_start + FADE_IN + 2160;
         SignalAssertion {
-            output: &all_output[(batch_start + FIR_WINDOW)..(batch_start + 960 - FIR_WINDOW)],
-            source: &source.shifted(D + Duration::from_millis(100) + SAMPLE48 * FIR_WINDOW as u32),
+            output: &all_output[(flush_end + FIR_WINDOW)..(restart - FIR_WINDOW)],
+            source: &SignalSource::new(RATE, silence()),
         }
+        .assert();
+        // Placement after a restart is exact to one frame. `SAMPLE48` is truncated to whole
+        // nanoseconds, too imprecise to multiply by a frame index this large.
+        let start = restart + FADE_IN + FIR_WINDOW;
+        SignalAssertion {
+            output: &all_output[start..],
+            source: &source.shifted(
+                base_pts + Duration::from_secs_f64((start + 1) as f64 / RATE as f64)
+                    - Duration::from_millis(45),
+            ),
+        }
+        .max_shift(SAMPLE48 * 2)
         .assert();
     }
 
     /// Same setup as `primed()` but with PTS shifted up by 1000ms to leave
-    /// room for backward drift. Writes [1010, 1050)+D, reads [1020, 1040)+D.
-    /// Then writes 12 contiguous 100ms batches of audio from [1050, 2250)+D,
+    /// room for backward drift. Writes [1010, 1130)+D, reads [1020, 1040)+D.
+    /// Then writes 12 contiguous 100ms batches of audio from [1130, 2330)+D,
     /// each with PTS shifted backward by `(i+1) * 50ms`. Each batch is 100ms
     /// of audio but its PTS only advances by 50ms, so `input_buffer_end_pts`
     /// falls behind by 50ms per batch. Each batch's PTS stays within the
@@ -923,8 +1083,8 @@ mod running {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal_5s());
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
-        r.write_batch(source.batch(D + Duration::from_millis(1010), Duration::from_millis(20)));
-        r.write_batch(source.batch(D + Duration::from_millis(1030), Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(1010), Duration::from_millis(60)));
+        r.write_batch(source.batch(D + Duration::from_millis(1070), Duration::from_millis(60)));
         let out_chunk_1 = mono(r.get_samples((
             D + Duration::from_millis(1020),
             D + Duration::from_millis(1040),
@@ -933,8 +1093,8 @@ mod running {
         // Each 100ms batch has PTS shifted backward by (i+1)*50ms — would
         // require squashing by 50% to handle without drops.
         for i in 0..12u64 {
-            let content_start = D + Duration::from_millis(1050 + i * 100);
-            let content_end = D + Duration::from_millis(1150 + i * 100);
+            let content_start = D + Duration::from_millis(1130 + i * 100);
+            let content_end = D + Duration::from_millis(1230 + i * 100);
             let samples = source.samples(content_start, content_end);
             r.write_batch(InputAudioSamples::new(
                 AudioSamples::Mono(samples),
@@ -959,105 +1119,97 @@ mod running {
             "running_drift_shift_backward_600ms.wav",
         );
 
+        // The first 64 samples of the second request are leftover from the
+        // first request's output_buffer, they play before the drop.
+        let start = FADE_IN + FIR_WINDOW;
         SignalAssertion {
-            output: &all_output[FIR_WINDOW..960],
+            output: &all_output[start..(960 + 64 - FIR_WINDOW)],
             source: &source
-                .shifted(D + Duration::from_millis(1020) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+                .shifted(D + Duration::from_millis(1020) + SAMPLE48 * (start as u32 + 1)),
         }
         .assert();
 
-        // After DROP, the buffer is realigned. The first 64 samples are
-        // leftover from the primed run's output_buffer. Content is shifted
-        // by 600ms relative to the normal timeline.
-        SignalAssertion {
-            output: &chunk[(64 + FIR_WINDOW)..],
-            source: &source.shifted(
-                D + Duration::from_millis(1040)
-                    + SAMPLE48 * (64 + FIR_WINDOW as u32 - 1)
-                    + Duration::from_millis(600),
-            ),
-        }
-        .assert();
+        // After DROP, content is shifted by ~600ms relative to the normal
+        // timeline. `splice::drop_frames` moves the cut by up to
+        // `SEARCH_DURATION` (5ms) to where the waveform matches best and
+        // crossfades over the first `CROSSFADE_DURATION` (5ms) after it.
+        let after_crossfade = 64 + FADE_IN + FIR_WINDOW;
+        let expected = source.shifted(
+            D + Duration::from_millis(1040)
+                + SAMPLE48 * (after_crossfade as u32 + 1)
+                + Duration::from_millis(600),
+        );
+        let (cut_error, rms) = measure_offset(
+            &chunk[after_crossfade..],
+            &expected,
+            Duration::from_millis(5),
+        );
+        assert!(
+            rms < 0.01 && cut_error.abs() <= 0.005,
+            "dropped {:.3}ms instead of 600ms ± 5ms (rms {rms:.4})",
+            600.0 + cut_error * 1e3
+        );
     }
 }
 
-/// Third `get_samples` call on a resampler that has been driven through
-/// **two** prior requests. The common setup writes [10, 50)+D and calls
-/// `get_samples((20, 40)+D)` and `get_samples((40, 60)+D)`, after which:
-/// - the input buffer is fully drained (0 frames, `end_pts = 50+D`),
-/// - the second `get_samples` over-produced into the squash branch and
-///   left ~80 zero frames in `output_buffer` for the next call.
+/// `get_samples` calls after the input ran out. The common setup writes
+/// [10, 70)+D and reads [20, 80)+D in three 20ms requests. The gate needs
+/// input far enough past the request end, so the input can only run out
+/// in the third request, where it is played to its end and flushed with
+/// 5ms of concealment, after which:
+/// - the input buffer is empty and the resampler is resyncing,
+/// - `output_buffer` is empty, the concealment ended at 75ms.
 ///
-/// Each test then writes a *single* batch and calls
-/// `get_samples((60, 80)+D)`. The concatenated output of all three
-/// `get_samples` calls is dumped to a WAV file for inspection.
-///
-/// The first ~80 output samples of every test are the leftover zeros
-/// from the second init `get_samples` — they appear before the new
-/// write's signal can reach the output. Test assertions are deferred
-/// (visually verify the dumped WAVs first).
+/// Each test then writes new input and reads from (80, 100)+D on. The
+/// concatenated output of all `get_samples` calls is dumped to a WAV file
+/// for inspection.
 mod drained {
     use super::*;
 
-    /// Common init: [10, 50)+D input, then `get_samples((20, 40)+D)` and
-    /// `get_samples((40, 60)+D)`.
+    /// Common init: [10, 70)+D input, then reads of [20, 80)+D.
     fn primed() -> (SignalSource, InputResampler, Vec<f64>) {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
-        r.write_batch(source.batch(D + Duration::from_millis(10), Duration::from_millis(20)));
-        r.write_batch(source.batch(D + Duration::from_millis(30), Duration::from_millis(20)));
-        let first =
-            mono(r.get_samples((D + Duration::from_millis(20), D + Duration::from_millis(40))));
-        let second =
-            mono(r.get_samples((D + Duration::from_millis(40), D + Duration::from_millis(60))));
-        let mut prev = Vec::with_capacity(first.len() + second.len());
-        prev.extend_from_slice(&first);
-        prev.extend_from_slice(&second);
+        r.write_batch(source.batch(D + Duration::from_millis(10), Duration::from_millis(30)));
+        r.write_batch(source.batch(D + Duration::from_millis(40), Duration::from_millis(30)));
+        let prev = read_chunks(&mut r, D + Duration::from_millis(20), 3);
         (source, r, prev)
     }
 
-    /// Assert primed() output. Input was [10, 50)+D, reads were [20, 60)+D.
-    /// First 20ms of output ([20, 40)+D) should reproduce the source.
-    /// Second 20ms ([40, 60)+D) has only 10ms of input — first half is
-    /// signal, second half is silence.
+    /// Assert primed() output: the input [20, 70)+D, 5ms of concealment
+    /// and silence until 80ms.
     #[test]
     fn primed_output() {
-        let (source, _r, all_output) = primed();
+        let (source, r, all_output) = primed();
 
         let pad = silence_samples(RATE, Duration::from_millis(20));
         dump_wav(&[&pad, &all_output], RATE, "drained_primed_output.wav");
 
-        // [20, 40)+D — fully covered by input
+        let start = FADE_IN + FIR_WINDOW;
+        let input_end = 960 * 2 + 480;
         SignalAssertion {
-            output: &all_output[FIR_WINDOW..960],
-            source: &source
-                .shifted(D + Duration::from_millis(20) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+            output: &all_output[start..(input_end - FIR_WINDOW)],
+            source: &source.shifted(D + Duration::from_millis(20) + SAMPLE48 * (start as u32 + 1)),
         }
         .assert();
-        // [40, 50)+D — last 10ms of input
         SignalAssertion {
-            output: &all_output[960..(960 + 470)],
-            source: &source.shifted(D + Duration::from_millis(20) + SAMPLE48 * 961),
-        }
-        .assert();
-        // [50, 60)+D — no input, should be silence
-        SignalAssertion {
-            output: &all_output[(960 + 490)..1910],
+            output: &all_output[(input_end + 240 + FIR_WINDOW)..],
             source: &SignalSource::new(RATE, silence()),
         }
         .assert();
+        assert!(r.needs_input_resync);
+        assert_eq!(r.resampler_input_buffer.frames(), 0);
+        assert_eq!(r.output_buffer.frames(), 0);
     }
 
-    /// Read [60, 80)+D on already drained state — no new input written.
-    /// Output should be silence.
+    /// Read [80, 100)+D on drained state — no new input written. Output
+    /// is silence.
     #[test]
     fn no_new_input() {
         let (_source, mut r, _prev) = primed();
 
-        let chunk =
-            mono(r.get_samples((D + Duration::from_millis(60), D + Duration::from_millis(80))));
-        assert_eq!(chunk.len(), 960);
+        let chunk = read_chunks(&mut r, D + Duration::from_millis(80), 1);
 
         SignalAssertion {
             output: &chunk,
@@ -1066,102 +1218,56 @@ mod drained {
         .assert();
     }
 
-    /// Write [50, 70)+D and [70, 90)+D after drained state, then read
-    /// [60, 80)+D. Input fully covers the request. Output should
-    /// reproduce the source.
+    /// Write [70, 150)+D after drained state, contiguous with the flushed
+    /// input, then read [80, 120)+D. The part of the new input before 80ms
+    /// is already in the past: the gate drains it and fades in the rest at
+    /// 80ms.
     #[test]
-    fn input_covers_request() {
+    fn input_continues() {
         let (source, mut r, mut all_output) = primed();
 
-        r.write_batch(source.batch(D + Duration::from_millis(50), Duration::from_millis(20)));
-        r.write_batch(source.batch(D + Duration::from_millis(70), Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(70), Duration::from_millis(80)));
 
-        let chunk =
-            mono(r.get_samples((D + Duration::from_millis(60), D + Duration::from_millis(80))));
-        assert_eq!(chunk.len(), 960);
-        all_output.extend_from_slice(&chunk);
-
+        let chunks = read_chunks(&mut r, D + Duration::from_millis(80), 2);
+        all_output.extend_from_slice(&chunks);
         let pad = silence_samples(RATE, Duration::from_millis(20));
-        dump_wav(
-            &[&pad, &all_output],
-            RATE,
-            "drained_input_covers_request.wav",
-        );
+        dump_wav(&[&pad, &all_output], RATE, "drained_input_continues.wav");
 
+        // Placement after a restart is exact to one frame.
+        let start = FADE_IN + FIR_WINDOW;
         SignalAssertion {
-            output: &chunk[FIR_WINDOW..],
-            source: &source
-                .shifted(D + Duration::from_millis(60) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+            output: &chunks[start..],
+            source: &source.shifted(D + Duration::from_millis(80) + SAMPLE48 * (start as u32 + 1)),
         }
+        .max_shift(SAMPLE48)
         .assert();
     }
 
-    /// Write [55, 75)+D and [75, 95)+D after drained state, then read
-    /// [60, 80)+D. 5ms gap from drained end (50ms) to new input (55ms),
-    /// but input fully covers the request. Output should reproduce the
-    /// source.
+    /// Write [90, 170)+D after drained state, then read [80, 120)+D. The
+    /// gate pads 10ms of silence and fades in the input at 90ms.
     #[test]
-    fn input_covers_request_5ms_gap() {
+    fn input_after_gap() {
         let (source, mut r, mut all_output) = primed();
 
-        r.write_batch(source.batch(D + Duration::from_millis(55), Duration::from_millis(20)));
-        r.write_batch(source.batch(D + Duration::from_millis(75), Duration::from_millis(20)));
+        r.write_batch(source.batch(D + Duration::from_millis(90), Duration::from_millis(80)));
 
-        let chunk =
-            mono(r.get_samples((D + Duration::from_millis(60), D + Duration::from_millis(80))));
-        assert_eq!(chunk.len(), 960);
-        all_output.extend_from_slice(&chunk);
-
+        let chunks = read_chunks(&mut r, D + Duration::from_millis(80), 2);
+        all_output.extend_from_slice(&chunks);
         let pad = silence_samples(RATE, Duration::from_millis(20));
-        dump_wav(
-            &[&pad, &all_output],
-            RATE,
-            "drained_input_covers_request_5ms_gap.wav",
-        );
+        dump_wav(&[&pad, &all_output], RATE, "drained_input_after_gap.wav");
 
         SignalAssertion {
-            output: &chunk[FIR_WINDOW..],
-            source: &source
-                .shifted(D + Duration::from_millis(60) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
-        }
-        .assert();
-    }
-
-    /// Write [65, 85)+D and [85, 105)+D after drained state, then read
-    /// [60, 80)+D. 15ms gap from drained end (50ms) to new input (65ms).
-    /// Input starts 5ms into the request — first 5ms of output is
-    /// silence, remainder reproduces the source.
-    #[test]
-    fn input_covers_request_15ms_gap() {
-        let (source, mut r, mut all_output) = primed();
-
-        r.write_batch(source.batch(D + Duration::from_millis(65), Duration::from_millis(20)));
-        r.write_batch(source.batch(D + Duration::from_millis(85), Duration::from_millis(20)));
-
-        let chunk =
-            mono(r.get_samples((D + Duration::from_millis(60), D + Duration::from_millis(80))));
-        assert_eq!(chunk.len(), 960);
-        all_output.extend_from_slice(&chunk);
-
-        let pad = silence_samples(RATE, Duration::from_millis(20));
-        dump_wav(
-            &[&pad, &all_output],
-            RATE,
-            "drained_input_covers_request_15ms_gap.wav",
-        );
-
-        // 5ms at 48kHz = 240 samples of silence before input starts
-        let boundary = 240;
-        SignalAssertion {
-            output: &chunk[0..(boundary - FIR_WINDOW)],
+            output: &chunks[..(480 - FIR_WINDOW)],
             source: &SignalSource::new(RATE, silence()),
         }
         .assert();
+        // Placement after a restart is exact to one frame.
+        let start = 480 + FADE_IN + FIR_WINDOW;
         SignalAssertion {
-            output: &chunk[(boundary + FIR_WINDOW)..960],
-            source: &source
-                .shifted(D + Duration::from_millis(65) + SAMPLE48 * (FIR_WINDOW as u32 + 1)),
+            output: &chunks[start..],
+            source: &source.shifted(D + Duration::from_millis(80) + SAMPLE48 * (start as u32 + 1)),
         }
+        .max_shift(SAMPLE48)
         .assert();
     }
 }
