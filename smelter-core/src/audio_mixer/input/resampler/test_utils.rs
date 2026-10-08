@@ -132,6 +132,25 @@ impl SignalSource {
         }
     }
 
+    /// Apply the resync fade-in (raised cosine over `frames`, same curve as `splice::fade_in`) to
+    /// the start of this source. Like `SignalAssertion` it treats PTS as relative to the start of
+    /// the asserted output, so apply it after `shifted`.
+    pub fn faded_in(&self, frames: usize) -> Self {
+        let func = self.func.clone();
+        let rate = self.rate;
+        Self {
+            func: Arc::new(move |pts| {
+                let frame = pts.as_secs_f64() * rate as f64;
+                let gain = match frame < frames as f64 {
+                    true => 0.5 * (1.0 - (PI * (frame + 0.5) / frames as f64).cos()),
+                    false => 1.0,
+                };
+                gain * func(pts)
+            }),
+            rate,
+        }
+    }
+
     pub fn sample_at(&self, pts: Timestamp) -> f64 {
         (self.func)(pts)
     }
@@ -234,6 +253,7 @@ pub(super) struct SignalAssertion<'a> {
 struct AssertParams {
     tolerance: f64,
     stretch: f64,
+    max_shift: Duration,
 }
 
 pub(super) struct SignalAssertionWithParams<'a> {
@@ -251,6 +271,7 @@ impl<'a> SignalAssertionWithParams<'a> {
     /// Assert that the output is time-stretched by `ratio` relative to the
     /// reference signal. 1.05 means the output is 5% longer (plays slower),
     /// 0.95 means 5% shorter (plays faster). 1.0 (default) means no stretch.
+    #[allow(dead_code)]
     pub fn stretch(mut self, ratio: f64) -> Self {
         self.params.stretch = ratio;
         self
@@ -265,8 +286,21 @@ impl<'a> SignalAssertion<'a> {
     const DEFAULT_PARAMS: AssertParams = AssertParams {
         tolerance: 0.01,
         stretch: 1.0,
+        max_shift: Duration::ZERO,
     };
 
+    /// Also accept the output shifted by up to `max_shift` either way, e.g. when its placement
+    /// is only exact to one frame.
+    pub fn max_shift(&'a self, max_shift: Duration) -> SignalAssertionWithParams<'a> {
+        let mut params = Self::DEFAULT_PARAMS;
+        params.max_shift = max_shift;
+        SignalAssertionWithParams {
+            inner: self,
+            params,
+        }
+    }
+
+    #[allow(dead_code)]
     pub fn tolerance(&'a self, tolerance: f64) -> SignalAssertionWithParams<'a> {
         let mut params = Self::DEFAULT_PARAMS;
         params.tolerance = tolerance;
@@ -276,10 +310,10 @@ impl<'a> SignalAssertion<'a> {
         }
     }
 
-    #[allow(dead_code)]
     /// Assert that the output is time-stretched by `ratio` relative to the
     /// reference signal. 1.05 means the output is 5% longer (plays slower),
     /// 0.95 means 5% shorter (plays faster). 1.0 (default) means no stretch.
+    #[allow(dead_code)]
     pub fn stretch(&'a self, ratio: f64) -> SignalAssertionWithParams<'a> {
         let mut params = Self::DEFAULT_PARAMS;
         params.stretch = ratio;
@@ -321,6 +355,23 @@ impl<'a> SignalAssertion<'a> {
         if max_err <= params.tolerance {
             tracing::debug!(max_err, "SignalAssertion passed");
             return;
+        }
+
+        // Search in 0.1µs steps.
+        let max_shift_steps = params.max_shift.as_nanos() as i64 / 100;
+        for step in -max_shift_steps..=max_shift_steps {
+            let shift_secs = step as f64 / 10_000_000.0;
+            let shifted: Vec<f64> = (0..length)
+                .map(|i| {
+                    let t_secs = i as f64 / source.rate as f64 + shift_secs;
+                    source.sample_at(Timestamp::from_secs_f64(t_secs))
+                })
+                .collect();
+            let (max_err, _) = max_abs_error(actual, &shifted);
+            if max_err <= params.tolerance {
+                tracing::debug!(max_err, shift_secs, "SignalAssertion passed with shift");
+                return;
+            }
         }
 
         let rms_nominal = rms_at_shift(actual, &source, 0.0);
@@ -396,6 +447,34 @@ impl<'a> SignalAssertion<'a> {
         }
         panic!("{}", buf);
     }
+}
+
+/// Measure where `output` sits in `source`: returns the shift `s` (in seconds, searched within
+/// ±`radius`) for which `output[i]` best matches `source` at `i / rate + s`, and the RMS error
+/// at that shift. Searches in 1µs steps, then refines in 0.1µs steps.
+pub(super) fn measure_offset(
+    output: &[f64],
+    source: &SignalSource,
+    radius: Duration,
+) -> (f64, f64) {
+    let radius_us = radius.as_micros() as i64;
+    let (mut best_shift, mut best_rms) = (0.0_f64, f64::INFINITY);
+    for us in -radius_us..=radius_us {
+        let shift_secs = us as f64 / 1_000_000.0;
+        let rms = rms_at_shift(output, source, shift_secs);
+        if rms < best_rms {
+            (best_shift, best_rms) = (shift_secs, rms);
+        }
+    }
+    let coarse = best_shift;
+    for step in -10..=10 {
+        let shift_secs = coarse + step as f64 / 10_000_000.0;
+        let rms = rms_at_shift(output, source, shift_secs);
+        if rms < best_rms {
+            (best_shift, best_rms) = (shift_secs, rms);
+        }
+    }
+    (best_shift, best_rms)
 }
 
 fn max_abs_error(a: &[f64], b: &[f64]) -> (f64, usize) {
