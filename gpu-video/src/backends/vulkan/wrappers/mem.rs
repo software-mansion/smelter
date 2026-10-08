@@ -259,7 +259,7 @@ impl Buffer {
         };
 
         let allocation_create_info = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::Auto,
+            usage: vk_mem::MemoryUsage::AutoPreferHost,
             required_flags: vk::MemoryPropertyFlags::HOST_COHERENT,
             flags: allocation_flags,
             ..Default::default()
