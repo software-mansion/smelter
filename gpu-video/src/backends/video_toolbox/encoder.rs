@@ -1,9 +1,14 @@
 use std::{
-    cell::OnceCell,
     ffi::{c_int, c_void},
     ops::Deref,
+    panic::AssertUnwindSafe,
     ptr::{NonNull, null, null_mut},
-    sync::mpsc,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
+    time::Duration,
 };
 
 use objc2_core_foundation as cf;
@@ -21,6 +26,7 @@ use crate::{
     encoders::{
         VideoEncoderBackend, VideoEncoderParametersInfoH264, VideoEncoderParametersInfoH265,
     },
+    in_flight_tracker::{InFlightTracker, SubmissionToken},
     parameters::{EncoderPreset, EncoderUsage, H264Profile, H265Profile, RateControl},
 };
 
@@ -29,7 +35,7 @@ pub(crate) mod wgpu_api;
 
 const ANNEX_B_START_CODE: [u8; 4] = [0, 0, 0, 1];
 
-pub(crate) trait EncodeCodec: Send {
+pub(crate) trait EncodeCodec: Send + 'static {
     type Profile: Copy + std::fmt::Debug + Send;
 
     /// parsed out of the session's current `CMFormatDescription`
@@ -57,7 +63,7 @@ pub(crate) struct ParameterSetInfo {
     nal_length_size: usize,
 }
 
-pub(crate) trait H26xCodec: Send {
+pub(crate) trait H26xCodec: Send + 'static {
     type Profile: Copy + std::fmt::Debug + Send;
     type ParameterSetKind: Copy + PartialEq + Send + std::fmt::Display;
 
@@ -357,32 +363,43 @@ fn query_parameter_set(
 pub(crate) struct VTEncoder<C: EncodeCodec> {
     session: Session,
     session_generation: u64,
-    stream_format: Option<StreamFormat<C>>,
-    prefetched_stream_format: OnceCell<StreamFormat<C>>,
     frame_index: i64,
     pts_step: i64,
     time_scale: i32,
     picture_byte_size: usize,
-    inline_stream_params: bool,
-    /// Fatal with `!inline_stream_params`.
-    parameters_changed_mid_stream: bool,
-    // Retained so a session invalidated mid-stream can be rebuilt identically.
+    max_in_flight_submissions: u32,
     input_parameters: VideoParameters,
     output_parameters: EncoderOutputParameters<C::Profile>,
-    on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
+    in_flight: InFlightTracker,
+    output_state: Arc<Mutex<OutputState<C>>>,
+    encode_failed: Arc<AtomicBool>,
+    flush_in_progress: Arc<AtomicBool>,
     #[cfg(feature = "wgpu")]
     wgpu: Option<wgpu_api::VTWgpuEncodeState>,
+}
+
+struct OutputState<C: EncodeCodec> {
+    stream_format: Option<StreamFormat<C>>,
+    prefetched_stream_format: Option<StreamFormat<C>>,
+    previous_keyframe_prefix: Option<Vec<u8>>,
+    inline_stream_params: bool,
+    parameters_changed_mid_stream: bool,
+    on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
+    session_invalidated: bool,
+    session_generation: u64,
 }
 
 impl<C: EncodeCodec> VTEncoder<C> {
     pub(crate) fn new(
         input_parameters: VideoParameters,
         output_parameters: EncoderOutputParameters<C::Profile>,
+        max_in_flight_submissions: u32,
         on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<Self, VideoEncoderError> {
         Ok(Self::create(
             input_parameters,
             output_parameters,
+            max_in_flight_submissions,
             false,
             on_chunk_callback,
         )?)
@@ -391,6 +408,7 @@ impl<C: EncodeCodec> VTEncoder<C> {
     pub(crate) fn create(
         input_parameters: VideoParameters,
         output_parameters: EncoderOutputParameters<C::Profile>,
+        max_in_flight_submissions: u32,
         metal_compatible_input: bool,
         on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<Self, VTEncoderError> {
@@ -415,17 +433,26 @@ impl<C: EncodeCodec> VTEncoder<C> {
         Ok(Self {
             session,
             session_generation: 0,
-            stream_format: None,
-            prefetched_stream_format: OnceCell::new(),
             frame_index: 0,
             pts_step,
             time_scale,
             picture_byte_size: width * height * 3 / 2,
-            inline_stream_params: output_parameters.inline_stream_params.unwrap_or(true),
-            parameters_changed_mid_stream: false,
+            max_in_flight_submissions,
             input_parameters,
             output_parameters,
-            on_chunk_callback,
+            in_flight: InFlightTracker::new(max_in_flight_submissions as usize),
+            output_state: Arc::new(Mutex::new(OutputState {
+                stream_format: None,
+                prefetched_stream_format: None,
+                previous_keyframe_prefix: None,
+                inline_stream_params: output_parameters.inline_stream_params.unwrap_or(true),
+                parameters_changed_mid_stream: false,
+                on_chunk_callback,
+                session_invalidated: false,
+                session_generation: 0,
+            })),
+            encode_failed: Arc::new(AtomicBool::new(false)),
+            flush_in_progress: Arc::new(AtomicBool::new(false)),
             #[cfg(feature = "wgpu")]
             wgpu: None,
         })
@@ -576,59 +603,69 @@ impl<C: EncodeCodec> VTEncoder<C> {
         })
     }
 
-    pub(crate) fn encode_pixel_buffer(
-        &mut self,
-        buffer: &cv::CVBuffer,
-        pts: Option<u64>,
-        force_idr: bool,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VTEncoderError> {
-        if self.parameters_changed_mid_stream && !self.inline_stream_params {
-            return Err(VTEncoderError::ParametersDiverged);
-        }
-
-        let (presentation_time_stamp, duration) = self.next_frame_timing();
-
-        let frame_properties = Self::frame_properties(force_idr);
-        let frame_properties = frame_properties
-            .as_ref()
-            .map(|properties| properties.as_ref());
-
-        let generation = self.session_generation;
-        match self.try_encode(
-            buffer,
-            presentation_time_stamp,
-            duration,
-            frame_properties,
-            pts,
-        ) {
-            Err(VTEncoderError::OSStatus(OSStatusError::VTInvalidSession)) => self
-                .recover_from_invalidated_session(
-                    generation,
-                    buffer,
-                    presentation_time_stamp,
-                    duration,
-                    frame_properties,
-                    pts,
-                ),
-            result => result,
-        }
+    fn frame_completion_deadline(&self, encoded_frame_index: i64) -> Option<cm::CMTime> {
+        let frame_index =
+            encoded_frame_index - i64::from(self.max_in_flight_submissions.saturating_sub(1));
+        (frame_index >= 0)
+            .then(|| unsafe { cm::CMTime::new(frame_index * self.pts_step, self.time_scale) })
     }
 
-    fn try_encode(
-        &mut self,
-        buffer: &cv::CVBuffer,
-        presentation_time_stamp: cm::CMTime,
-        duration: cm::CMTime,
-        frame_properties: Option<&cf::CFDictionary>,
-        pts: Option<u64>,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VTEncoderError> {
-        let sample = self.session.encode_blocking(
-            buffer,
-            presentation_time_stamp,
-            duration,
-            frame_properties,
-        )?;
-        self.collect_output(&sample, pts)
+    fn prepare_submission(&mut self, force_idr: bool) -> Result<bool, VTEncoderError> {
+        self.check_fatal_error()?;
+
+        let session_invalidated = self.output_state.lock().unwrap().session_invalidated;
+
+        if session_invalidated {
+            self.rebuild_session()?;
+        }
+
+        let encode_failed = self.encode_failed.swap(false, Ordering::Relaxed);
+        Ok(force_idr || session_invalidated || encode_failed)
+    }
+
+    fn rebuild_session(&mut self) -> Result<(), VTEncoderError> {
+        tracing::warn!("VideoToolbox invalidated the compression session; rebuilding it");
+
+        self.session = Self::build_session(
+            self.input_parameters,
+            &self.output_parameters,
+            self.metal_compatible_input(),
+        )
+        .map_err(|source| VTEncoderError::SessionInvalidated(Box::new(source)))?;
+        self.session_generation += 1;
+
+        let mut output_state = self.output_state.lock().unwrap();
+        output_state.session_generation = self.session_generation;
+        output_state.previous_keyframe_prefix = output_state
+            .stream_format
+            .as_ref()
+            .map(|stream_format| C::keyframe_prefix(&stream_format.parameters).to_vec());
+        output_state.session_invalidated = false;
+
+        Ok(())
+    }
+
+    fn check_fatal_error(&self) -> Result<(), VTEncoderError> {
+        let output_state = self.output_state.lock().unwrap();
+        if output_state.parameters_changed_mid_stream && !output_state.inline_stream_params {
+            return Err(VTEncoderError::ParametersDiverged);
+        }
+        Ok(())
+    }
+
+    fn flush_submitted_frames(&mut self) -> Result<(), VTEncoderError> {
+        self.flush_in_progress.store(true, Ordering::Relaxed);
+        let completed =
+            unsafe { self.session.session.complete_frames(cm::kCMTimeInvalid) }.osstatus();
+        let waited = self.in_flight.wait_for_all(Duration::MAX);
+        self.flush_in_progress.store(false, Ordering::Relaxed);
+        waited?;
+        Ok(completed?)
+    }
+
+    fn flush(&mut self) -> Result<(), VTEncoderError> {
+        self.flush_submitted_frames()?;
+        self.check_fatal_error()
     }
 
     #[cfg(feature = "wgpu")]
@@ -641,76 +678,50 @@ impl<C: EncodeCodec> VTEncoder<C> {
         false
     }
 
-    fn recover_from_invalidated_session(
-        &mut self,
-        generation: u64,
-        buffer: &cv::CVBuffer,
-        presentation_time_stamp: cm::CMTime,
-        duration: cm::CMTime,
-        frame_properties: Option<&cf::CFDictionary>,
-        pts: Option<u64>,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VTEncoderError> {
-        let previous_configuration = if generation == self.session_generation {
-            // Happens on media services resets, sleep/wake or GPU changes.
-            tracing::warn!(
-                "VideoToolbox invalidated the compression session; rebuilding it and retrying the frame"
-            );
+    fn prefetch_stream_format(&self) -> Result<StreamFormat<C>, VTEncoderError> {
+        tracing::debug!(
+            "encoding a dummy frame on a throwaway session to extract the stream parameters"
+        );
 
-            let previous = self
-                .stream_format
-                .as_ref()
-                .map(|stream_format| C::keyframe_prefix(&stream_format.parameters).to_vec());
+        let session = Self::build_session(
+            self.input_parameters,
+            &self.output_parameters,
+            self.metal_compatible_input(),
+        )?;
 
-            self.session = Self::build_session(
-                self.input_parameters,
-                &self.output_parameters,
-                self.metal_compatible_input(),
-            )
-            .map_err(|source| VTEncoderError::SessionInvalidated(Box::new(source)))?;
-            self.session_generation += 1;
+        let buffer = self.session.acquire_input_buffer()?;
 
-            previous
-        } else {
-            None
-        };
-
-        let chunk = self
-            .try_encode(
-                buffer,
-                presentation_time_stamp,
-                duration,
-                frame_properties,
-                pts,
-            )
-            .map_err(|source| VTEncoderError::SessionInvalidated(Box::new(source)))?;
-
-        if let Some(previous) = previous_configuration {
-            if C::keyframe_prefix(&self.stream_format()?.parameters) != previous.as_slice() {
-                self.parameters_changed_mid_stream = true;
-                if self.inline_stream_params {
-                    tracing::warn!(
-                        "stream parameters changed after rebuilding the compression session"
-                    );
-                } else {
-                    return Err(VTEncoderError::ParametersDiverged);
-                }
-            }
-        }
-
-        Ok(chunk)
+        session.encode_for_stream_format(
+            &buffer,
+            unsafe { cm::CMTime::new(0, self.time_scale) },
+            self.frame_duration(),
+        )
     }
+}
 
+impl<C: EncodeCodec> Drop for VTEncoder<C> {
+    fn drop(&mut self) {
+        if let Err(error) = self.flush_submitted_frames() {
+            tracing::error!("Failed to flush the encoder while dropping it: {error}");
+        }
+    }
+}
+
+impl<C: EncodeCodec> OutputState<C> {
     fn collect_output(
         &mut self,
         sample: &cm::CMSampleBuffer,
         pts: Option<u64>,
+        from_current_session: bool,
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VTEncoderError> {
         if let Some(format_description) = unsafe { sample.format_description() } {
-            self.update_stream_format(format_description)?;
+            self.update_stream_format(format_description, from_current_session)?;
         }
 
         let is_keyframe = is_keyframe(sample);
-        let stream_format = self.stream_format()?;
+        let stream_format = self
+            .known_stream_format()
+            .ok_or(VTEncoderError::NoFormatDescription)?;
 
         let mut data = if is_keyframe && self.inline_stream_params {
             C::keyframe_prefix(&stream_format.parameters).to_vec()
@@ -732,7 +743,13 @@ impl<C: EncodeCodec> VTEncoder<C> {
     fn update_stream_format(
         &mut self,
         description: cf::CFRetained<cm::CMFormatDescription>,
+        from_current_session: bool,
     ) -> Result<(), VTEncoderError> {
+        let previous_keyframe_prefix = match from_current_session {
+            true => self.previous_keyframe_prefix.take(),
+            false => None,
+        };
+
         let current = self
             .stream_format
             .as_ref()
@@ -741,26 +758,24 @@ impl<C: EncodeCodec> VTEncoder<C> {
             return Ok(());
         }
 
-        let stream_format = StreamFormat {
-            parameters: C::stream_parameters(&description)?,
-            description,
-        };
+        let stream_format = StreamFormat::<C>::from_description(description)?;
+        let keyframe_prefix = C::keyframe_prefix(&stream_format.parameters);
 
-        let diverged_from_prefetched = self.stream_format.is_none()
-            && self
+        let expected_keyframe_prefix = match &self.stream_format {
+            None => self
                 .prefetched_stream_format
-                .get()
-                .is_some_and(|prefetched| {
-                    C::keyframe_prefix(&prefetched.parameters)
-                        != C::keyframe_prefix(&stream_format.parameters)
-                });
+                .as_ref()
+                .map(|prefetched| C::keyframe_prefix(&prefetched.parameters)),
+            Some(_) => previous_keyframe_prefix.as_deref(),
+        };
+        let diverged = expected_keyframe_prefix.is_some_and(|expected| expected != keyframe_prefix);
 
         self.stream_format = Some(stream_format);
 
-        if diverged_from_prefetched {
+        if diverged {
             self.parameters_changed_mid_stream = true;
             if self.inline_stream_params {
-                tracing::warn!("stream parameters differ from the prefetched ones");
+                tracing::warn!("stream parameters changed mid-stream");
             } else {
                 return Err(VTEncoderError::ParametersDiverged);
             }
@@ -769,44 +784,10 @@ impl<C: EncodeCodec> VTEncoder<C> {
         Ok(())
     }
 
-    fn stream_format(&self) -> Result<&StreamFormat<C>, VTEncoderError> {
-        if let Some(stream_format) = &self.stream_format {
-            return Ok(stream_format);
-        }
-        if let Some(stream_format) = self.prefetched_stream_format.get() {
-            return Ok(stream_format);
-        }
-
-        let stream_format = self.prefetch_stream_format()?;
-        Ok(self.prefetched_stream_format.get_or_init(|| stream_format))
-    }
-
-    fn prefetch_stream_format(&self) -> Result<StreamFormat<C>, VTEncoderError> {
-        tracing::debug!(
-            "encoding a dummy frame on a throwaway session to extract the stream parameters"
-        );
-
-        let session = Self::build_session(
-            self.input_parameters,
-            &self.output_parameters,
-            self.metal_compatible_input(),
-        )?;
-
-        let buffer = self.session.acquire_input_buffer()?;
-
-        let sample = session.encode_blocking(
-            &buffer,
-            unsafe { cm::CMTime::new(0, self.time_scale) },
-            self.frame_duration(),
-            None,
-        )?;
-        let description =
-            unsafe { sample.format_description() }.ok_or(VTEncoderError::NoFormatDescription)?;
-
-        Ok(StreamFormat {
-            parameters: C::stream_parameters(&description)?,
-            description,
-        })
+    fn known_stream_format(&self) -> Option<&StreamFormat<C>> {
+        self.stream_format
+            .as_ref()
+            .or(self.prefetched_stream_format.as_ref())
     }
 }
 
@@ -823,21 +804,75 @@ impl<C: EncodeCodec> VideoEncoderBackend for VTEncoder<C> {
             });
         }
 
-        let buffer = self.session.input_buffer_from_nv12(frame.data.frame)?;
+        let force_idr = self.prepare_submission(force_idr)?;
 
-        let chunk = self.encode_pixel_buffer(&buffer, frame.pts, force_idr)?;
-        (self.on_chunk_callback)(chunk);
-        Ok(())
+        let buffer = self.session.input_buffer_from_nv12(frame.data.frame)?;
+        let (presentation_time_stamp, duration) = self.next_frame_timing();
+        let frame_properties = Self::frame_properties(force_idr);
+        let frame_properties = frame_properties
+            .as_ref()
+            .map(|properties| properties.as_ref());
+
+        let completion_deadline = self.frame_completion_deadline(self.frame_index - 1);
+
+        let session = &self.session;
+        let submitted = self.in_flight.submit(Duration::MAX, |submission_token| {
+            let frame_output = FrameOutput::new(
+                &self.output_state,
+                &self.encode_failed,
+                self.session_generation,
+                frame.pts,
+                submission_token,
+            );
+            session.encode(
+                &buffer,
+                presentation_time_stamp,
+                duration,
+                frame_properties,
+                &frame_output.output_block(),
+            )?;
+
+            if let Some(completion_deadline) = completion_deadline {
+                unsafe { session.session.complete_frames(completion_deadline) }.osstatus()?;
+            }
+
+            Ok(())
+        });
+
+        submitted.map_err(|error| {
+            let error = VTEncoderError::from(error);
+            if matches!(
+                error,
+                VTEncoderError::OSStatus(OSStatusError::VTInvalidSession)
+            ) {
+                self.output_state.lock().unwrap().session_invalidated = true;
+            }
+            error.into()
+        })
     }
 
     fn flush(&mut self) -> Result<(), VideoEncoderError> {
-        Ok(())
+        Ok(VTEncoder::flush(self)?)
     }
 }
 
 impl<C: H26xCodec> VTEncoder<C> {
     fn parameter_set(&self, wanted: C::ParameterSetKind) -> Result<Vec<u8>, VideoEncoderError> {
-        Ok(self.stream_format()?.parameters.parameter_sets_of(wanted)?)
+        if let Some(stream_format) = self.output_state.lock().unwrap().known_stream_format() {
+            return Ok(stream_format.parameters.parameter_sets_of(wanted)?);
+        }
+
+        let prefetched = self.prefetch_stream_format()?;
+
+        let mut output_state = self.output_state.lock().unwrap();
+        output_state
+            .prefetched_stream_format
+            .get_or_insert(prefetched);
+        Ok(output_state
+            .known_stream_format()
+            .ok_or(VTEncoderError::NoFormatDescription)?
+            .parameters
+            .parameter_sets_of(wanted)?)
     }
 }
 
@@ -865,43 +900,109 @@ impl VideoEncoderParametersInfoH265 for VTEncoder<H265Codec> {
     }
 }
 
-struct CallbackOutput {
+type EncodeOutputBlock =
+    block2::RcBlock<dyn Fn(i32, vt::VTEncodeInfoFlags, *mut cm::CMSampleBuffer)>;
+
+struct FrameOutput<C: EncodeCodec> {
+    output_state: Arc<Mutex<OutputState<C>>>,
+    encode_failed: Arc<AtomicBool>,
+    session_generation: u64,
+    pts: Option<u64>,
+    submission_token: Mutex<Option<SubmissionToken>>,
+}
+
+impl<C: EncodeCodec> FrameOutput<C> {
+    fn new(
+        output_state: &Arc<Mutex<OutputState<C>>>,
+        encode_failed: &Arc<AtomicBool>,
+        session_generation: u64,
+        pts: Option<u64>,
+        submission_token: SubmissionToken,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            output_state: output_state.clone(),
+            encode_failed: encode_failed.clone(),
+            session_generation,
+            pts,
+            submission_token: Mutex::new(Some(submission_token)),
+        })
+    }
+
+    fn output_block(self: &Arc<Self>) -> EncodeOutputBlock {
+        let frame_output = self.clone();
+        block2::RcBlock::new(
+            move |status: i32, flags: vt::VTEncodeInfoFlags, sample: *mut cm::CMSampleBuffer| {
+                frame_output.complete(encoded_sample(status, flags, sample));
+            },
+        )
+    }
+
+    fn complete(&self, encoded: Result<cf::CFRetained<cm::CMSampleBuffer>, VTEncoderError>) {
+        let Some(submission_token) = self.submission_token.lock().unwrap().take() else {
+            return;
+        };
+
+        if std::panic::catch_unwind(AssertUnwindSafe(|| self.deliver(encoded))).is_err() {
+            tracing::error!(
+                "Delivering an encoded frame panicked; the encoder has to be recreated"
+            );
+        }
+
+        submission_token.finish();
+    }
+
+    fn deliver(&self, encoded: Result<cf::CFRetained<cm::CMSampleBuffer>, VTEncoderError>) {
+        let mut output_state = self.output_state.lock().unwrap();
+        let from_current_session = self.session_generation == output_state.session_generation;
+        match encoded
+            .and_then(|sample| output_state.collect_output(&sample, self.pts, from_current_session))
+        {
+            Ok(chunk) => (output_state.on_chunk_callback)(chunk),
+            Err(VTEncoderError::OSStatus(OSStatusError::VTInvalidSession)) => {
+                tracing::warn!(
+                    "VideoToolbox invalidated the compression session; dropping the frame"
+                );
+                if from_current_session {
+                    output_state.session_invalidated = true;
+                }
+            }
+            Err(error @ VTEncoderError::ParametersDiverged) => {
+                tracing::error!("Encoding a frame failed: {error}");
+            }
+            Err(error) => {
+                tracing::error!("Encoding a frame failed: {error}");
+                self.encode_failed.store(true, Ordering::Relaxed);
+            }
+        }
+    }
+}
+
+impl<C: EncodeCodec> Drop for FrameOutput<C> {
+    fn drop(&mut self) {
+        let submission_token = self.submission_token.get_mut().unwrap().take();
+        let Some(submission_token) = submission_token else {
+            return;
+        };
+
+        self.encode_failed.store(true, Ordering::Relaxed);
+        submission_token.finish();
+    }
+}
+
+fn encoded_sample(
     status: i32,
     flags: vt::VTEncodeInfoFlags,
-    sample: Option<cf::CFRetained<cm::CMSampleBuffer>>,
-}
-
-// Safety: the sample buffer only carries encoded bytes, there is no GPU resource left to
-// synchronize by the time the output handler runs.
-unsafe impl Send for CallbackOutput {}
-
-/// VT calls the returned block from an internal thread once the frame is emitted.
-fn output_handler(
-    sender: mpsc::Sender<CallbackOutput>,
-) -> block2::RcBlock<dyn Fn(i32, vt::VTEncodeInfoFlags, *mut cm::CMSampleBuffer)> {
-    block2::RcBlock::new(
-        move |status: i32, flags: vt::VTEncodeInfoFlags, sample: *mut cm::CMSampleBuffer| {
-            let sample =
-                NonNull::new(sample).map(|sample| unsafe { cf::CFRetained::retain(sample) });
-            let _ = sender.send(CallbackOutput {
-                status,
-                flags,
-                sample,
-            });
-        },
-    )
-}
-
-fn check_output_status(
-    output: CallbackOutput,
+    sample: *mut cm::CMSampleBuffer,
 ) -> Result<cf::CFRetained<cm::CMSampleBuffer>, VTEncoderError> {
-    output.status.osstatus()?;
+    status.osstatus()?;
 
-    if output.flags.contains(vt::VTEncodeInfoFlags::FrameDropped) {
+    if flags.contains(vt::VTEncodeInfoFlags::FrameDropped) {
         return Err(VTEncoderError::FrameDropped);
     }
 
-    output.sample.ok_or(VTEncoderError::NoEncoderOutput)
+    NonNull::new(sample)
+        .map(|sample| unsafe { cf::CFRetained::retain(sample) })
+        .ok_or(VTEncoderError::NoEncoderOutput)
 }
 
 struct SessionGuard(cf::CFRetained<vt::VTCompressionSession>);
@@ -958,16 +1059,14 @@ impl Session {
         Ok(buffer)
     }
 
-    fn encode_blocking(
+    fn encode(
         &self,
         buffer: &cv::CVBuffer,
         presentation_time_stamp: cm::CMTime,
         duration: cm::CMTime,
         frame_properties: Option<&cf::CFDictionary>,
-    ) -> Result<cf::CFRetained<cm::CMSampleBuffer>, VTEncoderError> {
-        let (sender, receiver) = mpsc::channel();
-        let block = output_handler(sender);
-
+        output_block: &EncodeOutputBlock,
+    ) -> Result<(), VTEncoderError> {
         unsafe {
             self.session
                 .encode_frame_with_output_handler(
@@ -976,20 +1075,59 @@ impl Session {
                     duration,
                     frame_properties,
                     null_mut(),
-                    block2::RcBlock::as_ptr(&block),
+                    block2::RcBlock::as_ptr(output_block),
                 )
                 .osstatus()?;
+        }
 
-            // for blocking encoding
+        Ok(())
+    }
+
+    fn encode_for_stream_format<C: EncodeCodec>(
+        &self,
+        buffer: &cv::CVBuffer,
+        presentation_time_stamp: cm::CMTime,
+        duration: cm::CMTime,
+    ) -> Result<StreamFormat<C>, VTEncoderError> {
+        let (sender, receiver) = mpsc::channel();
+        let output_block: EncodeOutputBlock = block2::RcBlock::new(
+            move |status: i32, flags: vt::VTEncodeInfoFlags, sample: *mut cm::CMSampleBuffer| {
+                let stream_format = encoded_sample(status, flags, sample).and_then(|sample| {
+                    let description = unsafe { sample.format_description() }
+                        .ok_or(VTEncoderError::NoFormatDescription)?;
+                    StreamFormat::from_description(description)
+                });
+                let _ = sender.send(stream_format);
+            },
+        );
+
+        self.encode(
+            buffer,
+            presentation_time_stamp,
+            duration,
+            None,
+            &output_block,
+        )?;
+        unsafe {
             self.session
                 .complete_frames(cm::kCMTimeInvalid)
                 .osstatus()?;
         }
 
-        let output = receiver
+        receiver
             .try_recv()
-            .map_err(|_| VTEncoderError::NoEncoderOutput)?;
-        check_output_status(output)
+            .map_err(|_| VTEncoderError::NoEncoderOutput)?
+    }
+}
+
+impl<C: EncodeCodec> StreamFormat<C> {
+    fn from_description(
+        description: cf::CFRetained<cm::CMFormatDescription>,
+    ) -> Result<Self, VTEncoderError> {
+        Ok(Self {
+            parameters: C::stream_parameters(&description)?,
+            description,
+        })
     }
 }
 
@@ -1024,12 +1162,11 @@ fn configure_session<C: EncodeCodec>(
         C::profile_level(output_parameters.profile).as_ref(),
     )?;
 
-    // for blocking encoding
-    set_optional(
+    set_required(
         "AllowFrameReordering",
         unsafe { vt::kVTCompressionPropertyKey_AllowFrameReordering },
         cf::CFBoolean::new(false).as_ref(),
-    );
+    )?;
 
     if let Some(realtime) = realtime_hint(output_parameters.preset, output_parameters.usage_flags) {
         set_optional(

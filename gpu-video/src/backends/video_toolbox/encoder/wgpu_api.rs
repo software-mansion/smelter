@@ -1,7 +1,8 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     ptr::{NonNull, null_mut},
-    sync::{Arc, Mutex, mpsc},
+    sync::{Arc, Mutex, atomic::Ordering},
+    time::Duration,
 };
 
 use objc2::{rc::Retained, runtime::ProtocolObject};
@@ -16,7 +17,7 @@ use wgpu::hal::{Device as _, Queue as _, metal::Api as MtlApi};
 use crate::{
     EncodedOutputChunk, InputFrame, VideoEncoderError, VideoTexture,
     backends::video_toolbox::{
-        error::{OSStatusError, OSStatusExt, VTEncoderError, VTInitError},
+        error::{OSStatusExt, VTEncoderError, VTInitError},
         wgpu_api::{
             SendSyncCVBuffer, SyncCache, make_texture_cache, video_texture_from_pixel_buffer,
         },
@@ -25,7 +26,7 @@ use crate::{
     encoders::{EncodeTexture, WgpuTextureEncoderError, WgpuVideoEncoderBackend},
 };
 
-use super::{CallbackOutput, EncodeCodec, VTEncoder, check_output_status, output_handler};
+use super::{EncodeCodec, FrameOutput, VTEncoder};
 
 pub(crate) struct VTWgpuEncodeState {
     fence: wgpu::hal::metal::Fence,
@@ -34,17 +35,6 @@ pub(crate) struct VTWgpuEncodeState {
     next_fence_value: u64,
     texture_cache: SyncCache,
     issued_input_textures: Arc<Mutex<HashMap<VideoTexture, SendSyncCVBuffer>>>,
-    pending: VecDeque<PendingFrame>,
-}
-
-struct PendingFrame {
-    submitted: mpsc::Receiver<Result<(), OSStatusError>>,
-    output: mpsc::Receiver<CallbackOutput>,
-    frame_content: SendSyncCVBuffer,
-    session_generation: u64,
-    cm_pts: cm::CMTime,
-    pts: Option<u64>,
-    force_idr: bool,
 }
 
 struct ListenerFrame {
@@ -83,7 +73,6 @@ impl VTWgpuEncodeState {
             next_fence_value: 1,
             texture_cache,
             issued_input_textures: Default::default(),
-            pending: VecDeque::new(),
         })
     }
 }
@@ -93,10 +82,16 @@ impl<C: EncodeCodec> VTEncoder<C> {
         wgpu_device: &wgpu::Device,
         input_parameters: VideoParameters,
         output_parameters: EncoderOutputParameters<C::Profile>,
+        max_in_flight_submissions: u32,
         on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<Self, VTEncoderError> {
-        let mut encoder =
-            Self::create(input_parameters, output_parameters, true, on_chunk_callback)?;
+        let mut encoder = Self::create(
+            input_parameters,
+            output_parameters,
+            max_in_flight_submissions,
+            true,
+            on_chunk_callback,
+        )?;
         encoder.wgpu = Some(VTWgpuEncodeState::new(wgpu_device)?);
         Ok(encoder)
     }
@@ -143,15 +138,16 @@ impl<C: EncodeCodec> VTEncoder<C> {
         frame: &InputFrame<EncodeTexture>,
         force_idr: bool,
     ) -> Result<(), VTEncoderError> {
-        let Some(state) = self.wgpu.as_ref() else {
+        if self.wgpu.is_none() {
             return Err(VTEncoderError::NotConfiguredForWgpuInput);
-        };
-
-        if self.parameters_changed_mid_stream && !self.inline_stream_params {
-            return Err(VTEncoderError::ParametersDiverged);
         }
 
-        let SendSyncCVBuffer(buffer) = state
+        let force_idr = self.prepare_submission(force_idr)?;
+
+        let SendSyncCVBuffer(buffer) = self
+            .wgpu
+            .as_ref()
+            .unwrap()
             .issued_input_textures
             .lock()
             .unwrap()
@@ -159,11 +155,10 @@ impl<C: EncodeCodec> VTEncoder<C> {
             .ok_or(WgpuTextureEncoderError::TextureNotFromEncoder)?;
 
         let (cm_pts, duration) = self.next_frame_timing();
-        let session_generation = self.session_generation;
 
         let listener_frame = ListenerFrame {
             session: self.session.session.0.clone(),
-            buffer: buffer.clone(),
+            buffer,
             frame_properties: Self::frame_properties(force_idr),
         };
 
@@ -178,126 +173,74 @@ impl<C: EncodeCodec> VTEncoder<C> {
                 .map_err(WgpuTextureEncoderError::from)?;
         }
 
-        let (submitted_tx, submitted_rx) = mpsc::channel();
-        let (output_tx, output_rx) = mpsc::channel();
+        let completion_deadline = self.frame_completion_deadline(self.frame_index - 1);
+        let flush_in_progress = self.flush_in_progress.clone();
 
-        let block = block2::RcBlock::new(
-            move |_event: NonNull<ProtocolObject<dyn MTLSharedEvent>>, _value: u64| {
-                let output_block = output_handler(output_tx.clone());
-                let status = unsafe {
-                    listener_frame.session.encode_frame_with_output_handler(
-                        &listener_frame.buffer,
-                        cm_pts,
-                        duration,
-                        listener_frame
-                            .frame_properties
-                            .as_ref()
-                            .map(|properties| properties.as_ref()),
-                        null_mut(),
-                        block2::RcBlock::as_ptr(&output_block),
-                    )
-                };
+        let state = self.wgpu.as_ref().unwrap();
+        self.in_flight.submit(Duration::MAX, |submission_token| {
+            let frame_output = FrameOutput::new(
+                &self.output_state,
+                &self.encode_failed,
+                self.session_generation,
+                frame.pts,
+                submission_token,
+            );
 
-                let _ = submitted_tx.send(status.osstatus());
-            },
-        );
+            let listener_block = block2::RcBlock::new(
+                move |_event: NonNull<ProtocolObject<dyn MTLSharedEvent>>, _value: u64| {
+                    let status = unsafe {
+                        listener_frame.session.encode_frame_with_output_handler(
+                            &listener_frame.buffer,
+                            cm_pts,
+                            duration,
+                            listener_frame
+                                .frame_properties
+                                .as_ref()
+                                .map(|properties| properties.as_ref()),
+                            null_mut(),
+                            block2::RcBlock::as_ptr(&frame_output.output_block()),
+                        )
+                    };
 
-        let shared_event = state
-            .fence
-            .raw_shared_event()
-            .expect("presence was checked when the state was constructed");
-        unsafe {
-            shared_event.notifyListener_atValue_block(
-                &state.listener,
-                value,
-                block2::RcBlock::as_ptr(&block),
-            )
-        };
+                    if let Err(error) = status.osstatus() {
+                        frame_output.complete(Err(error.into()));
+                        return;
+                    }
 
-        state.pending.push_back(PendingFrame {
-            submitted: submitted_rx,
-            output: output_rx,
-            frame_content: SendSyncCVBuffer(buffer),
-            session_generation,
-            cm_pts,
-            pts: frame.pts,
-            force_idr,
-        });
+                    if let Some(completion_deadline) = completion_deadline {
+                        let completed =
+                            unsafe { listener_frame.session.complete_frames(completion_deadline) };
+                        if let Err(error) = completed.osstatus() {
+                            tracing::error!("Completing encoded frames failed: {error}");
+                        }
+                    }
+
+                    if flush_in_progress.load(Ordering::Relaxed) {
+                        let completed =
+                            unsafe { listener_frame.session.complete_frames(cm::kCMTimeInvalid) };
+                        if let Err(error) = completed.osstatus() {
+                            tracing::error!("Completing encoded frames failed: {error}");
+                        }
+                    }
+                },
+            );
+
+            let shared_event = state
+                .fence
+                .raw_shared_event()
+                .expect("presence was checked when the state was constructed");
+            unsafe {
+                shared_event.notifyListener_atValue_block(
+                    &state.listener,
+                    value,
+                    block2::RcBlock::as_ptr(&listener_block),
+                )
+            };
+
+            Ok::<(), VTEncoderError>(())
+        })?;
 
         Ok(())
-    }
-
-    pub(crate) fn wait_for_encoded_frame(
-        &mut self,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VTEncoderError> {
-        let pending = self
-            .wgpu
-            .as_mut()
-            .ok_or(VTEncoderError::NotConfiguredForWgpuInput)?
-            .pending
-            .pop_front()
-            .ok_or(VTEncoderError::NoPendingFrame)?;
-
-        let result = match pending
-            .submitted
-            .recv_timeout(std::time::Duration::from_secs(1))
-        {
-            // Accepted by a session that has since been replaced; its output can't be collected.
-            Ok(Ok(())) if pending.session_generation != self.session_generation => {
-                return self.reencode_after_invalidation(&pending);
-            }
-            Ok(Ok(())) => self.finish_frame(&pending),
-            Ok(Err(status)) => Err(status.into()),
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                return Err(VTEncoderError::SubmissionLost);
-            }
-            Err(mpsc::RecvTimeoutError::Timeout) => return Err(VTEncoderError::SubmissionTimeout),
-        };
-
-        match result {
-            Err(VTEncoderError::OSStatus(OSStatusError::VTInvalidSession)) => {
-                self.reencode_after_invalidation(&pending)
-            }
-            result => result,
-        }
-    }
-
-    fn reencode_after_invalidation(
-        &mut self,
-        pending: &PendingFrame,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VTEncoderError> {
-        // The copy into the input buffer is done, so no listener is needed for the retry.
-        let frame_properties = Self::frame_properties(pending.force_idr);
-        let frame_properties = frame_properties
-            .as_ref()
-            .map(|properties| properties.as_ref());
-        self.recover_from_invalidated_session(
-            pending.session_generation,
-            &pending.frame_content.0,
-            pending.cm_pts,
-            self.frame_duration(),
-            frame_properties,
-            pending.pts,
-        )
-    }
-
-    fn finish_frame(
-        &mut self,
-        pending: &PendingFrame,
-    ) -> Result<EncodedOutputChunk<Vec<u8>>, VTEncoderError> {
-        unsafe {
-            self.session
-                .session
-                .complete_frames(pending.cm_pts)
-                .osstatus()?
-        };
-
-        let output = pending
-            .output
-            .try_recv()
-            .map_err(|_| VTEncoderError::NoEncoderOutput)?;
-        let sample = check_output_status(output)?;
-        self.collect_output(&sample, pending.pts)
     }
 }
 
@@ -309,14 +252,11 @@ impl<C: EncodeCodec> WgpuVideoEncoderBackend for VTEncoder<C> {
         frame: InputFrame<EncodeTexture>,
         force_idr: bool,
     ) -> Result<(), VideoEncoderError> {
-        self.submit_texture(wgpu_queue, &frame, force_idr)?;
-        let chunk = self.wait_for_encoded_frame()?;
-        (self.on_chunk_callback)(chunk);
-        Ok(())
+        Ok(self.submit_texture(wgpu_queue, &frame, force_idr)?)
     }
 
     fn flush(&mut self) -> Result<(), VideoEncoderError> {
-        Ok(())
+        Ok(VTEncoder::flush(self)?)
     }
 
     fn next_input_texture(
