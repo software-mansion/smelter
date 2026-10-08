@@ -1,4 +1,5 @@
 use std::{
+    any::Any,
     ffi::{c_int, c_void},
     ops::Deref,
     panic::AssertUnwindSafe,
@@ -387,6 +388,7 @@ struct OutputState<C: EncodeCodec> {
     on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     session_invalidated: bool,
     session_generation: u64,
+    panic: Option<Box<dyn Any + Send>>,
 }
 
 impl<C: EncodeCodec> VTEncoder<C> {
@@ -450,6 +452,7 @@ impl<C: EncodeCodec> VTEncoder<C> {
                 on_chunk_callback,
                 session_invalidated: false,
                 session_generation: 0,
+                panic: None,
             })),
             encode_failed: Arc::new(AtomicBool::new(false)),
             flush_in_progress: Arc::new(AtomicBool::new(false)),
@@ -663,8 +666,17 @@ impl<C: EncodeCodec> VTEncoder<C> {
         Ok(completed?)
     }
 
+    fn check_for_panic(&self) {
+        let panic = self.output_state.lock().unwrap().panic.take();
+        if let Some(payload) = panic {
+            std::panic::resume_unwind(payload);
+        }
+    }
+
     fn flush(&mut self) -> Result<(), VTEncoderError> {
-        self.flush_submitted_frames()?;
+        let flushed = self.flush_submitted_frames();
+        self.check_for_panic();
+        flushed?;
         self.check_fatal_error()
     }
 
@@ -839,6 +851,8 @@ impl<C: EncodeCodec> VideoEncoderBackend for VTEncoder<C> {
             Ok(())
         });
 
+        self.check_for_panic();
+
         submitted.map_err(|error| {
             let error = VTEncoderError::from(error);
             if matches!(
@@ -942,17 +956,25 @@ impl<C: EncodeCodec> FrameOutput<C> {
             return;
         };
 
-        if std::panic::catch_unwind(AssertUnwindSafe(|| self.deliver(encoded))).is_err() {
-            tracing::error!(
-                "Delivering an encoded frame panicked; the encoder has to be recreated"
-            );
+        let mut output_state = self.output_state.lock().unwrap();
+        if output_state.panic.is_none() {
+            let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
+                self.deliver(&mut output_state, encoded);
+            }));
+            if let Err(payload) = result {
+                output_state.panic = Some(payload);
+            }
         }
+        drop(output_state);
 
         submission_token.finish();
     }
 
-    fn deliver(&self, encoded: Result<cf::CFRetained<cm::CMSampleBuffer>, VTEncoderError>) {
-        let mut output_state = self.output_state.lock().unwrap();
+    fn deliver(
+        &self,
+        output_state: &mut OutputState<C>,
+        encoded: Result<cf::CFRetained<cm::CMSampleBuffer>, VTEncoderError>,
+    ) {
         let from_current_session = self.session_generation == output_state.session_generation;
         match encoded
             .and_then(|sample| output_state.collect_output(&sample, self.pts, from_current_session))
