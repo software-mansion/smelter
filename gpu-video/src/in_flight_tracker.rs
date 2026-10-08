@@ -22,6 +22,7 @@ impl SubmissionToken {
         let _ = self.finished_sender.send(Ok(()));
     }
 
+    #[cfg_attr(not(vulkan), expect(dead_code))]
     pub(crate) fn finish_with_panic(self, payload: Box<dyn Any + Send>) {
         let _ = self.finished_sender.send(Err(payload));
     }

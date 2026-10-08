@@ -127,6 +127,7 @@ impl CoreVideoDeviceBackend for VTDevice {
         let encoder = VTEncoder::<H264Codec>::new(
             parameters.input_parameters,
             parameters.output_parameters,
+            parameters.max_in_flight_submissions.unwrap_or(3),
             on_chunk_callback,
         )?;
 
@@ -143,6 +144,7 @@ impl CoreVideoDeviceBackend for VTDevice {
         let encoder = VTEncoder::<H265Codec>::new(
             parameters.input_parameters,
             parameters.output_parameters,
+            parameters.max_in_flight_submissions.unwrap_or(3),
             on_chunk_callback,
         )?;
 

@@ -4,6 +4,7 @@ use objc2_video_toolbox as vt;
 
 use crate::{
     VideoBackendError, VideoDecoderError, VideoDeviceInitError, VideoEncoderError,
+    in_flight_tracker::{SubmissionWaitTimeout, SubmitError},
     parser::{h264::H264ParserError, reference_manager::ReferenceManagementError},
 };
 
@@ -371,21 +372,23 @@ pub enum VTEncoderError {
     #[error(transparent)]
     MetalTexture(#[from] super::wgpu_api::MetalTextureError),
 
-    #[cfg(feature = "wgpu")]
-    #[error("The frame submission callback was dropped before reporting a result")]
-    SubmissionLost,
+    #[error("Timed out waiting for submitted frames to be encoded")]
+    SubmissionWaitTimeout,
+}
 
-    #[cfg(feature = "wgpu")]
-    #[error(
-        "Timed out waiting for the GPU to finish the frame copy (the device may have been lost)"
-    )]
-    SubmissionTimeout,
+impl From<SubmissionWaitTimeout> for VTEncoderError {
+    fn from(_: SubmissionWaitTimeout) -> Self {
+        VTEncoderError::SubmissionWaitTimeout
+    }
+}
 
-    #[cfg(feature = "wgpu")]
-    #[error(
-        "The encoder was asked to wait for an encoded frame, but no submitted frame is pending"
-    )]
-    NoPendingFrame,
+impl From<SubmitError<VTEncoderError>> for VTEncoderError {
+    fn from(err: SubmitError<VTEncoderError>) -> Self {
+        match err {
+            SubmitError::Timeout(timeout) => timeout.into(),
+            SubmitError::Submit(err) => err,
+        }
+    }
 }
 
 impl From<VTEncoderError> for VideoEncoderError {
@@ -399,6 +402,7 @@ impl From<VTEncoderError> for VideoEncoderError {
             VTEncoderError::WgpuTextureEncoder(err) => {
                 VideoEncoderError::WgpuTextureEncoderError(err)
             }
+            VTEncoderError::SubmissionWaitTimeout => VideoEncoderError::EncodeSubmissionTimeout,
             err @ (VTEncoderError::ParametersDiverged | VTEncoderError::SessionInvalidated(_)) => {
                 VideoEncoderError::EncoderLost(VideoBackendError {
                     message: err.to_string(),

@@ -107,6 +107,7 @@ impl WgpuVideoDeviceBackend for VTDevice {
             &wgpu_device,
             parameters.input_parameters,
             parameters.output_parameters,
+            parameters.max_in_flight_submissions.unwrap_or(3),
             on_chunk_callback,
         )?;
 
@@ -128,6 +129,7 @@ impl WgpuVideoDeviceBackend for VTDevice {
             &wgpu_device,
             parameters.input_parameters,
             parameters.output_parameters,
+            parameters.max_in_flight_submissions.unwrap_or(3),
             on_chunk_callback,
         )?;
 
