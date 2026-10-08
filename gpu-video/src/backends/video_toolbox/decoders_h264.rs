@@ -1,6 +1,8 @@
 use std::{
+    any::Any,
     cmp::{Ordering, Reverse},
     collections::BinaryHeap,
+    panic::AssertUnwindSafe,
     sync::{Arc, Condvar, Mutex, MutexGuard, atomic},
     time::Duration,
 };
@@ -93,6 +95,7 @@ impl<T: Send + 'static> VTDecoderH264<T> {
                     frame_sorter: FrameSorter::default(),
                     on_frame_callback,
                     decode_failed: event_processor.decode_failed_flag(),
+                    panic: None,
                 }),
                 convert,
                 changed: Condvar::new(),
@@ -153,6 +156,8 @@ impl<T: Send + 'static> VTDecoderH264<T> {
                     shared.complete(submission_index, completion)
                 });
 
+        self.shared.check_for_panic();
+
         if let Err(err) = result {
             self.shared.complete(submission_index, Completion::Failed);
             return Err(err.into());
@@ -211,6 +216,8 @@ struct State<T> {
     frame_sorter: FrameSorter<T>,
     on_frame_callback: Box<dyn FnMut(OutputFrame<T>) + Send>,
     decode_failed: Arc<atomic::AtomicBool>,
+    /// Panic caught in the output handler, resumed on the user thread.
+    panic: Option<Box<dyn Any + Send>>,
 }
 
 impl<T: Send + 'static> Shared<T> {
@@ -220,16 +227,28 @@ impl<T: Send + 'static> Shared<T> {
         condition: impl FnMut(&mut State<T>) -> bool,
     ) -> Result<MutexGuard<'_, State<T>>, VideoDecoderError> {
         let state = self.state.lock().unwrap();
-        let (state, result) = self
+        let (mut state, result) = self
             .changed
             .wait_timeout_while(state, timeout, condition)
             .unwrap();
+
+        if let Some(payload) = state.panic.take() {
+            drop(state);
+            std::panic::resume_unwind(payload);
+        }
 
         if result.timed_out() {
             return Err(VideoDecoderError::DecodeSubmissionTimeout);
         }
 
         Ok(state)
+    }
+
+    fn check_for_panic(&self) {
+        let panic = self.state.lock().unwrap().panic.take();
+        if let Some(payload) = panic {
+            std::panic::resume_unwind(payload);
+        }
     }
 
     fn complete(&self, submission_index: u64, completion: Completion) {
@@ -248,7 +267,14 @@ impl<T: Send + 'static> Shared<T> {
         {
             let Reverse(entry) = state.completed.pop().unwrap();
             state.next_to_emit += 1;
-            state.emit(entry.converted);
+            if state.panic.is_none() {
+                let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
+                    state.emit(entry.converted);
+                }));
+                if let Err(payload) = result {
+                    state.panic = Some(payload);
+                }
+            }
         }
 
         self.changed.notify_all();

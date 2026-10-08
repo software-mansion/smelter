@@ -237,8 +237,12 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
                 encode_image.release_to_pool();
                 drop(staging_buffer);
 
+                let Ok(mut on_chunk_callback) = on_chunk_callback.lock() else {
+                    return;
+                };
+
                 match submission.download() {
-                    Ok(chunk) => (on_chunk_callback.lock().unwrap())(chunk),
+                    Ok(chunk) => on_chunk_callback(chunk),
                     Err(err) => {
                         error!("Encoding a frame failed: {err}");
                         encode_failed.store(true, Ordering::Relaxed);
