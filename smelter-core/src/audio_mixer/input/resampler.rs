@@ -219,8 +219,6 @@ impl InputResampler {
             "Resampler received a new batch"
         );
 
-        let seam = Timestamp::from(SEAM_THRESHOLD);
-        let gap = start_pts - self.input_buffer_end_pts;
         let mut samples = batch.samples;
         let mut fade_in = false;
         if !self.needs_input_resync {
@@ -230,15 +228,17 @@ impl InputResampler {
                 debug!("Detected overlapping batches, dropping.");
                 return;
             }
-            if gap >= seam {
+            if start_pts >= self.input_buffer_end_pts + SEAM_THRESHOLD {
                 // Play out the buffered input, `try_resync_after_discontinuity` places the new
                 // batch at its PTS.
+                let gap = start_pts - self.input_buffer_end_pts;
                 debug!(?gap, "Gap between batches, flushing.");
                 self.flush_with_concealment();
             }
         } else if self.resampler_input_buffer.frames() > 0 {
-            if gap >= seam {
+            if start_pts >= self.input_buffer_end_pts + SEAM_THRESHOLD {
                 // Conceal the end of buffered input, then silence until the batch.
+                let gap = start_pts - self.input_buffer_end_pts;
                 let mut padding =
                     (gap.as_secs_f64() * self.resampler.input_sample_rate as f64).round() as usize;
                 if let Some(concealment) = self.history.conceal() {
@@ -250,27 +250,29 @@ impl InputResampler {
                 self.history.clear();
                 fade_in = true;
                 debug!(?gap, "Gap between batches while resyncing, padding.");
-            } else if gap <= -seam {
+            } else if start_pts + SEAM_THRESHOLD <= self.input_buffer_end_pts {
                 // Buffered input wins, keep only the part of the batch after it.
-                let overlap = (gap.as_secs_f64().abs() * self.resampler.input_sample_rate as f64)
+                let overlap = self.input_buffer_end_pts - start_pts;
+                let overlap_frames = (overlap.as_secs_f64()
+                    * self.resampler.input_sample_rate as f64)
                     .round() as usize;
-                if overlap >= samples.len() {
+                if overlap_frames >= samples.len() {
                     debug!(
-                        ?gap,
+                        ?overlap,
                         "Batch overlaps buffered input while resyncing, dropping."
                     );
                     return;
                 }
                 match &mut samples {
                     AudioSamples::Mono(samples) => {
-                        samples.drain(..overlap);
+                        samples.drain(..overlap_frames);
                     }
                     AudioSamples::Stereo(samples) => {
-                        samples.drain(..overlap);
+                        samples.drain(..overlap_frames);
                     }
                 }
                 debug!(
-                    ?gap,
+                    ?overlap,
                     "Batch overlaps buffered input while resyncing, trimming."
                 );
             }
