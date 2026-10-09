@@ -486,7 +486,8 @@ mod fresh {
 
 /// Batches written while the resampler is resyncing, before the gate
 /// places the buffered input. `write_batch` keeps the buffered input on
-/// its timeline: gaps are padded, large overlaps are dropped.
+/// its timeline: gaps are padded, an overlap of at least `SEAM_THRESHOLD`
+/// starts a new timeline that replaces it.
 mod resync {
     use super::*;
 
@@ -530,18 +531,20 @@ mod resync {
         .assert();
     }
 
-    /// Input [20ms, 140ms), then a batch at [40ms, 60ms) with different
-    /// content. It overlaps the buffered input by 100ms, more than 80ms,
-    /// so it is dropped and the output reproduces the first input.
+    /// Input [20ms, 140ms), then a batch at [40ms, 160ms) with different
+    /// content. It overlaps the buffered input by 100ms, at least
+    /// `SEAM_THRESHOLD`, so it starts a new timeline: the buffered input is
+    /// discarded and the gate pads silence until the batch, faded in at
+    /// 40ms.
     #[test]
-    fn large_overlap_is_dropped() {
+    fn large_overlap_replaces_buffered_input() {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
         let other = SignalSource::new(RATE, |_| 0.5);
         let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
 
         r.write_batch(source.batch(D + Duration::from_millis(20), Duration::from_millis(120)));
-        r.write_batch(other.batch(D + Duration::from_millis(40), Duration::from_millis(20)));
+        r.write_batch(other.batch(D + Duration::from_millis(40), Duration::from_millis(120)));
 
         let out_start = D + Duration::from_millis(20);
         let samples = read_chunks(&mut r, out_start, 3);
@@ -549,22 +552,29 @@ mod resync {
         dump_wav(
             &[&pad, &samples],
             RATE,
-            "resync_large_overlap_is_dropped.wav",
+            "resync_large_overlap_replaces_buffered_input.wav",
         );
 
-        let start = FADE_IN + FIR_WINDOW;
+        // [20ms, 40ms) — silence before the batch
+        SignalAssertion {
+            output: &samples[..(960 - FIR_WINDOW)],
+            source: &SignalSource::new(RATE, silence()),
+        }
+        .assert();
+        // [40ms, 80ms) — the batch, faded in by the gate
+        let start = 960 + FADE_IN + FIR_WINDOW;
         SignalAssertion {
             output: &samples[start..],
-            source: &source.shifted(out_start + SAMPLE48 * (start as u32 + 1)),
+            source: &other.shifted(out_start + SAMPLE48 * (start as u32 + 1)),
         }
         .assert();
     }
 
     /// Input [20ms, 100ms), then source content [100ms, 180ms) with PTS
-    /// 10ms early (90ms). The 10ms overlap is under 80ms, so the batch is
-    /// appended as is. The buffered input's start is computed back from
-    /// its end, so everything before the overlap is placed 10ms early:
-    /// request [20ms, 40ms) plays the source from 30ms.
+    /// 5ms early (95ms). The 5ms overlap is under `SEAM_THRESHOLD`, so the
+    /// batch is appended as is. The buffered input's start is computed back
+    /// from its end, so everything before the overlap is placed 5ms early:
+    /// request [20ms, 40ms) plays the source from 25ms.
     #[test]
     fn small_overlap_places_earlier_input_early() {
         try_init_logger();
@@ -578,7 +588,7 @@ mod resync {
         );
         r.write_batch(InputAudioSamples::new(
             AudioSamples::Mono(samples),
-            D + Duration::from_millis(90),
+            D + Duration::from_millis(95),
             RATE,
         ));
 
@@ -595,7 +605,7 @@ mod resync {
         SignalAssertion {
             output: &samples[start..],
             source: &source
-                .shifted(out_start + Duration::from_millis(10) + SAMPLE48 * (start as u32 + 1)),
+                .shifted(out_start + Duration::from_millis(5) + SAMPLE48 * (start as u32 + 1)),
         }
         .assert();
     }
@@ -800,7 +810,7 @@ mod running {
 
     /// Write 200ms of continuous signal [130ms, 330ms)+D with PTS shifted
     /// backward by 5ms (input appears 5ms early). The overlap is below
-    /// 80ms, so it is appended and the whole buffered input is placed 5ms
+    /// `SEAM_THRESHOLD`, so it is appended and the whole buffered input is placed 5ms
     /// earlier. The resampler should compress the input over several
     /// chunks to absorb the overlap.
     #[test]
@@ -1070,13 +1080,14 @@ mod running {
 
     /// Same setup as `primed()` but with PTS shifted up by 1000ms to leave
     /// room for backward drift. Writes [1010, 1130)+D, reads [1020, 1040)+D.
-    /// Then writes 12 contiguous 100ms batches of audio from [1130, 2330)+D,
-    /// each with PTS shifted backward by `(i+1) * 50ms`. Each batch is 100ms
-    /// of audio but its PTS only advances by 50ms, so `input_buffer_end_pts`
-    /// falls behind by 50ms per batch. Each batch's PTS stays within the
-    /// 80ms anti-overlap tolerance of the previous `input_buffer_end_pts`.
+    /// Then writes 80 contiguous 20ms batches of audio from [1130, 2730)+D,
+    /// each with PTS shifted backward by `(i+1) * 7.5ms`. Each batch is 20ms
+    /// of audio but its PTS only advances by 12.5ms, so `input_buffer_end_pts`
+    /// falls behind by 7.5ms per batch. Each overlap is below
+    /// `SEAM_THRESHOLD`, so the batches are appended instead of starting a
+    /// new timeline.
     ///
-    /// After all writes the accumulated drift is ~600ms. Read at
+    /// After all writes the accumulated drift is 600ms. Read at
     /// [1040, 1060)+D → triggers DROP.
     #[test]
     fn drift_shift_backward_600ms() {
@@ -1090,19 +1101,19 @@ mod running {
             D + Duration::from_millis(1040),
         )));
 
-        // Each 100ms batch has PTS shifted backward by (i+1)*50ms — would
-        // require squashing by 50% to handle without drops.
-        for i in 0..12u64 {
-            let content_start = D + Duration::from_millis(1130 + i * 100);
-            let content_end = D + Duration::from_millis(1230 + i * 100);
+        // Each 20ms batch has PTS shifted backward by (i+1)*7.5ms — would
+        // require squashing by 37.5% to handle without drops.
+        for i in 0..80u64 {
+            let content_start = D + Duration::from_millis(1130 + i * 20);
+            let content_end = D + Duration::from_millis(1150 + i * 20);
             let samples = source.samples(content_start, content_end);
             r.write_batch(InputAudioSamples::new(
                 AudioSamples::Mono(samples),
-                content_start - Duration::from_millis((i + 1) * 50),
+                content_start - Duration::from_micros((i + 1) * 7500),
                 RATE,
             ));
         }
-        // Each batch introduces 50ms of backward drift; after 12 batches the
+        // Each batch introduces 7.5ms of backward drift; after 80 batches the
         // total is 600ms — past SQUASH_THRESHOLD, triggering DROP.
 
         let chunk = mono(r.get_samples((
