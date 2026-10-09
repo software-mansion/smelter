@@ -126,6 +126,17 @@ HResult input_enable_video(IDeckLinkInput *input, DisplayModeType mode,
   return static_cast<HResult>(result);
 }
 
+HResult input_enable_video_with_allocator(
+    IDeckLinkInput *input, DisplayModeType mode, PixelFormat format,
+    VideoInputFlags flags, rust::Box<DynFrameAllocator> allocator) {
+  auto provider = new FrameAllocatorProvider(std::move(allocator));
+  auto result = input->EnableVideoInputWithAllocatorProvider(
+      from_display_mode_type(mode), from_pixel_format(format),
+      from_video_input_flags(flags), provider);
+  provider->Release();
+  return static_cast<HResult>(result);
+}
+
 HResult input_enable_audio(IDeckLinkInput *input, uint32_t sample_rate,
                            AudioSampleType sample_type, uint32_t channels) {
   auto result = input->EnableAudioInput(
@@ -273,7 +284,7 @@ long video_input_frame_row_bytes(IDeckLinkVideoInputFrame *frame) {
   return frame->GetRowBytes();
 }
 
-uint8_t *video_input_frame_bytes(IDeckLinkVideoInputFrame *frame) {
+VideoBufferAccess video_input_frame_start_access(IDeckLinkVideoInputFrame *frame) {
   IDeckLinkVideoBuffer *videoBuffer = nullptr;
   if (frame->QueryInterface(IID_IDeckLinkVideoBuffer, (void **)&videoBuffer) != S_OK) {
     throw std::runtime_error("IDeckLinkVideoInputFrame::QueryInterface(IID_IDeckLinkVideoBuffer) failed.");
@@ -285,15 +296,32 @@ uint8_t *video_input_frame_bytes(IDeckLinkVideoInputFrame *frame) {
   }
 
   void *buffer = nullptr;
-  auto result = videoBuffer->GetBytes(&buffer);
-
-  videoBuffer->EndAccess(bmdBufferAccessRead);
-  videoBuffer->Release();
-
-  if (result != S_OK) {
+  if (videoBuffer->GetBytes(&buffer) != S_OK) {
+    video_buffer_end_access(videoBuffer);
     throw std::runtime_error("IDeckLinkVideoBuffer::GetBytes failed.");
   }
-  return reinterpret_cast<uint8_t *>(buffer);
+  return VideoBufferAccess{videoBuffer, reinterpret_cast<uint8_t *>(buffer)};
+}
+
+void video_buffer_end_access(IDeckLinkVideoBuffer *buffer) {
+  buffer->EndAccess(bmdBufferAccessRead);
+  buffer->Release();
+}
+
+const DynFrameBuffer *video_input_frame_buffer(IDeckLinkVideoInputFrame *frame) {
+  IDeckLinkVideoBuffer *video_buffer = nullptr;
+  if (frame->QueryInterface(IID_IDeckLinkVideoBuffer, (void **)&video_buffer) != S_OK) {
+    return nullptr;
+  }
+  FrameBuffer *buffer = nullptr;
+  bool lent = video_buffer->QueryInterface(IID_RustFrameBuffer, (void **)&buffer) == S_OK;
+  video_buffer->Release();
+  if (!lent) {
+    return nullptr;
+  }
+  // The frame keeps its buffer alive.
+  buffer->Release();
+  return &*buffer->buffer;
 }
 
 PixelFormat video_input_frame_pixel_format(IDeckLinkVideoInputFrame *frame) {

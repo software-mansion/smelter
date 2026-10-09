@@ -33,6 +33,14 @@ pub trait TextureExt {
 
     fn upload_data(&self, queue: &wgpu::Queue, data: &[u8], bytes_per_pixel: u32);
 
+    /// [`wgpu::Queue::submit`] has to be called afterwards
+    fn copy_from_buffer(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        buffer: &wgpu::Buffer,
+        bytes_per_row: u32,
+    );
+
     /// Returns `None` for some depth formats
     fn block_size(&self) -> Option<u32>;
 
@@ -72,6 +80,26 @@ impl TextureExt for wgpu::Texture {
                 bytes_per_row: Some(self.width() * bytes_per_pixel),
                 rows_per_image: Some(self.height()),
             },
+            self.size(),
+        );
+    }
+
+    fn copy_from_buffer(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        buffer: &wgpu::Buffer,
+        bytes_per_row: u32,
+    ) {
+        encoder.copy_buffer_to_texture(
+            wgpu::TexelCopyBufferInfo {
+                buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(bytes_per_row),
+                    rows_per_image: None,
+                },
+            },
+            self.as_image_copy(),
             self.size(),
         );
     }

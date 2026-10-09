@@ -105,6 +105,13 @@ impl VulkanDevice {
 
         let mut wgpu_extensions = hal_adapter.required_device_extensions(wgpu_features);
         required_extensions.append(&mut wgpu_extensions);
+        // Lets capture inputs hand frames in host memory straight to the GPU.
+        if hal_adapter
+            .physical_device_capabilities()
+            .supports_extension(ash::ext::external_memory_host::NAME)
+        {
+            required_extensions.push(ash::ext::external_memory_host::NAME);
+        }
 
         let mut wgpu_physical_device_features =
             hal_adapter.physical_device_features(&required_extensions, wgpu_features);

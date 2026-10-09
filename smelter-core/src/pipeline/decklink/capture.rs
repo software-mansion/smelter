@@ -12,7 +12,10 @@ use decklink::{
 use smelter_render::{FrameData, FramePreProcessor, Resolution, error::ErrorStack};
 use tracing::{Span, debug, info, trace, warn};
 
-use crate::pipeline::decklink::format::{BitDepth, Colorspace, Format};
+use crate::pipeline::decklink::{
+    format::{BitDepth, Colorspace, Format},
+    zero_copy::ZeroCopy,
+};
 use crate::queue::QueueSender;
 
 use crate::prelude::*;
@@ -23,7 +26,7 @@ pub(super) struct ChannelCallbackAdapter {
     video_sender: Option<QueueSender<Frame>>,
     audio_sender: Option<QueueSender<InputAudioSamples>>,
     /// Only set when a side channel is enabled (avoids duplicated processing).
-    frame_pre_processor: Option<Mutex<FramePreProcessor>>,
+    pre_processing: Option<Mutex<PreProcessing>>,
     span: Span,
 
     // I'm not sure, but I suspect that holding Arc here would create a circular
@@ -34,28 +37,53 @@ pub(super) struct ChannelCallbackAdapter {
     last_format: Mutex<Format>,
 }
 
+pub(super) struct PreProcessing {
+    pub pre_processor: FramePreProcessor,
+    pub zero_copy: Option<ZeroCopy>,
+}
+
 impl ChannelCallbackAdapter {
     pub(super) fn new(
         ctx: &Arc<PipelineCtx>,
         span: Span,
         video_sender: Option<QueueSender<Frame>>,
         audio_sender: Option<QueueSender<InputAudioSamples>>,
-        side_channel_enabled: bool,
+        pre_processing: Option<PreProcessing>,
         input: Weak<decklink::Input>,
         initial_format: Format,
     ) -> Self {
-        let frame_pre_processor =
-            side_channel_enabled.then(|| Mutex::new(FramePreProcessor::new(ctx.wgpu_ctx.clone())));
         Self {
             video_sender,
             audio_sender,
-            frame_pre_processor,
+            pre_processing: pre_processing.map(Mutex::new),
             span,
             input,
             sync_point: ctx.queue_ctx.sync_point,
             stream_offset: Mutex::new(None),
             last_format: Mutex::new(initial_format),
         }
+    }
+
+    /// Format detection reports the real format through
+    /// `video_input_format_changed`, which enables it in turn.
+    pub(super) fn enable_video(
+        &self,
+        input: &decklink::Input,
+        mode: decklink::DisplayModeType,
+        pixel_format: PixelFormat,
+    ) -> Result<(), decklink::DeckLinkError> {
+        input.enable_video(
+            mode,
+            pixel_format,
+            VideoInputFlags {
+                enable_format_detection: true,
+                ..Default::default()
+            },
+            self.pre_processing.as_ref().and_then(|pre_processing| {
+                let pre_processing = pre_processing.lock().unwrap();
+                pre_processing.zero_copy.as_ref().map(ZeroCopy::allocator)
+            }),
+        )
     }
 
     fn handle_video_frame(
@@ -72,41 +100,41 @@ impl ChannelCallbackAdapter {
             Duration::from_millis(if self.audio_sender.is_some() { 40 } else { 0 });
         let pts = offset + stream_time + presentation_delay;
 
-        let width = video_frame.width();
-        let height = video_frame.height();
-        let bytes_per_row = video_frame.bytes_per_row();
-        let data = video_frame.bytes()?;
-        let pixel_format = video_frame.pixel_format()?;
-
-        let frame = match pixel_format {
-            PixelFormat::Format8BitYUV => {
-                Self::frame_from_yuv_422(width, height, bytes_per_row, data, pts)
-            }
-            PixelFormat::Format8BitARGB => {
-                Self::frame_from_argb(width, height, bytes_per_row, data, pts)
-            }
-            PixelFormat::Format8BitBGRA => {
-                Self::frame_from_bgra(width, height, bytes_per_row, data, pts)
-            }
-            pixel_format => {
-                warn!(?pixel_format, "Unsupported pixel format");
-                return Ok(());
-            }
+        let resolution = Resolution {
+            width: video_frame.width(),
+            height: video_frame.height(),
         };
-
-        let frame = match &self.frame_pre_processor {
-            Some(pre_processor) => {
-                let texture = pre_processor
-                    .lock()
-                    .unwrap()
-                    .process_to_texture(frame.into(), None);
+        let pixel_format = video_frame.pixel_format()?;
+        let frame = match &self.pre_processing {
+            Some(pre_processing) => {
+                let PreProcessing {
+                    pre_processor,
+                    zero_copy,
+                } = &mut *pre_processing.lock().unwrap();
+                let texture = match zero_copy {
+                    Some(zero_copy) => zero_copy.process(pre_processor, video_frame, pixel_format),
+                    None => Self::frame(video_frame, video_frame.bytes()?, pixel_format, pts)
+                        .map(|frame| pre_processor.process_to_texture(frame.into(), None)),
+                };
+                let Some(texture) = texture else {
+                    return Ok(());
+                };
                 Frame {
                     data: FrameData::Rgba8UnormWgpuTexture(texture),
-                    resolution: Resolution { width, height },
+                    resolution,
                     pts,
                 }
             }
-            None => frame,
+            None => match Self::frame(
+                video_frame,
+                // Queued frames outlive DeckLink's buffer.
+                bytes::Bytes::copy_from_slice(&video_frame.bytes()?),
+                pixel_format,
+                pts,
+            ) {
+                Some(frame) => frame,
+                None => return Ok(()),
+            },
         };
 
         trace!(?frame, ?pixel_format, "Received frame from decklink");
@@ -122,6 +150,32 @@ impl ChannelCallbackAdapter {
             }
         }
         Ok(())
+    }
+
+    fn frame(
+        video_frame: &VideoInputFrame,
+        data: bytes::Bytes,
+        pixel_format: PixelFormat,
+        pts: Timestamp,
+    ) -> Option<Frame> {
+        let width = video_frame.width();
+        let height = video_frame.height();
+        let bytes_per_row = video_frame.bytes_per_row();
+        Some(match pixel_format {
+            PixelFormat::Format8BitYUV => {
+                Self::frame_from_yuv_422(width, height, bytes_per_row, data, pts)
+            }
+            PixelFormat::Format8BitARGB => {
+                Self::frame_from_argb(width, height, bytes_per_row, data, pts)
+            }
+            PixelFormat::Format8BitBGRA => {
+                Self::frame_from_bgra(width, height, bytes_per_row, data, pts)
+            }
+            pixel_format => {
+                warn!(?pixel_format, "Unsupported pixel format");
+                return None;
+            }
+        })
     }
 
     fn frame_from_yuv_422(
@@ -283,14 +337,7 @@ impl ChannelCallbackAdapter {
         info!(?pixel_format, ?flags, ?mode, "Detected new input format");
 
         input.pause_streams()?;
-        input.enable_video(
-            mode,
-            pixel_format,
-            VideoInputFlags {
-                enable_format_detection: true,
-                ..Default::default()
-            },
-        )?;
+        self.enable_video(&input, mode, pixel_format)?;
         input.flush_streams()?;
         input.start_streams()?;
 

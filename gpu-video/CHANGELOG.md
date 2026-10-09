@@ -23,6 +23,7 @@
 ### ✨ New features
 - Added VUI support to H.265 encoder ([#1995](https://github.com/software-mansion/smelter/pull/1995) by @noituri)
 - Made decoders work asynchronously. Bytes decoder now returns frames via callback ([#2143](https://github.com/software-mansion/smelter/pull/2143) by @noituri)
+- Added `HostMemoryBuffer`: host memory imported with `VK_EXT_external_memory_host` and exposed as a `wgpu::Buffer`, so a device can capture into it and the GPU copies from it in place. Devices from `VideoAdapterExt::request_device_with_video_support` enable the extension when the adapter supports it ([#2259](https://github.com/software-mansion/smelter/pull/2259) by @michael-dm)
 - Made encoders work asynchronously. Encoded frames are returned via callback ([#2215](https://github.com/software-mansion/smelter/pull/2215) by @noituri)
 - Added an asynchronous H.264 decoder backed by VideoToolbox on macOS (by @jerzywilczek)
 
