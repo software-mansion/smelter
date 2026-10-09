@@ -107,6 +107,10 @@ pub(super) struct InputResampler {
     /// `reset_after_discontinuity` so the next `get_samples` re-runs the gate against fresh
     /// input.
     needs_input_resync: bool,
+
+    /// Output written since the last resync that didn't come from real input (concealment and
+    /// zero padding). `None` before the first resync.
+    synthetic_output: Option<Duration>,
 }
 
 /// Should be on par with FFT resampler, but more CPU intensive.
@@ -161,9 +165,14 @@ const SEAM_THRESHOLD: Duration = Duration::from_millis(10);
 const MAX_PADDED_GAP: Duration = Duration::from_millis(500);
 
 /// Lead of real input past the request end, beyond the one chunk that the run-out check needs,
-/// required to restart after a discontinuity. Keeps a source that barely caught up from running
-/// out again on the next call. A final segment of a stream that doesn't reach that far is lost.
+/// required to restart after a long gap. Keeps a source that barely caught up from running out
+/// again on the next call. A final segment of a stream that doesn't reach that far is lost.
 const RESYNC_LEAD: Duration = Duration::from_millis(20);
+
+/// Synthetic output (concealment and zero padding) before a resync longer than this requires
+/// `RESYNC_LEAD`. After a shorter one (e.g. a lost packet with a small buffer) any real input in
+/// the requested range restarts, so waiting doesn't extend the gap.
+const RESYNC_LONG_GAP: Duration = Duration::from_millis(100);
 
 impl InputResampler {
     pub fn new(
@@ -189,6 +198,7 @@ impl InputResampler {
             history: ConcealmentHistory::new(channels, input_sample_rate),
 
             needs_input_resync: true,
+            synthetic_output: None,
         })
     }
 
@@ -345,6 +355,11 @@ impl InputResampler {
         while !self.needs_input_resync && self.output_buffer.frames() < batch_size {
             self.resample_with_drift_control(pts_range);
         }
+        if let Some(synthetic_output) = &mut self.synthetic_output {
+            let padding = batch_size.saturating_sub(self.output_buffer.frames());
+            *synthetic_output +=
+                Duration::from_secs_f64(padding as f64 / self.resampler.output_sample_rate as f64);
+        }
         // Pads with zeros if `output_buffer` doesn't have enough, e.g. after the input ran out.
         self.output_buffer.read_samples(batch_size)
     }
@@ -467,8 +482,9 @@ impl InputResampler {
     /// and after `reset_after_discontinuity`) and `output_buffer` doesn't cover the request.
     /// Aligns `resampler_input_buffer` so its earliest sample's PTS equals `start_pts`, where the
     /// next output sample lands, and fades it in. Returns false, leaving the input in place,
-    /// until real input reaches `RESYNC_LEAD` past one chunk after `end_pts` (end of the
-    /// requested range).
+    /// until real input reaches into the requested range, or after more than `RESYNC_LONG_GAP`
+    /// of synthetic output until it reaches `RESYNC_LEAD` past one chunk after `end_pts` (end of
+    /// the requested range).
     fn try_resync_after_discontinuity(&mut self, start_pts: Timestamp, end_pts: Timestamp) -> bool {
         // If entire input buffer is in the past
         // Then drop it, caller outputs what is left in `output_buffer` (or zeros)
@@ -488,18 +504,30 @@ impl InputResampler {
             return false;
         }
 
-        // If real input doesn't reach far enough past the request, it would run out right away
-        // Then wait for more. Padding below doesn't count.
-        let input_frame_duration = self.resampler.input_frame_duration();
-        if self.input_buffer_end_pts < end_pts + input_frame_duration + RESYNC_LEAD {
+        let input_buffer_start_pts = self.input_buffer_start_pts();
+
+        // Sync depending on current output gap:
+        // - short gap: sync immediately as long as there is anything in the buffer that would
+        //   get resampled
+        // - long gap: wait until we have some buffer before syncing
+        let has_enough_input = match self.synthetic_output {
+            Some(gap) if gap <= RESYNC_LONG_GAP => {
+                // we already know that input buffer is not in the past, so just checking
+                // if not future
+                input_buffer_start_pts < end_pts
+            }
+            _ => {
+                self.input_buffer_end_pts
+                    >= end_pts + self.resampler.input_frame_duration() + RESYNC_LEAD
+            }
+        };
+        if !has_enough_input {
             trace!(
                 end_pts = ?self.input_buffer_end_pts,
                 "Not enough input to resync, waiting"
             );
             return false;
         }
-
-        let input_buffer_start_pts = self.input_buffer_start_pts();
 
         // If input buffer start before `start_pts`
         // Then drop samples that are too old, (new start will be faded in in next step)
@@ -540,6 +568,8 @@ impl InputResampler {
                 .push_front(AudioSamples::zeros(self.channels, samples));
         }
 
+        debug!(gap = ?self.synthetic_output, "Resynced after gap");
+        self.synthetic_output = Some(Duration::ZERO);
         true
     }
 
@@ -547,6 +577,11 @@ impl InputResampler {
     /// `output_buffer` and reset after discontinuity.
     fn flush_with_concealment(&mut self) {
         if let Some(samples) = self.history.conceal() {
+            if let Some(synthetic_output) = &mut self.synthetic_output {
+                *synthetic_output += Duration::from_secs_f64(
+                    samples.len() as f64 / self.resampler.input_sample_rate as f64,
+                );
+            }
             trace!(len = samples.len(), "Concealing end of input");
             self.resampler_input_buffer.push_back(samples);
         }
