@@ -25,6 +25,7 @@
 - Made decoders work asynchronously. Bytes decoder now returns frames via callback ([#2143](https://github.com/software-mansion/smelter/pull/2143) by @noituri)
 - Made encoders work asynchronously. Encoded frames are returned via callback ([#2215](https://github.com/software-mansion/smelter/pull/2215) by @noituri)
 - Added an asynchronous H.264 decoder backed by VideoToolbox on macOS (by @jerzywilczek)
+- TODO: changelog
 
 ### 🐛 Bug fixes
 - Request only the transfer and compute queues that are actually used when creating the device. ([#2223](https://github.com/software-mansion/smelter/pull/2223) by @jerzywilczek)
