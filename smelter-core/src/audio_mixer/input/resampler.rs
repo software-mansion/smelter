@@ -7,13 +7,12 @@ use rubato::{
 };
 use tracing::{debug, error, trace, warn};
 
-use crate::{
-    AudioChannels, AudioSamples, Timestamp,
-    audio_mixer::input::resampler::splice::CROSSFADE_DURATION, prelude::InputAudioSamples,
-    utils::AudioSamplesBuffer,
-};
+use crate::utils::AudioSamplesBuffer;
+
+use crate::prelude::*;
 
 use concealment::ConcealmentHistory;
+use splice::CROSSFADE_DURATION;
 
 // Maximum *relative* deviation from the nominal resample ratio that we are willing to apply
 // when stretching/squashing to correct drift. Rubato's `Async::new_sinc` is initialized with
@@ -103,8 +102,8 @@ pub(super) struct InputResampler {
     /// Synchronization gate. While true, `get_samples` either serves any frames already in
     /// `output_buffer` (padded with zeros) while there isn't enough input, or aligns the input
     /// buffer to the requested range (via `try_resync_after_discontinuity`) and *does not*
-    /// engage the stretch/squash logic. Cleared once the gate passes; re-armed by
-    /// `reset_after_discontinuity` so the next `get_samples` re-runs the gate against fresh
+    /// engage the stretch/squash logic. Cleared once the gate passes; re-armed on every
+    /// discontinuity (flush or gap-fill) so the next `get_samples` re-runs the gate against fresh
     /// input.
     needs_input_resync: bool,
 
@@ -402,7 +401,12 @@ impl InputResampler {
             splice::fade_out(&mut fade_out, self.resampler.input_sample_rate);
             let samples = self.resampler.flush(&mut fade_out);
             self.output_buffer.push_back(samples);
-            self.reset_after_discontinuity();
+
+            // after resync input will be faded-in
+            self.needs_input_resync = true;
+            if self.resampler_input_buffer.frames() == 0 {
+                self.history.clear();
+            }
             debug!(?drift, "Input buffer behind, restarting after the gap");
             return;
         } else if drift > SHIFT_THRESHOLD {
@@ -479,7 +483,7 @@ impl InputResampler {
     }
 
     /// Pre-resample synchronization gate, called while `needs_input_resync` is set (initially,
-    /// and after `reset_after_discontinuity`) and `output_buffer` doesn't cover the request.
+    /// and after a discontinuity) and `output_buffer` doesn't cover the request.
     /// Aligns `resampler_input_buffer` so its earliest sample's PTS equals `start_pts`, where the
     /// next output sample lands, and fades it in. Returns false, leaving the input in place,
     /// until real input reaches into the requested range, or after more than `RESYNC_LONG_GAP`
@@ -574,7 +578,7 @@ impl InputResampler {
     }
 
     /// Extend the input with concealment, flush all of it through the resampler into
-    /// `output_buffer` and reset after discontinuity.
+    /// `output_buffer` and arm the resync gate. Next batch won't be contiguous with `history`.
     fn flush_with_concealment(&mut self) {
         if let Some(samples) = self.history.conceal() {
             if let Some(synthetic_output) = &mut self.synthetic_output {
@@ -587,16 +591,6 @@ impl InputResampler {
         }
         let samples = self.resampler.flush(&mut self.resampler_input_buffer);
         self.output_buffer.push_back(samples);
-        self.reset_after_discontinuity();
-    }
-
-    /// Reset state that becomes invalid across an input discontinuity. Called after
-    /// `resampler.flush`, which already reset rubato.
-    /// - `needs_input_resync` — re-engage `try_resync_after_discontinuity` so the next
-    ///   `get_samples` call realigns the (now empty) input buffer against the requested PTS
-    ///   range before resampling.
-    /// - `history` — next batch won't be contiguous with recorded input.
-    fn reset_after_discontinuity(&mut self) {
         self.needs_input_resync = true;
         self.history.clear();
     }
@@ -796,23 +790,20 @@ struct ResamplerOutputBuffer {
 impl ResamplerOutputBuffer {
     fn new(channels: AudioChannels, size: usize) -> Self {
         Self {
-            buffer: match channels {
-                AudioChannels::Mono => AudioSamples::Mono(vec![0.0; size]),
-                AudioChannels::Stereo => AudioSamples::Stereo(vec![(0.0, 0.0); size]),
-            },
+            buffer: AudioSamples::zeros(channels, size),
             samples_to_drop: 0,
         }
     }
 
     /// Take a copy of the current buffer contents, skipping the first `samples_to_drop` frames
-    /// if non-zero. Resets `samples_to_drop` to 0 after a single read — repeat reads of the
-    /// same buffer would not have the same skip applied.
+    /// if non-zero. Skipped frames are subtracted from `samples_to_drop`, warmup longer than one
+    /// batch is dropped over consecutive reads.
     fn get_samples(&mut self) -> AudioSamples {
         if self.samples_to_drop == 0 {
             return self.buffer.clone();
         }
         let start = usize::min(self.samples_to_drop, self.buffer.len());
-        self.samples_to_drop = 0;
+        self.samples_to_drop -= start;
         match &self.buffer {
             AudioSamples::Mono(samples) => AudioSamples::Mono(samples[start..].to_vec()),
             AudioSamples::Stereo(samples) => AudioSamples::Stereo(samples[start..].to_vec()),

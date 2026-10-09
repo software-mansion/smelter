@@ -188,10 +188,7 @@ struct ResamplerOutputBuffer {
 impl ResamplerOutputBuffer {
     fn new(channels: AudioChannels, size: usize) -> Self {
         Self {
-            buffer: match channels {
-                AudioChannels::Mono => AudioSamples::Mono(vec![0.0; size]),
-                AudioChannels::Stereo => AudioSamples::Stereo(vec![(0.0, 0.0); size]),
-            },
+            buffer: AudioSamples::zeros(channels, size),
             samples_to_drop: 0,
         }
     }
@@ -201,7 +198,7 @@ impl ResamplerOutputBuffer {
             return self.buffer.clone();
         }
         let start = usize::min(self.samples_to_drop, self.buffer.len());
-        self.samples_to_drop = 0;
+        self.samples_to_drop -= start;
         match &self.buffer {
             AudioSamples::Mono(samples) => AudioSamples::Mono(samples[start..].to_vec()),
             AudioSamples::Stereo(samples) => AudioSamples::Stereo(samples[start..].to_vec()),

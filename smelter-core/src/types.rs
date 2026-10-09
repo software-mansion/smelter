@@ -96,6 +96,13 @@ impl AudioSamples {
         self.len() == 0
     }
 
+    pub(crate) fn channels(&self) -> AudioChannels {
+        match self {
+            AudioSamples::Mono(_) => AudioChannels::Mono,
+            AudioSamples::Stereo(_) => AudioChannels::Stereo,
+        }
+    }
+
     pub(crate) fn zeros(channels: AudioChannels, len: usize) -> Self {
         match channels {
             AudioChannels::Mono => AudioSamples::Mono(vec![0.0; len]),
