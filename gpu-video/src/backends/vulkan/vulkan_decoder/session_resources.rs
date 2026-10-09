@@ -15,7 +15,7 @@ use crate::backends::vulkan::{
         vk_to_h264_level_idc,
     },
     vulkan_decoder::{DecoderTracker, DecoderTrackerWaitState, ImageModifiers, VulkanDecoderError},
-    vulkan_device::DecodingDevice,
+    vulkan_device::{DecodingDevice, queues::SubmitSync},
     wrappers::{
         DecodeInputBufferPool, OpenCommandBuffer, QueryPool, ResultQueryPool, VideoSession,
     },
@@ -337,10 +337,13 @@ impl<'a> VideoSessionResources<'a> {
             image_modifiers.additional_queue_index as u32,
         )?;
 
-        decoding_device.h264_decode_queues.submit_chain_semaphore(
+        decoding_device.h264_decode_queues.submit(
             decode_buffer.end()?,
-            tracker,
-            vk::PipelineStageFlags2::ALL_COMMANDS,
+            &mut tracker.semaphore_tracker,
+            SubmitSync::WaitOnPrevious {
+                wait_stages: vk::PipelineStageFlags2::ALL_COMMANDS,
+                additional_waits: Vec::new(),
+            },
             vk::PipelineStageFlags2::ALL_COMMANDS,
             DecoderTrackerWaitState::NewDecodingImagesLayoutTransition,
         )?;

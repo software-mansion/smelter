@@ -9,7 +9,7 @@ use crate::{
         VulkanEncoderError,
         codec::EncodeCodec,
         vulkan_encoder::{EncoderTrackerWaitState, async_encoder::AsyncVulkanEncoder},
-        wrappers::EncodeInputImage,
+        wrappers::{EncodeInputImage, SemaphoreWaitValue},
     },
     encoders::{
         EncodeTexture, VideoEncoderError, WgpuTextureEncoderError, WgpuVideoEncoderBackend,
@@ -22,7 +22,7 @@ impl<'a, C: EncodeCodec> AsyncVulkanEncoder<'a, C> {
         wgpu_device: &wgpu::Device,
         wgpu_queue: &wgpu::Queue,
         video_texture: &VideoTexture,
-    ) -> Result<EncodeInputImage, VulkanEncoderError> {
+    ) -> Result<(EncodeInputImage, SemaphoreWaitValue), VulkanEncoderError> {
         let hal_queue = unsafe { wgpu_queue.as_hal::<VkApi>().unwrap() };
 
         let input_image = self
@@ -35,14 +35,6 @@ impl<'a, C: EncodeCodec> AsyncVulkanEncoder<'a, C> {
         let Some(wgpu_texture) = video_texture.nv12_texture() else {
             return Err(WgpuTextureEncoderError::TextureNotFromEncoder.into());
         };
-
-        if let Some(wait_for) = self.encoder.tracker.semaphore_tracker.wait_for.as_ref() {
-            hal_queue.add_wait_semaphore(
-                self.encoder.tracker.raw_semaphore(),
-                Some(wait_for.value.0),
-                vk::PipelineStageFlags::ALL_COMMANDS,
-            );
-        }
 
         // Transitioning to a known layout
         let mut encoder = wgpu_device.create_command_encoder(&Default::default());
@@ -69,9 +61,7 @@ impl<'a, C: EncodeCodec> AsyncVulkanEncoder<'a, C> {
             );
 
         let semaphore_submit_info = self
-            .encoder
-            .tracker
-            .semaphore_tracker
+            .input_semaphore_tracker
             .next_submit_info(EncoderTrackerWaitState::TransitionInputImage);
 
         unsafe {
@@ -80,8 +70,9 @@ impl<'a, C: EncodeCodec> AsyncVulkanEncoder<'a, C> {
                 .map_err(WgpuTextureEncoderError::from)?;
         }
 
+        let input_wait_value = semaphore_submit_info.signal_value();
         semaphore_submit_info.mark_submitted();
-        Ok(input_image)
+        Ok((input_image, input_wait_value))
     }
 }
 
@@ -98,9 +89,15 @@ impl<'a, C: EncodeCodec + 'a> WgpuVideoEncoderBackend for AsyncVulkanEncoder<'a,
             .wait_if_full(timeout)
             .map_err(VulkanEncoderError::from)?;
 
-        let encode_image =
+        let (encode_image, input_wait_value) =
             self.image_from_video_texture(wgpu_device, wgpu_queue, &frame.data.texture)?;
-        self.submit_encode(encode_image, None, force_idr, frame.pts)?;
+        self.submit_encode(
+            encode_image,
+            Some(input_wait_value),
+            None,
+            force_idr,
+            frame.pts,
+        )?;
 
         Ok(())
     }

@@ -16,7 +16,10 @@ use crate::{
             h264::{H264Codec, encode::H264WriteParametersInfo},
             h265::{H265Codec, encode::H265WriteParametersInfo},
         },
-        vulkan_device::EncodingDevice,
+        vulkan_device::{
+            EncodingDevice,
+            queues::{SubmitSync, WaitInfo},
+        },
         wrappers::{
             CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, EncodeFeedback,
             EncodeOutputBuffer, EncodeOutputBufferPool, Image, ImageLayoutTracker, ImageView,
@@ -266,7 +269,6 @@ impl EncoderCommandBufferPools {
 
 impl CommandBufferPoolStorage for EncoderCommandBufferPools {
     fn mark_submitted_as_free(&self, last_waited_for: SemaphoreWaitValue) {
-        self.transfer.mark_submitted_as_free(last_waited_for);
         self.encode.mark_submitted_as_free(last_waited_for);
     }
 }
@@ -464,10 +466,13 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
             &profile_info.profile_info,
         )?;
 
-        encoding_device.encode_queues.submit_chain_semaphore(
+        encoding_device.encode_queues.submit(
             buffer.end()?,
-            &mut tracker,
-            vk::PipelineStageFlags2::ALL_COMMANDS,
+            &mut tracker.semaphore_tracker,
+            SubmitSync::WaitOnPrevious {
+                wait_stages: vk::PipelineStageFlags2::ALL_COMMANDS,
+                additional_waits: Vec::new(),
+            },
             vk::PipelineStageFlags2::ALL_COMMANDS,
             EncoderTrackerWaitState::InitializeEncoder,
         )?;
@@ -492,6 +497,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
     fn encode(
         &mut self,
         image: Arc<Image>,
+        additional_waits: Vec<WaitInfo>,
         force_idr: bool,
         pts: Option<u64>,
     ) -> Result<EncodeSubmission, VulkanEncoderError> {
@@ -696,10 +702,13 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
                 );
         }
 
-        let wait_value = self.encoding_device.encode_queues.submit_chain_semaphore(
+        let wait_value = self.encoding_device.encode_queues.submit(
             cmd_buffer.end()?,
-            &mut self.tracker,
-            vk::PipelineStageFlags2::ALL_COMMANDS,
+            &mut self.tracker.semaphore_tracker,
+            SubmitSync::WaitOnPrevious {
+                wait_stages: vk::PipelineStageFlags2::ALL_COMMANDS,
+                additional_waits,
+            },
             vk::PipelineStageFlags2::ALL_COMMANDS,
             EncoderTrackerWaitState::Encode,
         )?;

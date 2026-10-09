@@ -9,8 +9,10 @@ use session_resources::VideoSessionResources;
 use crate::{
     H264ParserError, RawFrameData, ReferenceManagementError, VideoBackendError,
     backends::vulkan::{
-        VulkanCommonError, codec::h264::parameters::SeqParameterSetExt,
-        vulkan_device::DecodingDevice, wrappers::*,
+        VulkanCommonError,
+        codec::h264::parameters::SeqParameterSetExt,
+        vulkan_device::{DecodingDevice, queues::SubmitSync},
+        wrappers::*,
     },
     decoders::VideoDecoderError,
     device::{ColorRange, ColorSpace},
@@ -446,15 +448,16 @@ impl<'a> VulkanDecoder<'a> {
                 )
         };
 
-        self.decoding_device
-            .h264_decode_queues
-            .submit_chain_semaphore(
-                cmd_buffer.end()?,
-                &mut self.tracker,
-                vk::PipelineStageFlags2::ALL_COMMANDS,
-                vk::PipelineStageFlags2::ALL_COMMANDS,
-                DecoderTrackerWaitState::Decode,
-            )?;
+        self.decoding_device.h264_decode_queues.submit(
+            cmd_buffer.end()?,
+            &mut self.tracker.semaphore_tracker,
+            SubmitSync::WaitOnPrevious {
+                wait_stages: vk::PipelineStageFlags2::ALL_COMMANDS,
+                additional_waits: Vec::new(),
+            },
+            vk::PipelineStageFlags2::ALL_COMMANDS,
+            DecoderTrackerWaitState::Decode,
+        )?;
 
         // after the decode save the new reference picture
         self.reference_id_to_dpb_slot_index
@@ -613,17 +616,16 @@ impl<'a> VulkanDecoder<'a> {
             );
         }
 
-        let semaphore_wait_value = self
-            .decoding_device
-            .queues
-            .transfer
-            .submit_chain_semaphore(
-                cmd_buffer.end()?,
-                &mut self.tracker,
-                vk::PipelineStageFlags2::ALL_COMMANDS,
-                vk::PipelineStageFlags2::ALL_COMMANDS,
-                DecoderTrackerWaitState::DownloadImageToBuffer,
-            )?;
+        let semaphore_wait_value = self.decoding_device.queues.transfer.submit(
+            cmd_buffer.end()?,
+            &mut self.tracker.semaphore_tracker,
+            SubmitSync::WaitOnPrevious {
+                wait_stages: vk::PipelineStageFlags2::ALL_COMMANDS,
+                additional_waits: Vec::new(),
+            },
+            vk::PipelineStageFlags2::ALL_COMMANDS,
+            DecoderTrackerWaitState::DownloadImageToBuffer,
+        )?;
 
         hal_queue.add_wait_semaphore(
             self.tracker.raw_semaphore(),
@@ -833,17 +835,16 @@ impl<'a> VulkanDecoder<'a> {
                 )
         };
 
-        let wait_value = self
-            .decoding_device
-            .queues
-            .transfer
-            .submit_chain_semaphore(
-                cmd_buffer.end()?,
-                &mut self.tracker,
-                vk::PipelineStageFlags2::ALL_COMMANDS,
-                vk::PipelineStageFlags2::ALL_COMMANDS,
-                DecoderTrackerWaitState::DownloadImageToBuffer,
-            )?;
+        let wait_value = self.decoding_device.queues.transfer.submit(
+            cmd_buffer.end()?,
+            &mut self.tracker.semaphore_tracker,
+            SubmitSync::WaitOnPrevious {
+                wait_stages: vk::PipelineStageFlags2::ALL_COMMANDS,
+                additional_waits: Vec::new(),
+            },
+            vk::PipelineStageFlags2::ALL_COMMANDS,
+            DecoderTrackerWaitState::DownloadImageToBuffer,
+        )?;
 
         Ok((dst_buffer, wait_value))
     }

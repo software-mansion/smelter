@@ -6,6 +6,31 @@ use ash::vk;
 
 use crate::backends::vulkan::{VulkanCommonError, wrappers::*};
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct WaitInfo {
+    pub(crate) semaphore: vk::Semaphore,
+    pub(crate) value: SemaphoreWaitValue,
+    pub(crate) stages: vk::PipelineStageFlags2,
+}
+
+impl WaitInfo {
+    pub(crate) fn submit_info(&self) -> vk::SemaphoreSubmitInfo<'static> {
+        vk::SemaphoreSubmitInfo::default()
+            .semaphore(self.semaphore)
+            .value(self.value.0)
+            .stage_mask(self.stages)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum SubmitSync {
+    DontWait,
+    WaitOnPrevious {
+        wait_stages: vk::PipelineStageFlags2,
+        additional_waits: Vec<WaitInfo>,
+    },
+}
+
 #[derive(Clone)]
 pub(crate) struct Queue {
     pub(crate) queue: Arc<Mutex<vk::Queue>>,
@@ -23,27 +48,39 @@ impl Queue {
             == vk::TRUE
     }
 
-    pub(crate) fn submit_chain_semaphore<K: TrackerKind>(
+    pub(crate) fn submit<S>(
         &self,
         buffer: RecordedCommandBuffer,
-        tracker: &mut Tracker<K>,
-        wait_stages: vk::PipelineStageFlags2,
+        tracker: &mut SemaphoreTracker<S>,
+        sync: SubmitSync,
         signal_stages: vk::PipelineStageFlags2,
-        new_wait_state: K::WaitState,
+        new_wait_state: S,
     ) -> Result<SemaphoreWaitValue, VulkanCommonError> {
         let buffer_submit_info =
             [vk::CommandBufferSubmitInfo::default().command_buffer(buffer.buffer())];
 
-        let semaphore_submit_info = tracker.semaphore_tracker.next_submit_info(new_wait_state);
+        let semaphore_submit_info = tracker.next_submit_info(new_wait_state);
         let signal_info = semaphore_submit_info.signal_info(signal_stages);
-        let wait_info = semaphore_submit_info.wait_info(wait_stages);
-
-        let mut submit_info = vk::SubmitInfo2::default()
-            .signal_semaphore_infos(std::slice::from_ref(&signal_info))
-            .command_buffer_infos(&buffer_submit_info);
-        if let Some(wait_info) = wait_info.as_ref() {
-            submit_info = submit_info.wait_semaphore_infos(std::slice::from_ref(wait_info));
+        let mut waits = Vec::new();
+        match sync {
+            SubmitSync::DontWait => {}
+            SubmitSync::WaitOnPrevious {
+                wait_stages,
+                additional_waits,
+            } => {
+                if let Some(wait_info) = semaphore_submit_info.wait_info(wait_stages) {
+                    waits.push(wait_info);
+                }
+                for additional_wait in additional_waits {
+                    waits.push(additional_wait.submit_info());
+                }
+            }
         }
+
+        let submit_info = vk::SubmitInfo2::default()
+            .signal_semaphore_infos(std::slice::from_ref(&signal_info))
+            .wait_semaphore_infos(&waits)
+            .command_buffer_infos(&buffer_submit_info);
 
         unsafe {
             self.device.queue_submit2(
@@ -165,15 +202,15 @@ impl VideoQueues {
         self.queues[0].supports_result_status_queries()
     }
 
-    pub(crate) fn submit_chain_semaphore<K: TrackerKind>(
+    pub(crate) fn submit<S>(
         &self,
         buffer: RecordedCommandBuffer,
-        tracker: &mut Tracker<K>,
-        wait_stages: vk::PipelineStageFlags2,
+        tracker: &mut SemaphoreTracker<S>,
+        sync: SubmitSync,
         signal_stages: vk::PipelineStageFlags2,
-        new_wait_state: K::WaitState,
+        new_wait_state: S,
     ) -> Result<SemaphoreWaitValue, VulkanCommonError> {
         let queue = self.next_queue();
-        queue.submit_chain_semaphore(buffer, tracker, wait_stages, signal_stages, new_wait_state)
+        queue.submit(buffer, tracker, sync, signal_stages, new_wait_state)
     }
 }

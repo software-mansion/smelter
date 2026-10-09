@@ -72,7 +72,7 @@ impl PlaneViews {
 
 pub(crate) struct InFlightResizeResources {
     pub(crate) _input_views: PlaneViews,
-    pub(crate) _output_views: Vec<PlaneViews>,
+    pub(crate) _output_views: Box<[PlaneViews]>,
     pub(crate) descriptors: Option<Descriptors>,
     pub(crate) _pipeline: Arc<ComputePipeline>,
     pub(crate) _encoder_semaphores: Vec<Arc<TimelineSemaphore>>,
@@ -89,9 +89,14 @@ impl Drop for InFlightResizeResources {
 }
 
 pub(crate) struct ResizeSubmission {
-    pub(crate) outputs: Box<[EncodeInputImage]>,
+    pub(crate) outputs: Box<[ResizeOutput]>,
     pub(crate) wait_value: SemaphoreWaitValue,
     pub(crate) in_flight_resources: InFlightResizeResources,
+}
+
+pub(crate) struct ResizeOutput {
+    pub(crate) image: EncodeInputImage,
+    pub(crate) wait_for: SemaphoreWaitValue,
 }
 
 pub(crate) struct OutputConfig {
@@ -377,7 +382,7 @@ impl ResizingPipeline {
         let output_views = outputs
             .iter()
             .map(|output| PlaneViews::new(output.image.clone(), 0))
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Box<_>, _>>()?;
         let descriptors = self.write_descriptors(&input_views, &output_views)?;
 
         let mut buffer = self.buffer_pool.begin_buffer()?;
@@ -449,7 +454,7 @@ impl ResizingPipeline {
         let (encoder_semaphores, encoder_semaphore_submit_infos): (Vec<_>, Vec<_>) = encoders
             .iter_mut()
             .map(|e| {
-                let tracker = &mut e.tracker().semaphore_tracker;
+                let tracker = e.input_semaphore_tracker();
                 (
                     tracker.semaphore.clone(),
                     tracker.next_submit_info(EncoderTrackerWaitState::ResizeInput),
@@ -461,10 +466,6 @@ impl ResizingPipeline {
             .iter()
             .map(|c| c.signal_info(vk::PipelineStageFlags2::ALL_COMMANDS))
             .collect::<Vec<_>>();
-        let mut waits = encoder_semaphore_submit_infos
-            .iter()
-            .flat_map(|c| c.wait_info(vk::PipelineStageFlags2::ALL_COMMANDS))
-            .collect::<Vec<_>>();
 
         let decoder_semaphore_submit_info = input_submission
             .decoder
@@ -472,11 +473,7 @@ impl ResizingPipeline {
             .semaphore_tracker
             .next_submit_info(DecoderTrackerWaitState::ExternalProcessing);
 
-        if let Some(wait) =
-            decoder_semaphore_submit_info.wait_info(vk::PipelineStageFlags2::ALL_COMMANDS)
-        {
-            waits.push(wait);
-        }
+        let waits = decoder_semaphore_submit_info.wait_info(vk::PipelineStageFlags2::ALL_COMMANDS);
 
         signals
             .push(decoder_semaphore_submit_info.signal_info(vk::PipelineStageFlags2::ALL_COMMANDS));
@@ -484,7 +481,7 @@ impl ResizingPipeline {
         let submission_wait_value = decoder_semaphore_submit_info.signal_value();
         let submit_info = vk::SubmitInfo2::default()
             .command_buffer_infos(std::slice::from_ref(&buffer_info))
-            .wait_semaphore_infos(&waits)
+            .wait_semaphore_infos(waits.as_slice())
             .signal_semaphore_infos(&signals);
 
         unsafe {
@@ -496,9 +493,16 @@ impl ResizingPipeline {
         }
 
         buffer.mark_submitted(submission_wait_value);
-        for semaphore_submit_info in encoder_semaphore_submit_infos {
-            semaphore_submit_info.mark_submitted();
-        }
+        let outputs = outputs
+            .into_iter()
+            .zip(encoder_semaphore_submit_infos)
+            .map(|(image, semaphore_submit_info)| {
+                let wait_for = semaphore_submit_info.signal_value();
+                semaphore_submit_info.mark_submitted();
+
+                ResizeOutput { image, wait_for }
+            })
+            .collect::<Box<_>>();
 
         decoder_semaphore_submit_info.mark_submitted();
 
