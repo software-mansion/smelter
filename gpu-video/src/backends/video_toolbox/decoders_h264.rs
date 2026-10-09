@@ -14,6 +14,8 @@ use tracing::debug;
 
 #[cfg(feature = "wgpu")]
 use crate::VideoTexture;
+#[cfg(feature = "transcoder")]
+use crate::backends::video_toolbox::metal_interop::SendSyncCVBuffer;
 use crate::{
     DecoderEvent, OutputFrame, RawFrameData, VideoDecoderError,
     backends::video_toolbox::{
@@ -48,6 +50,18 @@ impl VTDecoderH264<RawFrameData> {
     ) -> Self {
         let convert = Box::new(|buffer: &_| download_to_bytes(buffer).map_err(Into::into));
         Self::new(parameters, convert, on_frame_callback, false)
+    }
+}
+
+#[cfg(feature = "transcoder")]
+impl VTDecoderH264<SendSyncCVBuffer> {
+    pub(super) fn new_pixel_buffers(
+        parameters: DecoderParameters,
+        on_frame_callback: Box<dyn FnMut(OutputFrame<SendSyncCVBuffer>) + Send>,
+    ) -> Self {
+        let convert =
+            Box::new(|buffer: &cf::CFRetained<cv::CVBuffer>| Ok(SendSyncCVBuffer(buffer.clone())));
+        Self::new(parameters, convert, on_frame_callback, true)
     }
 }
 
@@ -107,7 +121,7 @@ impl<T: Send + 'static> VTDecoderH264<T> {
         }
     }
 
-    fn process_event(
+    pub(super) fn process_event(
         &mut self,
         event: DecoderEvent<'_, AccessUnit>,
     ) -> Result<(), VideoDecoderError> {
