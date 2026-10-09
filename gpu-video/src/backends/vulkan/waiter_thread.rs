@@ -1,11 +1,8 @@
 use std::{
-    any::Any,
-    collections::VecDeque,
     panic::AssertUnwindSafe,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
-        mpsc::Receiver,
     },
     time::Duration,
 };
@@ -14,9 +11,12 @@ use ash::vk;
 use rustc_hash::FxHashMap;
 use tracing::debug;
 
-use crate::backends::vulkan::{
-    VulkanCommonError,
-    wrappers::{Device, SemaphoreWaitValue, TimelineSemaphore},
+use crate::{
+    backends::vulkan::{
+        VulkanCommonError,
+        wrappers::{Device, SemaphoreWaitValue, TimelineSemaphore},
+    },
+    in_flight_tracker::{InFlightTracker, SubmissionWaitTimeout, SubmitError},
 };
 
 struct SharedState {
@@ -145,14 +145,10 @@ pub(crate) struct SubmissionWaitRequest {
     pub(crate) on_finish: Box<dyn FnOnce() + Send>,
 }
 
-type FinishResult = Result<(), Box<dyn Any + Send>>;
-
 pub(crate) struct SubmissionTracker {
     waiter_thread: Arc<WaiterThreadHandle>,
     semaphore: Arc<TimelineSemaphore>,
-
-    max_in_flight: usize,
-    in_flight: VecDeque<Receiver<FinishResult>>,
+    in_flight: InFlightTracker,
 }
 
 impl Drop for SubmissionTracker {
@@ -170,74 +166,54 @@ impl SubmissionTracker {
         Self {
             waiter_thread,
             semaphore,
-            max_in_flight,
-            in_flight: VecDeque::new(),
+            in_flight: InFlightTracker::new(max_in_flight),
         }
     }
 
-    pub(crate) fn add_wait_request(
+    pub(crate) fn submit(
         &mut self,
+        timeout: Duration,
         wait_for: SemaphoreWaitValue,
         on_finish: impl FnOnce() + Send + 'static,
     ) -> Result<(), VulkanCommonError> {
-        let (finished_sender, finished_receiver) = std::sync::mpsc::channel();
-
-        self.waiter_thread.submit(SubmissionWaitRequest {
-            semaphore: self.semaphore.clone(),
-            wait_for,
-            on_finish: Box::new(move || {
-                let result = std::panic::catch_unwind(AssertUnwindSafe(on_finish));
-                let _ = finished_sender.send(result);
-            }),
+        self.in_flight.submit(timeout, |submission_token| {
+            self.waiter_thread.submit(SubmissionWaitRequest {
+                semaphore: self.semaphore.clone(),
+                wait_for,
+                on_finish: Box::new(move || {
+                    match std::panic::catch_unwind(AssertUnwindSafe(on_finish)) {
+                        Ok(()) => submission_token.finish(),
+                        Err(payload) => submission_token.finish_with_panic(payload),
+                    }
+                }),
+            })
         })?;
-
-        if self.max_in_flight == 0 {
-            // block until the wait request is done
-            let result = finished_receiver.recv().unwrap();
-            if let Err(payload) = result {
-                std::panic::resume_unwind(payload);
-            }
-        } else {
-            self.in_flight.push_back(finished_receiver);
-        }
-
         Ok(())
     }
 
     pub(crate) fn wait_if_full(&mut self, timeout: Duration) -> Result<(), VulkanCommonError> {
-        if self.max_in_flight == 0 {
-            return Ok(());
-        }
-
-        while self.in_flight.len() >= self.max_in_flight {
-            self.wait_for_oldest(timeout)?;
-        }
-
+        self.in_flight.wait_if_full(timeout)?;
         Ok(())
     }
 
     pub(crate) fn wait_for_all(&mut self, timeout: Duration) -> Result<(), VulkanCommonError> {
-        while !self.in_flight.is_empty() {
-            self.wait_for_oldest(timeout)?;
-        }
-
+        self.in_flight.wait_for_all(timeout)?;
         Ok(())
     }
+}
 
-    fn wait_for_oldest(&mut self, timeout: Duration) -> Result<(), VulkanCommonError> {
-        let result = self
-            .in_flight
-            .front()
-            .unwrap()
-            .recv_timeout(timeout)
-            .map_err(|_| VulkanCommonError::SubmissionWaitTimeout)?;
-        self.in_flight.pop_front();
+impl From<SubmissionWaitTimeout> for VulkanCommonError {
+    fn from(_: SubmissionWaitTimeout) -> Self {
+        VulkanCommonError::SubmissionWaitTimeout
+    }
+}
 
-        if let Err(payload) = result {
-            std::panic::resume_unwind(payload);
+impl From<SubmitError<VulkanCommonError>> for VulkanCommonError {
+    fn from(err: SubmitError<VulkanCommonError>) -> Self {
+        match err {
+            SubmitError::Timeout(timeout) => timeout.into(),
+            SubmitError::Submit(err) => err,
         }
-
-        Ok(())
     }
 }
 

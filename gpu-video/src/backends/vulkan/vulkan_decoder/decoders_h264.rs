@@ -156,7 +156,7 @@ impl VideoDecoderBackend for VulkanBytesDecoderH264 {
             let output = self.output.clone();
 
             self.submission_tracker
-                .add_wait_request(semaphore_wait_value, move || {
+                .submit(Duration::MAX, semaphore_wait_value, move || {
                     command_buffer_pools.mark_submitted_as_free(semaphore_wait_value);
                     let Ok(mut output) = output.lock() else {
                         return;
@@ -277,7 +277,7 @@ impl crate::decoders::WgpuVideoDecoderBackend for VulkanWgpuTexturesDecoderH264 
             let decode_failed = self.decoder.event_processor.decode_failed_flag();
 
             self.submission_tracker
-                .add_wait_request(semaphore_wait_value, move || {
+                .submit(Duration::MAX, semaphore_wait_value, move || {
                     command_buffer_pools.mark_submitted_as_free(semaphore_wait_value);
                     if let Err(err) = frame.check_decode_results() {
                         tracing::debug!("Frame decoding failed: {err}");

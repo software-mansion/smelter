@@ -232,7 +232,7 @@ impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
         let encode_failed = self.encode_failed.clone();
 
         self.submission_tracker
-            .add_wait_request(wait_value, move || {
+            .submit(Duration::MAX, wait_value, move || {
                 command_buffer_pools.mark_submitted_as_free(wait_value);
                 encode_image.release_to_pool();
                 drop(staging_buffer);

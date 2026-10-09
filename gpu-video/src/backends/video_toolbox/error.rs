@@ -3,7 +3,8 @@ use objc2_core_video as cv;
 use objc2_video_toolbox as vt;
 
 use crate::{
-    VideoBackendError, VideoDecoderError, VideoDeviceInitError,
+    VideoBackendError, VideoDecoderError, VideoDeviceInitError, VideoEncoderError,
+    in_flight_tracker::{SubmissionWaitTimeout, SubmitError},
     parser::{h264::H264ParserError, reference_manager::ReferenceManagementError},
 };
 
@@ -279,8 +280,9 @@ pub enum VTDecoderError {
     #[error("Invalid input data: {0}")]
     InvalidInputData(String),
 
-    #[error("Failed to extract Metal texture from CVMetalTexture")]
-    MetalTextureExtractionFailed,
+    #[cfg(feature = "wgpu")]
+    #[error(transparent)]
+    MetalTexture(#[from] super::wgpu_api::MetalTextureError),
 }
 
 impl From<VTDecoderError> for VideoDecoderError {
@@ -295,6 +297,119 @@ impl From<VTDecoderError> for VideoDecoderError {
             VTDecoderError::InvalidInputData(e) => VideoDecoderError::InvalidInputData(e),
 
             err => VideoDecoderError::BackendError(VideoBackendError {
+                message: err.to_string(),
+                source: Box::new(err),
+            }),
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum VTEncoderError {
+    #[error(transparent)]
+    OSStatus(#[from] OSStatusError),
+
+    #[error("This machine has no hardware encoder for the requested codec")]
+    NoHardwareEncoder,
+
+    #[error("Invalid encoder parameters, field: {field} - problem: {problem}")]
+    Parameters {
+        field: &'static str,
+        problem: String,
+    },
+
+    #[error("VideoToolbox rejected the required encoder property {property}: {error}")]
+    PropertySet {
+        property: &'static str,
+        #[source]
+        error: OSStatusError,
+    },
+
+    #[error("This encoder does not support constant bitrate (CBR) rate control")]
+    ConstantBitrateUnsupported,
+
+    #[error("VideoToolbox encoder produced no output (callback was not called)")]
+    NoEncoderOutput,
+
+    #[error("VideoToolbox dropped the frame instead of encoding it")]
+    FrameDropped,
+
+    #[error("VideoToolbox returned an encoded frame with no data buffer")]
+    NoDataBuffer,
+
+    #[error("VideoToolbox returned an encoded frame with no format description")]
+    NoFormatDescription,
+
+    #[error("VideoToolbox invalidated the compression session and it could not be recovered")]
+    SessionInvalidated(#[source] Box<VTEncoderError>),
+
+    #[error(
+        "The stream parameters no longer match the ones this encoder returned earlier; recreate the encoder to continue"
+    )]
+    ParametersDiverged,
+
+    #[error("The encoded stream contains no {0} NAL unit")]
+    MissingParameterSet(String),
+
+    #[error("Encoder asked to encode wgpu textures, but was created without a wgpu device")]
+    NotConfiguredForWgpuInput,
+
+    #[cfg(feature = "wgpu")]
+    #[error(transparent)]
+    WgpuTextureEncoder(#[from] crate::encoders::WgpuTextureEncoderError),
+
+    #[cfg(feature = "wgpu")]
+    #[error(transparent)]
+    Init(#[from] VTInitError),
+
+    #[cfg(feature = "wgpu")]
+    #[error(
+        "The Metal device did not provide an MTLSharedEvent, which wgpu texture encoding requires"
+    )]
+    SharedEventUnavailable,
+
+    #[cfg(feature = "wgpu")]
+    #[error(transparent)]
+    MetalTexture(#[from] super::wgpu_api::MetalTextureError),
+
+    #[error("Timed out waiting for submitted frames to be encoded")]
+    SubmissionWaitTimeout,
+}
+
+impl From<SubmissionWaitTimeout> for VTEncoderError {
+    fn from(_: SubmissionWaitTimeout) -> Self {
+        VTEncoderError::SubmissionWaitTimeout
+    }
+}
+
+impl From<SubmitError<VTEncoderError>> for VTEncoderError {
+    fn from(err: SubmitError<VTEncoderError>) -> Self {
+        match err {
+            SubmitError::Timeout(timeout) => timeout.into(),
+            SubmitError::Submit(err) => err,
+        }
+    }
+}
+
+impl From<VTEncoderError> for VideoEncoderError {
+    fn from(err: VTEncoderError) -> Self {
+        match err {
+            VTEncoderError::NoHardwareEncoder => VideoEncoderError::EncoderUnsupported,
+            VTEncoderError::Parameters { field, problem } => {
+                VideoEncoderError::ParametersError { field, problem }
+            }
+            #[cfg(feature = "wgpu")]
+            VTEncoderError::WgpuTextureEncoder(err) => {
+                VideoEncoderError::WgpuTextureEncoderError(err)
+            }
+            VTEncoderError::SubmissionWaitTimeout => VideoEncoderError::EncodeSubmissionTimeout,
+            err @ (VTEncoderError::ParametersDiverged | VTEncoderError::SessionInvalidated(_)) => {
+                VideoEncoderError::EncoderLost(VideoBackendError {
+                    message: err.to_string(),
+                    source: Box::new(err),
+                })
+            }
+            err => VideoEncoderError::BackendError(VideoBackendError {
                 message: err.to_string(),
                 source: Box::new(err),
             }),
