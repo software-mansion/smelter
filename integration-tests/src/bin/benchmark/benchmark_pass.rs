@@ -21,7 +21,7 @@ use smelter_render::{
 use tracing::debug;
 
 use crate::{
-    args::Resolution,
+    args::{EncoderPreset, Resolution},
     benchmark::EncoderOptions,
     scenes::{BuilderFn, SceneContext},
     utils::benchmark_pipeline_options,
@@ -188,7 +188,7 @@ impl SingleBenchmarkPass {
         output_id: &OutputId,
         root: Component,
         audio_mix: AudioMixerConfig,
-        preset: FfmpegH264EncoderPreset,
+        preset: EncoderPreset,
     ) -> Result<Box<dyn DurationReceiver + Send>, RegisterOutputError> {
         let result = Pipeline::register_encoded_data_output(
             pipeline,
@@ -202,7 +202,7 @@ impl SingleBenchmarkPass {
                 output_options: EncodedDataOutputOptions {
                     audio: Some(default_audio_encoder()),
                     video: Some(VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
-                        preset,
+                        encoder_name: None,
                         bitrate: None,
                         keyframe_interval: KEYFRAME_INTERVAL,
                         resolution: smelter_render::Resolution {
@@ -210,7 +210,10 @@ impl SingleBenchmarkPass {
                             height: self.output_resolution.height,
                         },
                         pixel_format: OutputPixelFormat::YUV420P,
-                        raw_options: vec![("threads".into(), "0".into())],
+                        raw_options: vec![
+                            ("threads".into(), "0".into()),
+                            ("preset".into(), preset.as_str().into()),
+                        ],
                         bitstream_format: H264BitstreamFormat::AnnexB,
                         low_latency: false,
                     })),

@@ -37,7 +37,7 @@ async function startSmelter() {
     type: 'rtmp_client',
     url: 'rtmp://127.0.0.1:8000/',
     video: {
-      encoder: { type: 'ffmpeg_h264', preset: 'ultrafast' },
+      encoder: { type: 'ffmpeg_h264', ffmpegOptions: { preset: 'ultrafast' } },
       resolution: { width: 1920, height: 1080 },
     },
     audio: {

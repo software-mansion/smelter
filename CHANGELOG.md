@@ -4,8 +4,11 @@
 
 ### 💥 Breaking changes
 
+- Remove `preset` from `ffmpeg_h264` encoder options. Pass encoder specific options via `ffmpeg_options` instead, e.g. `"ffmpeg_options": { "preset": "ultrafast" }` by [@wkozyra95](https://github.com/wkozyra95)
+
 ### ✨ New features
 
+- Add `encoder_name` option to `ffmpeg_h264` encoder to select which FFmpeg encoder is used by [@wkozyra95](https://github.com/wkozyra95)
 - Add `SMELTER_RENDER_MAX_LAYOUTS_COUNT` environment variable to configure the maximum number of layouts (default 100) by [@wkozyra95](https://github.com/wkozyra95)
 - Support FFmpeg 9 by [@wkozyra95](https://github.com/wkozyra95)
 - Add `start_at_ms` option to MP4 and HLS outputs. Output is created when the register request is handled, but it starts producing data at the specified time by [@wkozyra95](https://github.com/wkozyra95)

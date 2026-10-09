@@ -541,11 +541,11 @@ export type RtpVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
+       * FFmpeg encoder name, e.g. `"libopenh264"`. Must be available in the FFmpeg installed on the system.
        *
-       * Defaults to `"fast"`.
+       * Defaults to the H264 encoder that FFmpeg selects by default.
        */
-      preset?: H264EncoderPreset | null;
+      encoder_name?: string | null;
       /**
        * Encoding bitrate. Default value depends on chosen encoder.
        */
@@ -614,17 +614,6 @@ export type RtpVideoEncoderOptions =
        */
       keyframe_interval_ms?: number | null;
     };
-export type H264EncoderPreset =
-  | "ultrafast"
-  | "superfast"
-  | "veryfast"
-  | "faster"
-  | "fast"
-  | "medium"
-  | "slow"
-  | "slower"
-  | "veryslow"
-  | "placebo";
 export type VideoEncoderBitrate =
   | number
   | {
@@ -1125,11 +1114,11 @@ export type RtmpClientVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
+       * FFmpeg encoder name, e.g. `"libopenh264"`. Must be available in the FFmpeg installed on the system.
        *
-       * Defaults to `"fast"`.
+       * Defaults to the H264 encoder that FFmpeg selects by default.
        */
-      preset?: H264EncoderPreset | null;
+      encoder_name?: string | null;
       /**
        * Encoding bitrate. Default value depends on chosen encoder.
        */
@@ -1222,11 +1211,11 @@ export type MoqClientVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
+       * FFmpeg encoder name, e.g. `"libopenh264"`. Must be available in the FFmpeg installed on the system.
        *
-       * Defaults to `"fast"`.
+       * Defaults to the H264 encoder that FFmpeg selects by default.
        */
-      preset?: H264EncoderPreset | null;
+      encoder_name?: string | null;
       /**
        * Encoding bitrate. Default value depends on chosen encoder.
        */
@@ -1328,11 +1317,11 @@ export type Mp4VideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
+       * FFmpeg encoder name, e.g. `"libopenh264"`. Must be available in the FFmpeg installed on the system.
        *
-       * Defaults to `"fast"`.
+       * Defaults to the H264 encoder that FFmpeg selects by default.
        */
-      preset?: H264EncoderPreset | null;
+      encoder_name?: string | null;
       /**
        * Encoding bitrate. Default value depends on chosen encoder.
        */
@@ -1374,11 +1363,11 @@ export type WhipVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * Preset for an encoder. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
+       * FFmpeg encoder name, e.g. `"libopenh264"`. Must be available in the FFmpeg installed on the system.
        *
-       * Defaults to `"fast"`.
+       * Defaults to the H264 encoder that FFmpeg selects by default.
        */
-      preset?: H264EncoderPreset | null;
+      encoder_name?: string | null;
       /**
        * Encoding bitrate. Default value depends on chosen encoder.
        */
@@ -1473,11 +1462,11 @@ export type WhepVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
+       * FFmpeg encoder name, e.g. `"libopenh264"`. Must be available in the FFmpeg installed on the system.
        *
-       * Defaults to `"fast"`.
+       * Defaults to the H264 encoder that FFmpeg selects by default.
        */
-      preset?: H264EncoderPreset | null;
+      encoder_name?: string | null;
       /**
        * Encoding bitrate. Default value depends on chosen encoder.
        */
@@ -1571,11 +1560,11 @@ export type HlsVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
+       * FFmpeg encoder name, e.g. `"libopenh264"`. Must be available in the FFmpeg installed on the system.
        *
-       * Defaults to `"fast"`.
+       * Defaults to the H264 encoder that FFmpeg selects by default.
        */
-      preset?: H264EncoderPreset | null;
+      encoder_name?: string | null;
       /**
        * Encoding bitrate. Default value depends on chosen encoder.
        */

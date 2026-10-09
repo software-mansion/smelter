@@ -5,20 +5,6 @@ use smelter_render::Resolution;
 use crate::codecs::{OutputPixelFormat, VideoEncoderBitrate};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum FfmpegH264EncoderPreset {
-    Ultrafast,
-    Superfast,
-    Veryfast,
-    Faster,
-    Fast,
-    Medium,
-    Slow,
-    Slower,
-    Veryslow,
-    Placebo,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum H264BitstreamFormat {
     AnnexB,
     Avcc,
@@ -26,7 +12,8 @@ pub enum H264BitstreamFormat {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FfmpegH264EncoderOptions {
-    pub preset: FfmpegH264EncoderPreset,
+    /// FFmpeg encoder name. If `None`, the default FFmpeg H264 encoder is used.
+    pub encoder_name: Option<Arc<str>>,
     pub bitrate: Option<VideoEncoderBitrate>,
     pub keyframe_interval: Duration,
     pub resolution: Resolution,

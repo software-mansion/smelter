@@ -77,7 +77,7 @@ pub(super) fn resolve_video_preferences(
                         })
                     } else {
                         VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
-                            preset: FfmpegH264EncoderPreset::Fast,
+                            encoder_name: None,
                             resolution,
                             bitrate: None,
                             keyframe_interval: KEYFRAME_INTERVAL,

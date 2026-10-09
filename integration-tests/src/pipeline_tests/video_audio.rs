@@ -47,7 +47,7 @@ pub fn single_input_with_video_and_audio_flaky() -> Result<()> {
                 },
                 "encoder": {
                     "type": "ffmpeg_h264",
-                    "preset": "ultrafast",
+                    "ffmpeg_options": { "preset": "ultrafast" },
                 },
                 "initial": {
                     "root": {

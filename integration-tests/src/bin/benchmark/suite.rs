@@ -1,13 +1,10 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
-use smelter_core::{
-    codecs::{FfmpegH264EncoderPreset, VideoDecoderOptions},
-    graphics_context::GraphicsContext,
-};
+use smelter_core::{codecs::VideoDecoderOptions, graphics_context::GraphicsContext};
 use smelter_render::RenderingMode;
 
 use crate::{
-    args::ResolutionPreset,
+    args::{EncoderPreset, ResolutionPreset},
     benchmark::{Benchmark, EncoderOptions},
     benchmark_pass::{InputFile, InputFileKind, SingleBenchmarkPass},
     scenes::{
@@ -88,8 +85,8 @@ pub fn high_res_benchmark_suite(ctx: &GraphicsContext) -> Vec<Benchmark> {
     let ffmpeg_base = BenchmarkBuilder::new()
         .scenes([SINGLE_VIDEO_N_TO_N, TWO_VIDEO_2N_TO_N, FOUR_VIDEO_4N_TO_N])
         .encoders([
-            EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Ultrafast),
-            EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Fast),
+            EncoderOptions::FfmpegH264(EncoderPreset::Ultrafast),
+            EncoderOptions::FfmpegH264(EncoderPreset::Fast),
         ])
         .decoders(vec![VideoDecoderOptions::FfmpegH264]);
     [
@@ -143,8 +140,8 @@ pub fn minimal_benchmark_suite(ctx: &GraphicsContext) -> Vec<Benchmark> {
     let ffmpeg_base = BenchmarkBuilder::new()
         .scenes([SINGLE_VIDEO_N_TO_N, FOUR_VIDEO_4N_TO_N])
         .encoders([
-            EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Ultrafast),
-            EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Fast),
+            EncoderOptions::FfmpegH264(EncoderPreset::Ultrafast),
+            EncoderOptions::FfmpegH264(EncoderPreset::Fast),
         ])
         .decoders(vec![VideoDecoderOptions::FfmpegH264]);
 
@@ -201,9 +198,9 @@ pub fn c5_docs_benchmark_suite(ctx: &GraphicsContext) -> Vec<Benchmark> {
     let ffmpeg_base = BenchmarkBuilder::new()
         .scenes([SINGLE_VIDEO_N_TO_N, TWO_VIDEO_2N_TO_N, FOUR_VIDEO_4N_TO_N])
         .encoders([
-            EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Ultrafast),
-            EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Veryfast),
-            EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Fast),
+            EncoderOptions::FfmpegH264(EncoderPreset::Ultrafast),
+            EncoderOptions::FfmpegH264(EncoderPreset::Veryfast),
+            EncoderOptions::FfmpegH264(EncoderPreset::Fast),
         ])
         .decoders(vec![VideoDecoderOptions::FfmpegH264])
         .rendering_mode(RenderingMode::CpuOptimized);
@@ -233,9 +230,9 @@ pub fn g4dn_docs_benchmark_suite(ctx: &GraphicsContext) -> Vec<Benchmark> {
     let ffmpeg_base = BenchmarkBuilder::new()
         .scenes([SINGLE_VIDEO_N_TO_N, TWO_VIDEO_2N_TO_N, FOUR_VIDEO_4N_TO_N])
         .encoders([
-            EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Ultrafast),
-            EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Veryfast),
-            EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Fast),
+            EncoderOptions::FfmpegH264(EncoderPreset::Ultrafast),
+            EncoderOptions::FfmpegH264(EncoderPreset::Veryfast),
+            EncoderOptions::FfmpegH264(EncoderPreset::Fast),
         ])
         .decoders(vec![VideoDecoderOptions::FfmpegH264]);
 
@@ -319,9 +316,9 @@ fn benchmark_set_constant_input_output_ratio() -> BenchmarkBuilder {
         .scenes([SINGLE_VIDEO_N_TO_N, TWO_VIDEO_2N_TO_N, FOUR_VIDEO_4N_TO_N])
         .encoders([
             EncoderOptions::VulkanH264,
-            EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Ultrafast),
-            EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Veryfast),
-            EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Fast),
+            EncoderOptions::FfmpegH264(EncoderPreset::Ultrafast),
+            EncoderOptions::FfmpegH264(EncoderPreset::Veryfast),
+            EncoderOptions::FfmpegH264(EncoderPreset::Fast),
         ])
         .decoders(vec![
             VideoDecoderOptions::VulkanH264,
@@ -372,8 +369,8 @@ fn benchmark_set_encoder_only(ctx: &'static BenchmarkSuiteContext) -> BenchmarkB
         .input_source([ctx.bbb_raw_720p_input.clone()])
         .encoders(vec![
             EncoderOptions::VulkanH264,
-            EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Fast),
-            EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Ultrafast),
+            EncoderOptions::FfmpegH264(EncoderPreset::Fast),
+            EncoderOptions::FfmpegH264(EncoderPreset::Ultrafast),
         ])
         .output_resolutions([
             ResolutionPreset::Res480p,
@@ -591,9 +588,8 @@ impl BenchmarkBuilder {
                                 label: "placeholder",
                                 kind: InputFileKind::Mp4(PathBuf::new()),
                             }),
-                            encoder: encoder.unwrap_or(EncoderOptions::FfmpegH264(
-                                FfmpegH264EncoderPreset::Ultrafast,
-                            )),
+                            encoder: encoder
+                                .unwrap_or(EncoderOptions::FfmpegH264(EncoderPreset::Ultrafast)),
                             decoder: decoder.unwrap_or(VideoDecoderOptions::FfmpegH264),
                             warm_up_time: Duration::from_secs(2),
                             rendering_mode: rendering_mode.unwrap_or(RenderingMode::GpuOptimized),

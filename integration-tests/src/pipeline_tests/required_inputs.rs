@@ -67,7 +67,7 @@ pub fn required_video_inputs_no_offset() -> Result<()> {
                 },
                 "encoder": {
                     "type": "ffmpeg_h264",
-                    "preset": "ultrafast",
+                    "ffmpeg_options": { "preset": "ultrafast" },
                 },
                 "initial": {
                     "root": {
@@ -187,7 +187,7 @@ pub fn required_video_inputs_with_offset() -> Result<()> {
                 },
                 "encoder": {
                     "type": "ffmpeg_h264",
-                    "preset": "ultrafast",
+                    "ffmpeg_options": { "preset": "ultrafast" },
                 },
                 "initial": {
                     "root": {
@@ -595,7 +595,7 @@ pub fn optional_inputs_no_offset_flaky() -> Result<()> {
                 },
                 "encoder": {
                     "type": "ffmpeg_h264",
-                    "preset": "ultrafast",
+                    "ffmpeg_options": { "preset": "ultrafast" },
                 },
                 "initial": {
                     "root": {

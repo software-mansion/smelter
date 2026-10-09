@@ -29,11 +29,12 @@ export type HlsVideoEncoderOptions =
        */
       keyframeIntervalMs?: number;
       /**
-       * Preset for an encoder. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
+       * FFmpeg encoder name, e.g. `"libopenh264"`. Must be available in the FFmpeg installed
+       * on the system.
        *
-       * Defaults to `"fast"`.
+       * Defaults to the H264 encoder that FFmpeg selects by default.
        */
-      preset?: Api.H264EncoderPreset;
+      encoderName?: string;
       /**
        * Encoder pixel format. Defaults to `"yuv420p"`.
        */

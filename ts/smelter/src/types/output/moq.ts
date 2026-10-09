@@ -23,11 +23,12 @@ export type MoqClientVideoEncoderOptions =
   | {
       type: 'ffmpeg_h264';
       /**
-       * Preset for an encoder. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
+       * FFmpeg encoder name, e.g. `"libopenh264"`. Must be available in the FFmpeg installed
+       * on the system.
        *
-       * Defaults to `"fast"`.
+       * Defaults to the H264 encoder that FFmpeg selects by default.
        */
-      preset?: Api.H264EncoderPreset;
+      encoderName?: string;
       /**
        * Encoding bitrate. Default value depends on chosen encoder.
        */

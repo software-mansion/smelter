@@ -43,7 +43,7 @@ async function run() {
   } as const;
   const VIDEO_ENCODER_OPTS = {
     type: 'ffmpeg_h264',
-    preset: 'ultrafast',
+    ffmpegOptions: { preset: 'ultrafast' },
   } as const;
 
   await ffplayStartRtmpServerAsync(9002);

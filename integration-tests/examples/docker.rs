@@ -139,7 +139,7 @@ fn start_example_client_code(host_ip: String) -> Result<()> {
                 },
                 "encoder": {
                     "type": "ffmpeg_h264",
-                    "preset": "ultrafast"
+                    "ffmpeg_options": { "preset": "ultrafast" }
                 },
                 "initial": {
                     "root": {

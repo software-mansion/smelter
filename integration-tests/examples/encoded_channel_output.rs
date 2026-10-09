@@ -32,7 +32,7 @@ fn main() {
     let output_options = RegisterEncodedDataOutputOptions {
         output_options: EncodedDataOutputOptions {
             video: Some(VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
-                preset: FfmpegH264EncoderPreset::Ultrafast,
+                encoder_name: None,
                 bitrate: None,
                 keyframe_interval: Duration::from_millis(5000),
                 resolution: Resolution {
@@ -40,7 +40,7 @@ fn main() {
                     height: 720,
                 },
                 pixel_format: OutputPixelFormat::YUV420P,
-                raw_options: vec![],
+                raw_options: vec![("preset".into(), "ultrafast".into())],
                 bitstream_format: H264BitstreamFormat::AnnexB,
                 low_latency: false,
             })),

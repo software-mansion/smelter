@@ -37,10 +37,11 @@ pub struct OutputRtmpClientVideoOptions {
 pub enum RtmpClientVideoEncoderOptions {
     #[serde(rename = "ffmpeg_h264")]
     FfmpegH264 {
-        /// Video output encoder preset. See https://trac.ffmpeg.org/wiki/Encode/H.264#Preset for more.
+        /// FFmpeg encoder name, e.g. `"libopenh264"`. Must be available in the FFmpeg installed
+        /// on the system.
         ///
-        /// Defaults to `"fast"`.
-        preset: Option<H264EncoderPreset>,
+        /// Defaults to the H264 encoder that FFmpeg selects by default.
+        encoder_name: Option<Arc<str>>,
 
         /// Encoding bitrate. Default value depends on chosen encoder.
         bitrate: Option<VideoEncoderBitrate>,

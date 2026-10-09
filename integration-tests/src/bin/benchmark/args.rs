@@ -1,6 +1,6 @@
 use std::{path::PathBuf, str::FromStr};
 
-use smelter_core::codecs::{FfmpegH264EncoderPreset, VideoDecoderOptions};
+use smelter_core::codecs::VideoDecoderOptions;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NumericArgument {
@@ -94,19 +94,19 @@ pub enum EncoderPreset {
     Placebo,
 }
 
-impl From<EncoderPreset> for FfmpegH264EncoderPreset {
-    fn from(value: EncoderPreset) -> Self {
-        match value {
-            EncoderPreset::Ultrafast => FfmpegH264EncoderPreset::Ultrafast,
-            EncoderPreset::Superfast => FfmpegH264EncoderPreset::Superfast,
-            EncoderPreset::Veryfast => FfmpegH264EncoderPreset::Veryfast,
-            EncoderPreset::Faster => FfmpegH264EncoderPreset::Faster,
-            EncoderPreset::Fast => FfmpegH264EncoderPreset::Fast,
-            EncoderPreset::Medium => FfmpegH264EncoderPreset::Medium,
-            EncoderPreset::Slow => FfmpegH264EncoderPreset::Slow,
-            EncoderPreset::Slower => FfmpegH264EncoderPreset::Slower,
-            EncoderPreset::Veryslow => FfmpegH264EncoderPreset::Veryslow,
-            EncoderPreset::Placebo => FfmpegH264EncoderPreset::Placebo,
+impl EncoderPreset {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            EncoderPreset::Ultrafast => "ultrafast",
+            EncoderPreset::Superfast => "superfast",
+            EncoderPreset::Veryfast => "veryfast",
+            EncoderPreset::Faster => "faster",
+            EncoderPreset::Fast => "fast",
+            EncoderPreset::Medium => "medium",
+            EncoderPreset::Slow => "slow",
+            EncoderPreset::Slower => "slower",
+            EncoderPreset::Veryslow => "veryslow",
+            EncoderPreset::Placebo => "placebo",
         }
     }
 }

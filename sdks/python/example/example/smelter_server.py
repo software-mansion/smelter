@@ -94,10 +94,9 @@ def setup_pipeline(mp4_path: str | None):
                 "resolution": {"width": 1920, "height": 1080},
                 "encoder": {
                     "type": "ffmpeg_h264",
-                    "preset": "ultrafast",
                     "ffmpeg_options": {
+                        "preset": "ultrafast",
                         "tune": "zerolatency",
-                        "thread_type": "slice",
                     },
                 },
                 "initial": {
@@ -135,7 +134,7 @@ def setup_pipeline(mp4_path: str | None):
                 "resolution": {"width": OUTPUT_W, "height": OUTPUT_H},
                 "encoder": {
                     "type": "ffmpeg_h264",
-                    "preset": "ultrafast",
+                    "ffmpeg_options": {"preset": "ultrafast"},
                 },
                 "initial": {
                     "root": {

@@ -107,7 +107,7 @@ fn register_output_with_initial_scene(instance: &CompositorInstance, port: u16) 
                 },
                 "encoder": {
                     "type": "ffmpeg_h264",
-                    "preset": "ultrafast"
+                    "ffmpeg_options": { "preset": "ultrafast" }
                 },
                 "initial": {
                     "root": {

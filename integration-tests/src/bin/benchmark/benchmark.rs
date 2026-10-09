@@ -1,17 +1,18 @@
 use std::{sync::Arc, time::Duration};
 
 use serde_json::{Value as JsonValue, json};
-use smelter_core::{codecs::FfmpegH264EncoderPreset, graphics_context::GraphicsContext};
+use smelter_core::graphics_context::GraphicsContext;
 use tracing::{error, info};
 
 use crate::{
+    args::EncoderPreset,
     benchmark_pass::SingleBenchmarkPass,
     maximize_iter::{MaximizeIter, MaximizeU64},
 };
 
 #[derive(Debug, Clone, Copy)]
 pub enum EncoderOptions {
-    FfmpegH264(FfmpegH264EncoderPreset),
+    FfmpegH264(EncoderPreset),
     VulkanH264,
     Disabled,
 }

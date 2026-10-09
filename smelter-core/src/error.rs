@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use smelter_render::{
     InputId, OutputId,
     error::{InitRendererEngineError, UpdateSceneError},
@@ -211,6 +213,9 @@ pub enum OutputHlsRuntimeError {
 pub enum EncoderInitError {
     #[error("Could not find an ffmpeg codec")]
     NoCodec,
+
+    #[error("FFmpeg encoder \"{0}\" is not available or is not an H264 encoder")]
+    NoH264CodecWithName(Arc<str>),
 
     #[error(transparent)]
     FfmpegError(#[from] ffmpeg_next::Error),

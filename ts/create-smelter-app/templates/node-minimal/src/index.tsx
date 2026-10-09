@@ -35,7 +35,7 @@ async function run() {
     video: {
       encoder: {
         type: 'ffmpeg_h264',
-        preset: 'ultrafast',
+        ffmpegOptions: { preset: 'ultrafast' },
       },
       resolution: {
         width: 1920,
