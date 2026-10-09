@@ -34,8 +34,8 @@ const MAX_STRETCH_RATIO: f64 = 0.04 + 0.001;
 /// - Mono or Stereo `f64` PCM samples.
 ///
 /// Batches generally arrive in PTS order but may have gaps or overlaps; the queue does *not* pad
-/// gaps. `write_batch` handles gaps of at least `SEAM_THRESHOLD` and overlaps over 80ms. Smaller
-/// ones are left to drift control.
+/// gaps. `write_batch` handles gaps and overlaps of at least `SEAM_THRESHOLD`. Smaller ones are
+/// left to drift control.
 ///
 /// ## Outputs (what `get_samples` produces)
 /// Exactly the number of frames at `output_sample_rate` that fit the requested `pts_range`,
@@ -149,10 +149,16 @@ const SQUASH_THRESHOLD: Timestamp = Timestamp::from_millis(500);
 /// is audibly bad.
 const STRETCH_THRESHOLD: Timestamp = Timestamp::from_millis(40);
 
-/// Minimal gap between consecutive batches that `write_batch` treats as a discontinuity. Smaller
-/// gaps are treated as timestamp jitter and left to drift control. Matches the shortest
-/// realistic packet loss (10ms Opus packet).
+/// Minimal gap or overlap between consecutive batches that `write_batch` treats as a
+/// discontinuity. Smaller ones are treated as timestamp jitter and left to drift control. Matches
+/// the shortest realistic packet loss (10ms Opus packet).
 const SEAM_THRESHOLD: Duration = Duration::from_millis(10);
+
+/// Maximal gap that `write_batch` pads while resyncing. The queue delivers batches at most ~80ms
+/// past the requested range (`MIXER_STRETCH_BUFFER`), so buffered input ending this long before
+/// a new batch is already in the past and would be dropped by the resync gate anyway, e.g.
+/// decoder concealment of a long loss sent together with the data after it.
+const MAX_PADDED_GAP: Duration = Duration::from_millis(500);
 
 /// Lead of real input past the request end, beyond the one chunk that the run-out check needs,
 /// required to restart after a discontinuity. Keeps a source that barely caught up from running
@@ -203,16 +209,20 @@ impl InputResampler {
     }
 
     /// Append a newly arrived input batch to `resampler_input_buffer`. Gaps and overlaps are
-    /// relative to the end of the buffered input. Gaps smaller than `SEAM_THRESHOLD` and overlaps
-    /// up to 80ms count as continuous.
+    /// relative to the end of the buffered input, smaller than `SEAM_THRESHOLD` count as
+    /// continuous. Larger overlap means that the batch starts a new timeline (e.g. after
+    /// resynchronization upstream), it is a discontinuity like a gap.
     ///
-    /// - buffer not empty, overlap over 80ms: buffered input wins, batch is dropped.
     /// - Playing (`!needs_input_resync`):
-    ///   - gap:
+    ///   - gap or overlap:
     ///     - flush with concealment existing buffer (switches needs_input_resync on)
-    ///     - when resync happens it will fade-in other side of the gap
+    ///     - when resync happens it will fade-in other side of the gap, or drain the part of the
+    ///       batch already covered by the flushed output and fade-in the rest
     ///   - otherwise: append
     /// - Resyncing (`needs_input_resync`):
+    ///   - overlap + input_buffer, or gap over `MAX_PADDED_GAP`
+    ///     - buffered input (if any) wasn't placed yet and is superseded by the batch or already
+    ///       in the past, discard it and append the batch
     ///   - gap + input_buffer
     ///     - generate concealment and pad rest with zeros
     ///     - fade-in current batch before attaching it to input buffer
@@ -230,24 +240,20 @@ impl InputResampler {
         );
 
         let is_buffer_empty = self.resampler_input_buffer.frames() == 0;
-        let has_overlap = start_pts + Duration::from_millis(80) < self.input_buffer_end_pts;
+        // With empty buffer `input_buffer_end_pts` refers to input that is already gone, there is
+        // nothing to overlap with.
+        let has_overlap =
+            !is_buffer_empty && start_pts + SEAM_THRESHOLD <= self.input_buffer_end_pts;
         let has_gap = start_pts >= self.input_buffer_end_pts + SEAM_THRESHOLD;
-
-        // If samples overlap too much drop, for lower overlap than 80ms we let squashing handle
-        // that. Artifacts at the join of overlapping batches are not handled. With empty buffer
-        // `input_buffer_end_pts` refers to input that is already gone, there is nothing to
-        // overlap with.
-        if !is_buffer_empty && has_overlap {
-            debug!("Detected overlapping batches, dropping.");
-            return;
-        }
+        let has_large_gap = start_pts > self.input_buffer_end_pts + MAX_PADDED_GAP;
 
         match self.needs_input_resync {
             false => {
-                // If there is a gap flush everything before writing current batch.
-                if has_gap {
+                // If there is a gap or overlap flush everything before writing current batch.
+                if has_gap || has_overlap {
+                    // Negative on overlap.
                     let gap = start_pts - self.input_buffer_end_pts;
-                    debug!(?gap, "Gap between batches, flushing.");
+                    debug!(?gap, "Discontinuity between batches, flushing.");
                     // The end of the buffered input is concealed, start of the new one will be
                     // faded in because flushing switches needs_input_resync to true
                     self.flush_with_concealment();
@@ -258,7 +264,23 @@ impl InputResampler {
                 self.resampler_input_buffer.push_back(batch.samples);
             }
             true => {
-                if !is_buffer_empty && has_gap {
+                if has_overlap || has_large_gap {
+                    // Buffered input wasn't placed yet. On overlap the batch starts a new timeline
+                    // that supersedes it. After a large gap it is already in the past, padding
+                    // would only produce silence for the gate to drain.
+                    // Negative on overlap.
+                    let gap = start_pts - self.input_buffer_end_pts;
+                    debug!(
+                        ?gap,
+                        "Discontinuity between batches while resyncing, discarding buffer."
+                    );
+                    self.resampler_input_buffer.clear();
+                    self.history.clear();
+
+                    self.input_buffer_end_pts = end_pts;
+                    self.history.push(&batch.samples);
+                    self.resampler_input_buffer.push_back(batch.samples);
+                } else if !is_buffer_empty && has_gap {
                     // Conceal the end of buffered input, then silence until the batch, which
                     // fades in.
                     let gap = start_pts - self.input_buffer_end_pts;
