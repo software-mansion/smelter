@@ -1,6 +1,7 @@
 use std::{
     any::Any,
     panic::AssertUnwindSafe,
+    ptr::NonNull,
     sync::{Arc, Mutex},
 };
 
@@ -24,8 +25,9 @@ use crate::{
 };
 
 use objc2::{rc::Retained, runtime::ProtocolObject};
+use objc2_core_foundation as cf;
 use objc2_core_video as cv;
-use objc2_metal::{self as mtl, MTLCommandBuffer, MTLCommandQueue, MTLDevice};
+use objc2_metal::{self as mtl, MTLCommandBuffer, MTLCommandQueue, MTLDevice, MTLSharedEvent};
 
 mod resize;
 
@@ -35,15 +37,31 @@ enum AnyEncoder {
 }
 
 impl AnyEncoder {
-    fn encode_pixel_buffer(
+    fn submit_when_event_reaches(
         &mut self,
-        buffer: &cv::CVBuffer,
+        buffer: cf::CFRetained<cv::CVBuffer>,
         pts: Option<u64>,
-        force_idr: bool,
+        event: &ProtocolObject<dyn mtl::MTLSharedEvent>,
+        value: u64,
+        check_input_ready: impl FnOnce() -> Result<(), VTEncoderError> + 'static,
     ) -> Result<(), VTEncoderError> {
         match self {
-            AnyEncoder::H264(encoder) => encoder.encode_pixel_buffer(buffer, pts, force_idr),
-            AnyEncoder::H265(encoder) => encoder.encode_pixel_buffer(buffer, pts, force_idr),
+            AnyEncoder::H264(encoder) => encoder.submit_when_event_reaches(
+                buffer,
+                pts,
+                false,
+                event,
+                value,
+                check_input_ready,
+            ),
+            AnyEncoder::H265(encoder) => encoder.submit_when_event_reaches(
+                buffer,
+                pts,
+                false,
+                event,
+                value,
+                check_input_ready,
+            ),
         }
     }
 
@@ -127,11 +145,20 @@ pub(crate) struct Transcoder {
     pipeline: Arc<Mutex<ResizeEncodePipeline>>,
 }
 
+struct DecodedPlanesKeptAlive(PlaneTextures);
+
+// Safety: the wrapped textures are only held to keep the decoded pixel buffer alive and are never
+// accessed through this wrapper, only retained and released, which is thread-safe.
+unsafe impl Send for DecodedPlanesKeptAlive {}
+unsafe impl Sync for DecodedPlanesKeptAlive {}
+
 struct ResizeEncodePipeline {
     decoder_texture_cache: SyncCache,
     backends: Vec<Backend>,
     _device: Retained<ProtocolObject<dyn mtl::MTLDevice>>,
     queue: Retained<ProtocolObject<dyn mtl::MTLCommandQueue>>,
+    resize_finished_event: Retained<ProtocolObject<dyn mtl::MTLSharedEvent>>,
+    next_event_value: u64,
     error: Option<VTTranscoderError>,
     panic: Option<Box<dyn Any + Send>>,
 }
@@ -147,6 +174,10 @@ impl Transcoder {
             .ok_or(VTTranscoderError::CommandQueueCreationFailed)?;
         let decoder_texture_cache =
             SyncCache::new_from_mtl(&device, mtl::MTLTextureUsage::ShaderRead)?;
+
+        let resize_finished_event = device
+            .newSharedEvent()
+            .ok_or(VTTranscoderError::SharedEventCreationFailed)?;
 
         let max_in_flight_submissions = params.max_in_flight_submissions.unwrap_or(3);
         let on_chunk_callback = Arc::new(Mutex::new(on_chunk_callback));
@@ -179,6 +210,8 @@ impl Transcoder {
             backends,
             _device: device,
             queue,
+            resize_finished_event,
+            next_event_value: 1,
             error: None,
             panic: None,
         }));
@@ -262,23 +295,11 @@ impl ResizeEncodePipeline {
         &mut self,
         decoded: OutputFrame<SendSyncCVBuffer>,
     ) -> Result<(), VTTranscoderError> {
-        let input_planes =
-            plane_textures_from_pixel_buffer(&self.decoder_texture_cache, &decoded.data.0)?;
-        let encoder_inputs = self.resize(&input_planes)?;
+        let input_planes = Arc::new(DecodedPlanesKeptAlive(plane_textures_from_pixel_buffer(
+            &self.decoder_texture_cache,
+            &decoded.data.0,
+        )?));
 
-        for (backend, input) in self.backends.iter_mut().zip(encoder_inputs) {
-            backend
-                .encoder
-                .encode_pixel_buffer(&input.buffer, decoded.metadata.pts, false)?;
-        }
-
-        Ok(())
-    }
-
-    fn resize(
-        &mut self,
-        input_planes: &PlaneTextures,
-    ) -> Result<Vec<MetalInputFrame>, VTTranscoderError> {
         let cmd = self
             .queue
             .commandBuffer()
@@ -287,19 +308,41 @@ impl ResizeEncodePipeline {
         let mut encoder_inputs = Vec::with_capacity(self.backends.len());
         for backend in &mut self.backends {
             let output = backend.encoder.acquire_input_frame()?;
-            backend.encode_resize(&cmd, input_planes, &output.planes);
+            backend.encode_resize(&cmd, &input_planes.0, &output.planes);
             encoder_inputs.push(output);
         }
 
+        let event_value = self.next_event_value;
+        self.next_event_value += 1;
+        let resize_finished_event = self.resize_finished_event.clone();
+        let signal_event_when_completed = block2::RcBlock::new(
+            move |_cmd: NonNull<ProtocolObject<dyn mtl::MTLCommandBuffer>>| {
+                resize_finished_event.setSignaledValue(event_value);
+            },
+        );
+        unsafe { cmd.addCompletedHandler(block2::RcBlock::as_ptr(&signal_event_when_completed)) };
         cmd.commit();
-        cmd.waitUntilCompleted();
 
-        if cmd.status() == mtl::MTLCommandBufferStatus::Error {
-            let description = cmd.error().map(|e| e.to_string()).unwrap_or_default();
-            return Err(VTTranscoderError::ResizeFailed(description));
+        for (backend, input) in self.backends.iter_mut().zip(encoder_inputs) {
+            let cmd = cmd.clone();
+            let input_planes = input_planes.clone();
+            backend.encoder.submit_when_event_reaches(
+                input.buffer,
+                decoded.metadata.pts,
+                &self.resize_finished_event,
+                event_value,
+                move || {
+                    let _decoded_planes_kept_alive_until_resize_finished = input_planes;
+                    if cmd.status() == mtl::MTLCommandBufferStatus::Error {
+                        let description = cmd.error().map(|e| e.to_string()).unwrap_or_default();
+                        return Err(VTEncoderError::InputPreparationFailed(description));
+                    }
+                    Ok(())
+                },
+            )?;
         }
 
-        Ok(encoder_inputs)
+        Ok(())
     }
 }
 

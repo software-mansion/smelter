@@ -13,13 +13,15 @@ use std::{
 };
 
 #[cfg(metal_interop)]
-use objc2::runtime::ProtocolObject;
+use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_core_foundation as cf;
 use objc2_core_media as cm;
 use objc2_core_video as cv;
 #[cfg(metal_interop)]
-use objc2_metal as mtl;
+use objc2_metal::{self as mtl, MTLSharedEvent as _};
 use objc2_video_toolbox as vt;
+#[cfg(metal_interop)]
+use std::cell::Cell;
 
 use crate::{
     EncodedOutputChunk, InputFrame, RawFrameRef, VideoEncoderError,
@@ -389,7 +391,21 @@ pub(crate) struct VTEncoder<C: EncodeCodec> {
     wgpu: Option<wgpu_api::VTWgpuEncodeState>,
     #[cfg(metal_interop)]
     texture_cache: Option<SyncCache>,
+    #[cfg(metal_interop)]
+    listener: Option<Retained<mtl::MTLSharedEventListener>>,
 }
+
+#[cfg(metal_interop)]
+struct ListenerFrame {
+    session: cf::CFRetained<vt::VTCompressionSession>,
+    buffer: cf::CFRetained<cv::CVBuffer>,
+    frame_properties: Option<cf::CFRetained<cf::CFDictionary<cf::CFString, cf::CFType>>>,
+}
+
+// Safety: VT sessions are not documented as thread-affine (see `Session`), CF retain counts are
+// thread-safe, and nothing mutates the buffer or the dictionary after construction.
+#[cfg(metal_interop)]
+unsafe impl Send for ListenerFrame {}
 
 #[cfg(feature = "transcoder")]
 pub(crate) struct MetalInputFrame {
@@ -447,6 +463,7 @@ impl<C: EncodeCodec> VTEncoder<C> {
                 mtl::MTLTextureUsage::ShaderWrite.0 | mtl::MTLTextureUsage::RenderTarget.0,
             ),
         )?);
+        encoder.listener = Some(mtl::MTLSharedEventListener::new());
 
         Ok(encoder)
     }
@@ -505,6 +522,8 @@ impl<C: EncodeCodec> VTEncoder<C> {
             wgpu: None,
             #[cfg(metal_interop)]
             texture_cache: None,
+            #[cfg(metal_interop)]
+            listener: None,
         })
     }
 
@@ -666,15 +685,105 @@ impl<C: EncodeCodec> VTEncoder<C> {
         Ok(MetalInputFrame { buffer, planes })
     }
 
-    #[cfg(feature = "transcoder")]
-    pub(crate) fn encode_pixel_buffer(
+    #[cfg(metal_interop)]
+    pub(crate) fn submit_when_event_reaches(
         &mut self,
-        buffer: &cv::CVBuffer,
+        buffer: cf::CFRetained<cv::CVBuffer>,
         pts: Option<u64>,
         force_idr: bool,
+        event: &ProtocolObject<dyn mtl::MTLSharedEvent>,
+        value: u64,
+        check_input_ready: impl FnOnce() -> Result<(), VTEncoderError> + 'static,
     ) -> Result<(), VTEncoderError> {
+        let listener = self
+            .listener
+            .clone()
+            .ok_or(VTEncoderError::NotConfiguredForMetalInput)?;
+
         let force_idr = self.prepare_submission(force_idr)?;
-        self.submit_pixel_buffer(buffer, pts, force_idr)
+
+        let (cm_pts, duration) = self.next_frame_timing();
+
+        let listener_frame = ListenerFrame {
+            session: self.session.session.0.clone(),
+            buffer,
+            frame_properties: Self::frame_properties(force_idr),
+        };
+
+        let completion_deadline = self.frame_completion_deadline(self.frame_index - 1);
+        let flush_in_progress = self.flush_in_progress.clone();
+
+        let submitted = self.in_flight.submit(Duration::MAX, |submission_token| {
+            let frame_output = FrameOutput::new(
+                &self.output_state,
+                &self.encode_failed,
+                self.session_generation,
+                pts,
+                submission_token,
+            );
+            let check_input_ready = Cell::new(Some(check_input_ready));
+
+            let listener_block = block2::RcBlock::new(
+                move |_event: NonNull<ProtocolObject<dyn mtl::MTLSharedEvent>>, _value: u64| {
+                    if let Some(check_input_ready) = check_input_ready.take()
+                        && let Err(error) = check_input_ready()
+                    {
+                        frame_output.complete(Err(error));
+                        return;
+                    }
+
+                    let status = unsafe {
+                        listener_frame.session.encode_frame_with_output_handler(
+                            &listener_frame.buffer,
+                            cm_pts,
+                            duration,
+                            listener_frame
+                                .frame_properties
+                                .as_ref()
+                                .map(|properties| properties.as_ref()),
+                            null_mut(),
+                            block2::RcBlock::as_ptr(&frame_output.output_block()),
+                        )
+                    };
+
+                    if let Err(error) = status.osstatus() {
+                        frame_output.complete(Err(error.into()));
+                        return;
+                    }
+
+                    if let Some(completion_deadline) = completion_deadline {
+                        let completed =
+                            unsafe { listener_frame.session.complete_frames(completion_deadline) };
+                        if let Err(error) = completed.osstatus() {
+                            tracing::error!("Completing encoded frames failed: {error}");
+                        }
+                    }
+
+                    if flush_in_progress.load(Ordering::Relaxed) {
+                        let completed =
+                            unsafe { listener_frame.session.complete_frames(cm::kCMTimeInvalid) };
+                        if let Err(error) = completed.osstatus() {
+                            tracing::error!("Completing encoded frames failed: {error}");
+                        }
+                    }
+                },
+            );
+
+            unsafe {
+                event.notifyListener_atValue_block(
+                    &listener,
+                    value,
+                    block2::RcBlock::as_ptr(&listener_block),
+                )
+            };
+
+            Ok::<(), VTEncoderError>(())
+        });
+
+        self.check_for_panic();
+        submitted?;
+
+        Ok(())
     }
 
     fn submit_pixel_buffer(

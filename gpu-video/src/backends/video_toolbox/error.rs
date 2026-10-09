@@ -371,6 +371,10 @@ pub enum VTEncoderError {
     )]
     SharedEventUnavailable,
 
+    #[cfg(feature = "transcoder")]
+    #[error("The GPU failed to prepare the encoder input: {0}")]
+    InputPreparationFailed(String),
+
     #[cfg(metal_interop)]
     #[error(transparent)]
     MetalTexture(#[from] super::metal_interop::MetalTextureError),
@@ -478,8 +482,8 @@ pub enum VTTranscoderError {
     #[error("Failed to create a Metal command buffer")]
     CommandBufferCreationFailed,
 
-    #[error("The GPU failed to execute the resize commands: {0}")]
-    ResizeFailed(String),
+    #[error("Failed to create a Metal shared event")]
+    SharedEventCreationFailed,
 }
 
 #[cfg(feature = "transcoder")]
@@ -494,7 +498,7 @@ impl From<VTTranscoderError> for VideoTranscoderError {
             | VTTranscoderError::MetalPerformanceShadersUnsupported
             | VTTranscoderError::CommandQueueCreationFailed
             | VTTranscoderError::CommandBufferCreationFailed
-            | VTTranscoderError::ResizeFailed(_) => {
+            | VTTranscoderError::SharedEventCreationFailed => {
                 VideoTranscoderError::BackendError(VideoBackendError {
                     message: err.to_string(),
                     source: Box::new(err),
