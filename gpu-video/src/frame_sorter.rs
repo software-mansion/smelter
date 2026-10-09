@@ -100,10 +100,7 @@ impl<T> FrameSorter<T> {
     }
 
     #[cfg_attr(
-        any(
-            all(not(video_toolbox), not(feature = "wgpu")),
-            all(video_toolbox, not(feature = "transcoder"))
-        ),
+        any(all(not(video_toolbox), not(feature = "wgpu")), video_toolbox),
         expect(dead_code)
     )]
     pub(crate) fn put_frames(&mut self, frames: Vec<DecodeResult<T>>) -> Vec<OutputFrame<T>> {

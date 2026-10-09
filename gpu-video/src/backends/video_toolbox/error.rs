@@ -455,16 +455,10 @@ impl From<VTInitError> for VideoDecoderError {
 #[derive(Debug, thiserror::Error)]
 pub enum VTTranscoderError {
     #[error(transparent)]
-    Decoder(#[from] VTDecoderError),
-
-    #[error(transparent)]
     Encoder(#[from] VTEncoderError),
 
-    #[error("H264 parser error: {0}")]
-    ParserError(#[from] H264ParserError),
-
-    #[error("Reference management error: {0}")]
-    ReferenceManagementError(#[from] ReferenceManagementError),
+    #[error(transparent)]
+    Decoder(#[from] VideoDecoderError),
 
     #[error(transparent)]
     Init(#[from] VTInitError),
@@ -492,12 +486,8 @@ pub enum VTTranscoderError {
 impl From<VTTranscoderError> for VideoTranscoderError {
     fn from(err: VTTranscoderError) -> Self {
         match err {
-            VTTranscoderError::Decoder(err) => VideoTranscoderError::Decoder(err.into()),
             VTTranscoderError::Encoder(err) => VideoTranscoderError::Encoder(err.into()),
-            VTTranscoderError::ParserError(err) => VideoTranscoderError::Decoder(err.into()),
-            VTTranscoderError::ReferenceManagementError(err) => {
-                VideoTranscoderError::Decoder(err.into())
-            }
+            VTTranscoderError::Decoder(err) => VideoTranscoderError::Decoder(err),
             VTTranscoderError::Init(_)
             | VTTranscoderError::MetalTexture(_)
             | VTTranscoderError::NoMetalDevice

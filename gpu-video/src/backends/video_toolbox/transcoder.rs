@@ -1,24 +1,22 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    any::Any,
+    panic::AssertUnwindSafe,
+    sync::{Arc, Mutex},
+};
 
 use crate::{
-    EncodedInputChunk, EncodedOutputChunk, OutputFrame, VideoTranscoderError,
+    DecoderEvent, EncodedInputChunk, EncodedOutputChunk, OutputFrame, VideoTranscoderError,
     backends::video_toolbox::{
         VTEncoder,
-        decoder::{Completion, VTDecoder},
+        decoders_h264::VTDecoderH264,
         encoder::{H264Codec, H265Codec, MetalInputFrame},
-        error::{VTDecoderError, VTEncoderError, VTTranscoderError},
+        error::{VTEncoderError, VTTranscoderError},
         metal_interop::{
             PlaneTextures, SendSyncCVBuffer, SyncCache, plane_textures_from_pixel_buffer,
         },
     },
-    device::{Rational, VideoParameters},
-    frame_sorter::{DecodeResult, FrameSorter},
+    device::{DecoderParameters, Rational, VideoParameters},
     parameters::DecoderUsage,
-    parser::{
-        decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},
-        h264::{AccessUnit, H264Parser},
-        reference_manager::{DecodeInformation, ReferenceContext},
-    },
     transcoder::{
         AnyEncoderParameters, TranscodedChunk, TranscoderOutputParameters, TranscoderParameters,
         VideoTranscoderBackend,
@@ -28,7 +26,6 @@ use crate::{
 use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_core_video as cv;
 use objc2_metal::{self as mtl, MTLCommandBuffer, MTLCommandQueue, MTLDevice};
-use objc2_video_toolbox as vt;
 
 mod resize;
 
@@ -126,15 +123,17 @@ impl Backend {
 }
 
 pub(crate) struct Transcoder {
-    parser: H264Parser,
-    reference_context: ReferenceContext,
-    decoder: VTDecoder,
-    decoded: Arc<Mutex<DecodedFrames>>,
+    decoder: VTDecoderH264<SendSyncCVBuffer>,
+    pipeline: Arc<Mutex<ResizeEncodePipeline>>,
+}
+
+struct ResizeEncodePipeline {
     decoder_texture_cache: SyncCache,
-    frame_sorter: FrameSorter<SendSyncCVBuffer>,
     backends: Vec<Backend>,
     _device: Retained<ProtocolObject<dyn mtl::MTLDevice>>,
     queue: Retained<ProtocolObject<dyn mtl::MTLCommandQueue>>,
+    error: Option<VTTranscoderError>,
+    panic: Option<Box<dyn Any + Send>>,
 }
 
 impl Transcoder {
@@ -175,110 +174,102 @@ impl Transcoder {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(Self {
-            parser: H264Parser::new_avcc_output(),
-            reference_context: ReferenceContext::default(),
-            decoder: VTDecoder::new(DecoderUsage::Transcoding, true),
-            decoded: Arc::default(),
+        let pipeline = Arc::new(Mutex::new(ResizeEncodePipeline {
             decoder_texture_cache,
-            frame_sorter: FrameSorter::default(),
             backends,
             _device: device,
             queue,
-        })
+            error: None,
+            panic: None,
+        }));
+
+        let decoder_pipeline = pipeline.clone();
+        let decoder = VTDecoderH264::new_pixel_buffers(
+            DecoderParameters {
+                corrupted_state_handling: Default::default(),
+                usage_flags: DecoderUsage::Transcoding,
+                max_in_flight_submissions,
+            },
+            Box::new(move |frame| {
+                let mut pipeline = decoder_pipeline.lock().unwrap();
+                if pipeline.panic.is_some() {
+                    return;
+                }
+                let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
+                    pipeline.resize_and_encode(frame)
+                }));
+                match result {
+                    Ok(Ok(())) => {}
+                    Ok(Err(err)) if pipeline.error.is_none() => pipeline.error = Some(err),
+                    Ok(Err(err)) => {
+                        tracing::error!("Failed to resize and encode a decoded frame: {err}")
+                    }
+                    Err(payload) => pipeline.panic = Some(payload),
+                }
+            }),
+        );
+
+        Ok(Self { decoder, pipeline })
+    }
+
+    fn take_pipeline_error(&self) -> Result<(), VTTranscoderError> {
+        let (panic, error) = {
+            let mut pipeline = self.pipeline.lock().unwrap();
+            (pipeline.panic.take(), pipeline.error.take())
+        };
+        if let Some(payload) = panic {
+            std::panic::resume_unwind(payload);
+        }
+        match error {
+            Some(err) => Err(err),
+            None => Ok(()),
+        }
     }
 
     fn transcode(&mut self, input: EncodedInputChunk<'_>) -> Result<(), VTTranscoderError> {
-        let parsed = self.parser.parse(input.data, input.pts)?;
-        let sorted = self.aus_to_sorted(parsed)?;
-        self.resize_and_encode(sorted)
+        self.take_pipeline_error()?;
+        self.decoder
+            .process_event(DecoderEvent::DecodeChunk(input))?;
+        self.take_pipeline_error()
     }
 
     fn flush(&mut self) -> Result<(), VTTranscoderError> {
-        let frames = self.parser.flush()?;
-        let mut sorted = self.aus_to_sorted(frames)?;
-        sorted.append(&mut self.frame_sorter.flush());
-        self.resize_and_encode(sorted)?;
+        self.decoder.process_event(DecoderEvent::Flush)?;
 
-        for backend in &mut self.backends {
-            backend.encoder.flush()?;
-        }
+        let encoders_flushed = {
+            let mut pipeline = self.pipeline.lock().unwrap();
+            std::panic::catch_unwind(AssertUnwindSafe(|| {
+                pipeline
+                    .backends
+                    .iter_mut()
+                    .map(|backend| backend.encoder.flush())
+                    .collect::<Vec<_>>()
+            }))
+        };
 
+        self.take_pipeline_error()?;
+        let encoders_flushed = match encoders_flushed {
+            Ok(results) => results,
+            Err(payload) => std::panic::resume_unwind(payload),
+        };
+        encoders_flushed.into_iter().collect::<Result<(), _>>()?;
         Ok(())
     }
+}
 
-    fn aus_to_sorted(
-        &mut self,
-        aus: Vec<AccessUnit>,
-    ) -> Result<Vec<OutputFrame<SendSyncCVBuffer>>, VTTranscoderError> {
-        if std::mem::take(&mut self.decoded.lock().unwrap().decode_failed) {
-            self.reference_context.mark_corrupted_state();
-        }
-
-        let instructions = compile_to_decoder_instructions(&mut self.reference_context, aus)?;
-
-        for instruction in instructions {
-            match instruction {
-                DecoderInstruction::Sps { sps, raw_bytes } => {
-                    self.decoder.process_sps(sps, raw_bytes)
-                }
-                DecoderInstruction::Pps { pps, raw_bytes } => {
-                    self.decoder.process_pps(pps, raw_bytes)
-                }
-                DecoderInstruction::Decode { decode_info, .. } => {
-                    self.submit(decode_info, false)?
-                }
-                DecoderInstruction::Idr { decode_info, .. } => self.submit(decode_info, true)?,
-                DecoderInstruction::Drop { .. } => {}
-            }
-        }
-
-        self.decoder.wait_for_pending_frames()?;
-
-        let decoded = std::mem::take(&mut self.decoded.lock().unwrap().frames);
-
-        Ok(self.frame_sorter.put_frames(decoded))
-    }
-
-    fn submit(
-        &mut self,
-        decode_info: DecodeInformation,
-        is_idr: bool,
-    ) -> Result<(), VTDecoderError> {
-        let decoded = self.decoded.clone();
-
-        self.decoder.submit(
-            decode_info,
-            is_idr,
-            vt::VTDecodeFrameFlags::empty(),
-            move |completion| {
-                let mut decoded = decoded.lock().unwrap();
-                match completion {
-                    Completion::Frame(frame) => decoded.frames.push(DecodeResult {
-                        frame: SendSyncCVBuffer(frame.frame),
-                        metadata: frame.metadata,
-                    }),
-                    Completion::Dropped => {}
-                    Completion::Failed => decoded.decode_failed = true,
-                }
-            },
-        )
-    }
-
+impl ResizeEncodePipeline {
     fn resize_and_encode(
         &mut self,
-        frames: Vec<OutputFrame<SendSyncCVBuffer>>,
+        decoded: OutputFrame<SendSyncCVBuffer>,
     ) -> Result<(), VTTranscoderError> {
-        for decoded in frames {
-            let input_planes =
-                plane_textures_from_pixel_buffer(&self.decoder_texture_cache, &decoded.data.0)?;
-            let encoder_inputs = self.resize(&input_planes)?;
+        let input_planes =
+            plane_textures_from_pixel_buffer(&self.decoder_texture_cache, &decoded.data.0)?;
+        let encoder_inputs = self.resize(&input_planes)?;
 
-            for (backend, input) in self.backends.iter_mut().zip(encoder_inputs) {
-                backend
-                    .encoder
-                    .encode_pixel_buffer(&input.buffer, decoded.metadata.pts, false)?;
-            }
+        for (backend, input) in self.backends.iter_mut().zip(encoder_inputs) {
+            backend
+                .encoder
+                .encode_pixel_buffer(&input.buffer, decoded.metadata.pts, false)?;
         }
 
         Ok(())
@@ -310,12 +301,6 @@ impl Transcoder {
 
         Ok(encoder_inputs)
     }
-}
-
-#[derive(Default)]
-struct DecodedFrames {
-    frames: Vec<DecodeResult<SendSyncCVBuffer>>,
-    decode_failed: bool,
 }
 
 impl VideoTranscoderBackend for Transcoder {
