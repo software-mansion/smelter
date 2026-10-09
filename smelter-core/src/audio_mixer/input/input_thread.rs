@@ -51,10 +51,7 @@ impl InputProcessor {
     }
 
     pub fn write_batch(&mut self, batch: InputAudioSamples) {
-        let channels = match batch.samples {
-            AudioSamples::Mono(_) => AudioChannels::Mono,
-            AudioSamples::Stereo(_) => AudioChannels::Stereo,
-        };
+        let channels = batch.samples.channels();
         let input_sample_rate = batch.sample_rate;
 
         let resampler = self.resampler.get_or_insert_with(|| {
