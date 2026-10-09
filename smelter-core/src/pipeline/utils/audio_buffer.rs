@@ -99,13 +99,9 @@ impl AudioSamplesBuffer {
 
 impl From<AudioSamples> for AudioSamplesBuffer {
     fn from(batch: AudioSamples) -> Self {
-        let channels = match batch {
-            AudioSamples::Mono(_) => AudioChannels::Mono,
-            AudioSamples::Stereo(_) => AudioChannels::Stereo,
-        };
         Self {
+            channels: batch.channels(),
             buffer: VecDeque::from([(batch, 0)]),
-            channels,
         }
     }
 }

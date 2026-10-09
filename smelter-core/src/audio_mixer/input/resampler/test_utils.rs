@@ -361,15 +361,13 @@ impl<'a> SignalAssertion<'a> {
         let max_shift_steps = params.max_shift.as_nanos() as i64 / 100;
         for step in -max_shift_steps..=max_shift_steps {
             let shift_secs = step as f64 / 10_000_000.0;
-            let shifted: Vec<f64> = (0..length)
-                .map(|i| {
-                    let t_secs = i as f64 / source.rate as f64 + shift_secs;
-                    source.sample_at(Timestamp::from_secs_f64(t_secs))
-                })
-                .collect();
-            let (max_err, _) = max_abs_error(actual, &shifted);
-            if max_err <= params.tolerance {
-                tracing::debug!(max_err, shift_secs, "SignalAssertion passed with shift");
+            let matches = actual.iter().enumerate().all(|(i, &sample)| {
+                let t_secs = i as f64 / source.rate as f64 + shift_secs;
+                let expected = source.sample_at(Timestamp::from_secs_f64(t_secs));
+                (sample - expected).abs() <= params.tolerance
+            });
+            if matches {
+                tracing::debug!(shift_secs, "SignalAssertion passed with shift");
                 return;
             }
         }
