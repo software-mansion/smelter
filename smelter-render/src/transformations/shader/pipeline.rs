@@ -31,7 +31,7 @@ pub(super) struct ShaderPipeline {
 }
 
 impl ShaderPipeline {
-    pub fn new(wgpu_ctx: &Arc<WgpuCtx>, shader_src: Arc<str>) -> Result<Self, CreateShaderError> {
+    pub fn new(wgpu_ctx: &WgpuCtx, shader_src: Arc<str>) -> Result<Self, CreateShaderError> {
         let scope = WgpuErrorScope::push(&wgpu_ctx.device);
 
         let module = naga::front::wgsl::parse_str(&shader_src)
@@ -80,7 +80,7 @@ impl ShaderPipeline {
 
     pub fn render(
         &self,
-        wgpu_ctx: &Arc<WgpuCtx>,
+        wgpu_ctx: &WgpuCtx,
         params: &wgpu::BindGroup,
         sources: &[&NodeTexture],
         target: &NodeTextureState,
@@ -159,7 +159,7 @@ impl ShaderPipeline {
         validate_params(params, ty, &self.module)
     }
 
-    fn input_textures_bgl(wgpu_ctx: &Arc<WgpuCtx>) -> wgpu::BindGroupLayout {
+    fn input_textures_bgl(wgpu_ctx: &WgpuCtx) -> wgpu::BindGroupLayout {
         let count = match cfg!(target_arch = "wasm32") {
             false => NonZeroU32::new(super::SHADER_INPUT_TEXTURES_AMOUNT),
             true => None,
@@ -182,11 +182,7 @@ impl ShaderPipeline {
             })
     }
 
-    fn input_textures_bg(
-        &self,
-        wgpu_ctx: &Arc<WgpuCtx>,
-        sources: &[&NodeTexture],
-    ) -> wgpu::BindGroup {
+    fn input_textures_bg(&self, wgpu_ctx: &WgpuCtx, sources: &[&NodeTexture]) -> wgpu::BindGroup {
         match cfg!(target_arch = "wasm32") {
             false => {
                 let mut texture_views: Vec<&wgpu::TextureView> = sources

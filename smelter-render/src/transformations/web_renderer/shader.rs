@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::{
     state::node_texture::NodeTextureState,
     wgpu::{
@@ -17,7 +15,7 @@ pub(super) struct WebRendererShader {
 }
 
 impl WebRendererShader {
-    pub fn new(wgpu_ctx: &Arc<WgpuCtx>) -> Result<Self, CreateShaderError> {
+    pub fn new(wgpu_ctx: &WgpuCtx) -> Result<Self, CreateShaderError> {
         let scope = WgpuErrorScope::push(&wgpu_ctx.device);
 
         let shader_module = wgpu_ctx
@@ -52,7 +50,7 @@ impl WebRendererShader {
 
     pub(super) fn render(
         &self,
-        wgpu_ctx: &Arc<WgpuCtx>,
+        wgpu_ctx: &WgpuCtx,
         textures: &[(Option<&wgpu::TextureView>, RenderInfo)],
         target: &NodeTextureState,
     ) {

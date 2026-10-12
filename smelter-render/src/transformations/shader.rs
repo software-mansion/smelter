@@ -26,7 +26,7 @@ pub struct ShaderSpec {
 }
 
 impl Shader {
-    pub fn new(wgpu_ctx: &Arc<WgpuCtx>, spec: ShaderSpec) -> Result<Self, CreateShaderError> {
+    pub fn new(wgpu_ctx: &WgpuCtx, spec: ShaderSpec) -> Result<Self, CreateShaderError> {
         let clear_color = None;
         let pipeline = ShaderPipeline::new(wgpu_ctx, spec.source)?;
 

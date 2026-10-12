@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::{
     NvPlanes, Resolution,
     scene::RGBColor,
@@ -11,9 +9,8 @@ use crate::{
 
 #[derive(Debug)]
 pub struct NV12Texture {
-    // TODO: Remove Arcs on wgpu textures. They are just handles which can be cloned around
-    texture: Arc<wgpu::Texture>,
-    secondary_texture: Option<Arc<wgpu::Texture>>,
+    texture: wgpu::Texture,
+    secondary_texture: Option<wgpu::Texture>,
     view_y: wgpu::TextureView,
     view_uv: wgpu::TextureView,
 }
@@ -46,7 +43,7 @@ impl NV12Texture {
         let (view_y, view_uv) = create_plane_views(&texture);
 
         Self {
-            texture: Arc::new(texture),
+            texture,
             secondary_texture: None,
             view_y,
             view_uv,
@@ -90,16 +87,14 @@ impl NV12Texture {
         let view_uv = secondary_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         Self {
-            texture: texture.into(),
-            secondary_texture: Some(secondary_texture.into()),
+            texture,
+            secondary_texture: Some(secondary_texture),
             view_y,
             view_uv,
         }
     }
 
-    pub fn from_wgpu_texture(
-        texture: Arc<wgpu::Texture>,
-    ) -> Result<Self, NV12TextureViewCreateError> {
+    pub fn from_wgpu_texture(texture: wgpu::Texture) -> Result<Self, NV12TextureViewCreateError> {
         let expected = (wgpu::TextureDimension::D2, wgpu::TextureFormat::NV12);
         let actual = (texture.dimension(), texture.format());
 

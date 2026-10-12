@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use wasm_bindgen::JsValue;
 
 use super::types::to_js_error;
@@ -13,7 +11,7 @@ impl wgpu::rwh::HasDisplayHandle for WebDisplayHandle {
     }
 }
 
-pub async fn create_wgpu_context() -> Result<(Arc<wgpu::Device>, Arc<wgpu::Queue>), JsValue> {
+pub async fn create_wgpu_context() -> Result<(wgpu::Device, wgpu::Queue), JsValue> {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::GL,
         backend_options: wgpu::BackendOptions {
@@ -63,7 +61,7 @@ pub async fn create_wgpu_context() -> Result<(Arc<wgpu::Device>, Arc<wgpu::Queue
         .await
         .map_err(to_js_error)?;
 
-    Ok((device.into(), queue.into()))
+    Ok((device, queue))
 }
 
 pub fn pad_to_256(value: u32) -> u32 {

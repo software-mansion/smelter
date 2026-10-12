@@ -14,10 +14,7 @@ pub struct LayoutRenderer {
 }
 
 impl LayoutRenderer {
-    pub fn new(
-        wgpu_ctx: &Arc<WgpuCtx>,
-        max_layouts_count: usize,
-    ) -> Result<Self, CreateShaderError> {
+    pub fn new(wgpu_ctx: &WgpuCtx, max_layouts_count: usize) -> Result<Self, CreateShaderError> {
         let shader = Arc::new(LayoutShader::new(wgpu_ctx, max_layouts_count)?);
         let resampler = match wgpu_ctx.mode {
             RenderingMode::GpuOptimized | RenderingMode::WebGl => {

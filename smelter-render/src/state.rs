@@ -45,8 +45,8 @@ pub struct RendererOptions {
     pub load_system_fonts: bool,
     pub rendering_mode: RenderingMode,
     pub max_layouts_count: usize,
-    pub device: Arc<wgpu::Device>,
-    pub queue: Arc<wgpu::Queue>,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
 }
 
 #[derive(Clone)]
