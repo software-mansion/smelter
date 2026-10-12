@@ -260,27 +260,16 @@ fn download_nv12_texture(
 
     queue.submit(Some(encoder.finish()));
 
-    let y = read_buffer(
+    let data = read_buffer(
         device,
         queue,
         &buffer,
         0,
-        y_plane_size,
-        bytes_per_row,
-        width,
-    );
-    let uv = read_buffer(
-        device,
-        queue,
-        &buffer,
-        y_plane_size,
         y_plane_size + uv_plane_size,
         bytes_per_row,
         width,
     );
 
-    let mut data = y;
-    data.extend(uv);
     Nv12Frame {
         width: width as usize,
         height: height as usize,

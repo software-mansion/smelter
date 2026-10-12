@@ -137,6 +137,9 @@ name = "process_helper"
 path = "src/bin/process_helper.rs"
 required-features = ["web-renderer"]
 
+[profile.dev.package.integration-tests]
+opt-level = 3
+
 [workspace.lints.clippy]
 todo = "warn"
 uninlined_format_args = "warn"
