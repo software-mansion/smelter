@@ -55,6 +55,7 @@ pub(super) fn spawn_video_decoder(
 
     let options = VideoDecoderThreadOptions {
         ctx: input.ctx.clone(),
+        input_ref: input.input_ref.clone(),
         transformer: h264_config.map(H264AvccToAnnexB::new),
         frame_sender,
         input_buffer_size: buffer_size,
@@ -86,6 +87,7 @@ pub(super) fn spawn_audio_decoder(
         input.input_ref.clone(),
         AudioDecoderThreadOptions {
             ctx: input.ctx.clone(),
+            input_ref: input.input_ref.clone(),
             // Asc is defined for fMP4 and None for MPEG-TS
             decoder_options: FdkAacDecoderOptions { asc: extradata },
             samples_sender,

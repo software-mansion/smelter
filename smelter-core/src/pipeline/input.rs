@@ -13,6 +13,7 @@ use crate::{
         webrtc::{WhepInput, WhipInput},
     },
     queue::QueueInput,
+    stats::InputStatsGuard,
 };
 
 use crate::prelude::*;
@@ -26,6 +27,8 @@ pub struct PipelineInput {
     /// Some(received) - Whether EOS was received from queue on video stream for that input.
     /// None - No video configured for that input.
     pub(super) video_eos_received: Option<bool>,
+
+    _stats_guard: InputStatsGuard,
 }
 
 pub enum Input {
@@ -122,6 +125,7 @@ pub(super) fn new_external_input(
 pub(super) fn register_pipeline_input<BuildFn, NewInputResult>(
     pipeline: &Arc<Mutex<Pipeline>>,
     input_id: InputId,
+    kind: InputProtocolKind,
     build_input: BuildFn,
 ) -> Result<NewInputResult, RegisterInputError>
 where
@@ -136,7 +140,12 @@ where
 
     let pipeline_ctx = pipeline.lock().unwrap().ctx.clone();
 
-    let (input, input_result, queue_input) = build_input(pipeline_ctx, Ref::new(&input_id))
+    let input_ref = Ref::new(&input_id);
+    // Registered before the build, so events sent while building are not dropped. Any error
+    // below drops the guard, which removes the input from stats.
+    let stats_guard =
+        InputStatsGuard::new(input_ref.clone(), kind, pipeline_ctx.stats_sender.clone());
+    let (input, input_result, queue_input) = build_input(pipeline_ctx, input_ref.clone())
         .map_err(|err| RegisterInputError::InputError(input_id.clone(), err))?;
 
     // TODO: for now assume that
@@ -146,6 +155,7 @@ where
         input,
         audio_eos_received,
         video_eos_received,
+        _stats_guard: stats_guard,
     };
 
     let mut guard = pipeline.lock().unwrap();
@@ -172,7 +182,9 @@ where
 
     guard.inputs.insert(input_id.clone(), pipeline_input);
     guard.queue.add_input(&input_id, queue_input);
-    guard.audio_mixer.register_input(input_id.clone());
+    guard
+        .audio_mixer
+        .register_input(input_ref, guard.ctx.stats_sender.clone());
     guard.renderer.register_input(input_id);
 
     Ok(input_result)

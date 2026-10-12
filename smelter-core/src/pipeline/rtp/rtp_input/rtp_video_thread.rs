@@ -32,19 +32,24 @@ pub(super) struct RtpVideoThread<Decoder: VideoDecoder + 'static> {
 }
 
 impl<Decoder: VideoDecoder> InitializableThread for RtpVideoThread<Decoder> {
-    type InitOptions = (Arc<PipelineCtx>, DepayloaderOptions, QueueSender<Frame>);
+    type InitOptions = (
+        Arc<PipelineCtx>,
+        Ref<InputId>,
+        DepayloaderOptions,
+        QueueSender<Frame>,
+    );
 
     type SpawnOutput = RtpVideoTrackThreadHandle;
     type SpawnError = DecoderInitError;
 
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
-        let (ctx, depayloader_options, frame_sender) = options;
+        let (ctx, input_ref, depayloader_options, frame_sender) = options;
 
         let (rtp_packet_sender, rtp_packet_receiver) = duration_bounded(RTP_BUFFER);
         let depayloader_stream =
             DepayloaderStream::new(depayloader_options, rtp_packet_receiver.into_iter());
         let decoder_stream =
-            VideoDecoderStream::<Decoder, _>::new(ctx, depayloader_stream.flatten())?;
+            VideoDecoderStream::<Decoder, _>::new(ctx, input_ref, depayloader_stream.flatten())?;
 
         let state = Self {
             stream: Box::new(decoder_stream.flatten()),

@@ -28,6 +28,7 @@ pub(crate) struct RtpAudioTrackThreadHandle {
 
 pub(super) struct RtpAudioThreadOptions<Decoder: AudioDecoder> {
     pub ctx: Arc<PipelineCtx>,
+    pub input_ref: Ref<InputId>,
     pub decoder_options: Decoder::Options,
     pub depayloader_options: DepayloaderOptions,
     pub samples_sender: QueueSender<InputAudioSamples>,
@@ -49,6 +50,7 @@ impl<Decoder: AudioDecoder + 'static> InitializableThread for RtpAudioThread<Dec
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let RtpAudioThreadOptions {
             ctx,
+            input_ref,
             decoder_options,
             depayloader_options,
             samples_sender,
@@ -62,6 +64,7 @@ impl<Decoder: AudioDecoder + 'static> InitializableThread for RtpAudioThread<Dec
 
         let decoder_stream = AudioDecoderStream::<Decoder, _>::new(
             ctx,
+            input_ref,
             decoder_options,
             depayloader_stream.flatten(),
         )?;

@@ -85,7 +85,7 @@ async fn process_audio_track(
 
     let handle = AudioTrackThread::spawn(
         format!("WHIP input audio, input_id: {input_ref}"),
-        (ctx.pipeline_ctx.clone(), samples_sender),
+        (ctx.pipeline_ctx.clone(), input_ref.clone(), samples_sender),
     )?;
 
     let stats_sender = ctx.pipeline_ctx.stats_sender.clone();
@@ -153,6 +153,7 @@ async fn process_video_track(
         format!("WHIP input video, input_id: {input_ref}"),
         (
             ctx.pipeline_ctx.clone(),
+            input_ref,
             decoder_mapping,
             payload_type_mapping,
             video_sender,

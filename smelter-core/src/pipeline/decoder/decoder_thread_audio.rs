@@ -14,6 +14,7 @@ use super::AudioDecoder;
 
 pub(crate) struct AudioDecoderThreadOptions<Decoder: AudioDecoder> {
     pub ctx: Arc<PipelineCtx>,
+    pub input_ref: Ref<InputId>,
     pub decoder_options: Decoder::Options,
     pub samples_sender: QueueSender<InputAudioSamples>,
     pub input_buffer_size: Duration,
@@ -37,6 +38,7 @@ where
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let AudioDecoderThreadOptions {
             ctx,
+            input_ref,
             decoder_options,
             samples_sender,
             input_buffer_size: buffer_size,
@@ -46,6 +48,7 @@ where
 
         let decoded_stream = AudioDecoderStream::<Decoder, _>::new(
             ctx,
+            input_ref,
             decoder_options,
             chunk_receiver.into_iter(),
         )?;

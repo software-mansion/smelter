@@ -18,6 +18,25 @@ pub enum RegisterInputOptions {
     DeckLink(DeckLinkInputOptions),
 }
 
+impl RegisterInputOptions {
+    pub fn kind(&self) -> InputProtocolKind {
+        match self {
+            RegisterInputOptions::Rtp(_) => InputProtocolKind::Rtp,
+            RegisterInputOptions::RtmpServer(_) => InputProtocolKind::Rtmp,
+            RegisterInputOptions::MoqServer(_) => InputProtocolKind::MoqServer,
+            RegisterInputOptions::MoqClient(_) => InputProtocolKind::MoqClient,
+            RegisterInputOptions::Mp4(_) => InputProtocolKind::Mp4,
+            RegisterInputOptions::Hls(_) => InputProtocolKind::Hls,
+            RegisterInputOptions::Whip(_) => InputProtocolKind::Whip,
+            RegisterInputOptions::Whep(_) => InputProtocolKind::Whep,
+            #[cfg(target_os = "linux")]
+            RegisterInputOptions::V4l2(_) => InputProtocolKind::V4l2,
+            #[cfg(feature = "decklink")]
+            RegisterInputOptions::DeckLink(_) => InputProtocolKind::DeckLink,
+        }
+    }
+}
+
 pub enum InputInitInfo {
     Rtp {
         port: Option<Port>,

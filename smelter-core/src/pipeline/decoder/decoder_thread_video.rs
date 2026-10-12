@@ -2,8 +2,10 @@ use std::{marker::PhantomData, sync::Arc, time::Duration};
 
 use tracing::warn;
 
+use smelter_render::InputId;
+
 use crate::{
-    Frame, PipelineCtx,
+    Frame, PipelineCtx, Ref,
     error::DecoderInitError,
     pipeline::decoder::{
         BytestreamTransformStream, BytestreamTransformer, DecoderThreadHandle, VideoDecoderStream,
@@ -16,6 +18,7 @@ use super::VideoDecoder;
 
 pub(crate) struct VideoDecoderThreadOptions<Transformer: BytestreamTransformer> {
     pub ctx: Arc<PipelineCtx>,
+    pub input_ref: Ref<InputId>,
     pub transformer: Option<Transformer>,
     pub frame_sender: QueueSender<Frame>,
     pub input_buffer_size: Duration,
@@ -41,6 +44,7 @@ where
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let VideoDecoderThreadOptions {
             ctx,
+            input_ref,
             transformer,
             frame_sender,
             input_buffer_size: buffer_size,
@@ -50,7 +54,8 @@ where
         let transformed_bytestream =
             BytestreamTransformStream::new(transformer, chunk_receiver.into_iter());
 
-        let decoder_stream = VideoDecoderStream::<Decoder, _>::new(ctx, transformed_bytestream)?;
+        let decoder_stream =
+            VideoDecoderStream::<Decoder, _>::new(ctx, input_ref, transformed_bytestream)?;
 
         let state = Self {
             stream: Box::new(decoder_stream.flatten()),

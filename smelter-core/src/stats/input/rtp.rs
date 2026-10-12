@@ -5,9 +5,10 @@ use smelter_render::InputId;
 use crate::{
     Ref,
     stats::{
+        input::{audio_mixer::AudioMixerInputStatsState, media::InputMediaStatsState},
         input_reports::{
-            RtpInputStatsReport, RtpJitterBufferSlidingWindowStatsReport,
-            RtpJitterBufferStatsReport,
+            RtpInputAudioTrackStatsReport, RtpInputStatsReport, RtpInputVideoTrackStatsReport,
+            RtpJitterBufferSlidingWindowStatsReport, RtpJitterBufferStatsReport,
         },
         state::StatsEvent,
         utils::SlidingWindowValue,
@@ -35,6 +36,8 @@ impl RtpInputStatsEvent {
 pub struct RtpInputState {
     pub video: RtpJitterBufferState,
     pub audio: RtpJitterBufferState,
+    pub media: InputMediaStatsState,
+    pub audio_mixer: AudioMixerInputStatsState,
 }
 
 impl RtpInputState {
@@ -42,6 +45,8 @@ impl RtpInputState {
         Self {
             video: RtpJitterBufferState::new(),
             audio: RtpJitterBufferState::new(),
+            media: InputMediaStatsState::new(),
+            audio_mixer: AudioMixerInputStatsState::new(),
         }
     }
 
@@ -53,9 +58,22 @@ impl RtpInputState {
     }
 
     pub fn report(&mut self) -> RtpInputStatsReport {
+        let has_video = self.video.received_any() || self.media.video.received_any();
+        let has_audio = self.audio.received_any()
+            || self.media.audio.received_any()
+            || self.audio_mixer.received_any();
         RtpInputStatsReport {
-            video_rtp: self.video.report(),
-            audio_rtp: self.audio.report(),
+            video: has_video.then(|| RtpInputVideoTrackStatsReport {
+                bitrate_1_second: self.media.video.bitrate_1_second(),
+                bitrate_1_minute: self.media.video.bitrate_1_minute(),
+                jitter_buffer: self.video.report(),
+            }),
+            audio: has_audio.then(|| RtpInputAudioTrackStatsReport {
+                bitrate_1_second: self.media.audio.bitrate_1_second(),
+                bitrate_1_minute: self.media.audio.bitrate_1_minute(),
+                jitter_buffer: self.audio.report(),
+                mixer: self.audio_mixer.report(),
+            }),
         }
     }
 }
@@ -130,6 +148,10 @@ impl RtpJitterBufferState {
                 self.bitrate_1_min.push(chunk_size_bits);
             }
         }
+    }
+
+    pub fn received_any(&self) -> bool {
+        self.packets_received > 0
     }
 
     pub fn report(&mut self) -> RtpJitterBufferStatsReport {

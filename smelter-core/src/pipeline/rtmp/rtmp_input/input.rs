@@ -50,11 +50,6 @@ impl RtmpServerInput {
             return Err(RtmpServerError::ServerNotRunning.into());
         };
 
-        ctx.stats_sender.send(StatsEvent::NewInput {
-            input_ref: input_ref.clone(),
-            kind: InputProtocolKind::Rtmp,
-        });
-
         let queue_input = QueueInput::new(&ctx, &input_ref, options.queue_options);
         if options.is_live {
             queue_input.set_stale_frame_timeout(ctx.stale_frame_timeout);

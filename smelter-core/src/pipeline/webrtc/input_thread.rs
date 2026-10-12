@@ -35,6 +35,7 @@ pub(super) struct VideoTrackThread {
 impl InitializableThread for VideoTrackThread {
     type InitOptions = (
         Arc<PipelineCtx>,
+        Ref<InputId>,
         VideoDecoderMapping,
         VideoPayloadTypeMapping,
         QueueSender<Frame>,
@@ -45,8 +46,14 @@ impl InitializableThread for VideoTrackThread {
     type SpawnError = DecoderInitError;
 
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
-        let (ctx, decoder_mapping, payload_type_mapping, frame_sender, keyframe_request_sender) =
-            options;
+        let (
+            ctx,
+            input_ref,
+            decoder_mapping,
+            payload_type_mapping,
+            frame_sender,
+            keyframe_request_sender,
+        ) = options;
         let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5000);
 
         let packet_stream = AsyncReceiverIter {
@@ -58,6 +65,7 @@ impl InitializableThread for VideoTrackThread {
 
         let decoder_stream = DynamicVideoDecoderStream::new(
             ctx,
+            input_ref,
             decoder_mapping,
             depayloader_stream,
             keyframe_request_sender,
@@ -100,13 +108,17 @@ pub(super) struct AudioTrackThread {
 }
 
 impl InitializableThread for AudioTrackThread {
-    type InitOptions = (Arc<PipelineCtx>, QueueSender<InputAudioSamples>);
+    type InitOptions = (
+        Arc<PipelineCtx>,
+        Ref<InputId>,
+        QueueSender<InputAudioSamples>,
+    );
 
     type SpawnOutput = AudioTrackThreadHandle;
     type SpawnError = DecoderInitError;
 
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
-        let (ctx, samples_sender) = options;
+        let (ctx, input_ref, samples_sender) = options;
 
         let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5000);
 
@@ -119,6 +131,7 @@ impl InitializableThread for AudioTrackThread {
 
         let decoder_stream = AudioDecoderStream::<OpusDecoder, _>::new(
             ctx,
+            input_ref,
             OpusDecoderOptions { opus_head: None },
             depayloader_stream,
         )?

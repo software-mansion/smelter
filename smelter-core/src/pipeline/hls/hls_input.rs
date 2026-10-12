@@ -77,10 +77,6 @@ impl HlsInput {
     ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
         let _span = span!(Level::INFO, "HLS input", input_id = input_ref.to_string()).entered();
         let should_close = Arc::new(AtomicBool::new(false));
-        ctx.stats_sender.send(StatsEvent::NewInput {
-            input_ref: input_ref.clone(),
-            kind: InputProtocolKind::Hls,
-        });
 
         let ffmpeg_ctx = FfmpegInputContext::new(&opts.url, should_close.clone())?;
         let queue_input = QueueInput::new(&ctx, &input_ref, opts.queue_options.clone());

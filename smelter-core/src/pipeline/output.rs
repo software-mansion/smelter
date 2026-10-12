@@ -7,15 +7,19 @@ use crossbeam_channel::Sender;
 use smelter_render::{OutputFrameFormat, error::ErrorStack};
 use tracing::{error, info, warn};
 
-use crate::pipeline::{
-    hls::HlsOutput,
-    input::PipelineInput,
-    moq::MoqClientOutput,
-    mp4::Mp4Output,
-    rtmp::RtmpClientOutput,
-    rtp::RtpOutput,
-    webrtc::{WhepOutput, WhipOutput},
+use crate::{
+    pipeline::{
+        hls::HlsOutput,
+        input::PipelineInput,
+        moq::MoqClientOutput,
+        mp4::Mp4Output,
+        rtmp::RtmpClientOutput,
+        rtp::RtpOutput,
+        webrtc::{WhepOutput, WhipOutput},
+    },
+    stats::OutputStatsGuard,
 };
+
 use crate::prelude::*;
 
 pub(crate) struct PipelineOutput {
@@ -23,6 +27,7 @@ pub(crate) struct PipelineOutput {
     /// Unique per registration, unlike `OutputId` which can be reused after unregister.
     pub output_ref: Ref<OutputId>,
     pub state: OutputState,
+    _stats_guard: OutputStatsGuard,
 }
 
 pub(crate) enum OutputState {
@@ -177,6 +182,7 @@ pub(super) enum OutputSender<T> {
 pub(super) fn register_pipeline_output<BuildFn, NewOutputResult>(
     pipeline: &Arc<Mutex<Pipeline>>,
     output_id: OutputId,
+    kind: OutputProtocolKind,
     video: Option<RegisterOutputVideoOptions>,
     audio: Option<RegisterOutputAudioOptions>,
     start_at: Option<Timestamp>,
@@ -203,6 +209,11 @@ where
     };
 
     let output_ref = Ref::new(&output_id);
+    // Registered before the build, so events sent while building are not dropped. Any error
+    // below, including removing the output after a failed start, drops the guard, which
+    // removes the output from stats.
+    let stats_guard =
+        OutputStatsGuard::new(output_ref.clone(), kind, pipeline_ctx.stats_sender.clone());
     let (output, output_result) = build_output(pipeline_ctx, output_ref.clone())
         .map_err(|err| RegisterOutputError::OutputError(output_id.clone(), err))?;
 
@@ -217,6 +228,7 @@ where
             output,
             output_ref: output_ref.clone(),
             state: OutputState::NotStarted { video, audio },
+            _stats_guard: stats_guard,
         },
     );
 

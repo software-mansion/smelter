@@ -392,6 +392,7 @@ fn spawn_video_decoder(
             input_ref.clone(),
             VideoDecoderThreadOptions::<H264AvccToAnnexB> {
                 ctx: ctx.clone(),
+                input_ref: input_ref.clone(),
                 transformer: None,
                 frame_sender,
                 input_buffer_size: buffer_size,
@@ -401,6 +402,7 @@ fn spawn_video_decoder(
             input_ref.clone(),
             VideoDecoderThreadOptions::<H264AvccToAnnexB> {
                 ctx: ctx.clone(),
+                input_ref: input_ref.clone(),
                 transformer: None,
                 frame_sender,
                 input_buffer_size: buffer_size,
@@ -428,6 +430,7 @@ fn spawn_h264_video_decoder(
 
     let options = VideoDecoderThreadOptions {
         ctx: ctx.clone(),
+        input_ref: input_ref.clone(),
         transformer: config.map(H264AvccToAnnexB::new),
         frame_sender,
         input_buffer_size: buffer_size,
@@ -464,6 +467,7 @@ fn spawn_audio_decoder(
 
             let options = AudioDecoderThreadOptions {
                 ctx: ctx.clone(),
+                input_ref: input_ref.clone(),
                 decoder_options: FdkAacDecoderOptions { asc },
                 samples_sender: sample_sender,
                 input_buffer_size: buffer_size,
@@ -476,6 +480,7 @@ fn spawn_audio_decoder(
         AudioCodec::Opus => {
             let options = AudioDecoderThreadOptions {
                 ctx: ctx.clone(),
+                input_ref: input_ref.clone(),
                 decoder_options: OpusDecoderOptions { opus_head: None },
                 samples_sender: sample_sender,
                 input_buffer_size: buffer_size,

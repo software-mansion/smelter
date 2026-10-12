@@ -1,21 +1,45 @@
-use crate::stats::{input::sync::InputSyncState, input_reports::HlsInputStatsReport};
+use crate::stats::{
+    input::{
+        audio_mixer::AudioMixerInputStatsState, media::InputMediaStatsState, sync::InputSyncState,
+    },
+    input_reports::{
+        HlsInputAudioTrackStatsReport, HlsInputStatsReport, HlsInputVideoTrackStatsReport,
+    },
+};
 
 #[derive(Debug)]
 pub struct HlsInputState {
     pub sync: InputSyncState,
+    pub media: InputMediaStatsState,
+    pub audio_mixer: AudioMixerInputStatsState,
 }
 
 impl HlsInputState {
     pub fn new() -> Self {
         Self {
             sync: InputSyncState::new(),
+            media: InputMediaStatsState::new(),
+            audio_mixer: AudioMixerInputStatsState::new(),
         }
     }
 
     pub fn report(&mut self) -> HlsInputStatsReport {
+        let has_video = self.sync.video.was_added() || self.media.video.received_any();
+        let has_audio = self.sync.audio.was_added()
+            || self.media.audio.received_any()
+            || self.audio_mixer.received_any();
         HlsInputStatsReport {
-            video: self.sync.video.report(),
-            audio: self.sync.audio.report(),
+            video: has_video.then(|| HlsInputVideoTrackStatsReport {
+                bitrate_1_second: self.media.video.bitrate_1_second(),
+                bitrate_1_minute: self.media.video.bitrate_1_minute(),
+                sync: self.sync.video.report(),
+            }),
+            audio: has_audio.then(|| HlsInputAudioTrackStatsReport {
+                bitrate_1_second: self.media.audio.bitrate_1_second(),
+                bitrate_1_minute: self.media.audio.bitrate_1_minute(),
+                sync: self.sync.audio.report(),
+                mixer: self.audio_mixer.report(),
+            }),
         }
     }
 }

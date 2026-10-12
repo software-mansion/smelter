@@ -115,7 +115,7 @@ mod fresh {
     fn input_before_request() {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
-        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono, stats_sender()).unwrap();
 
         r.write_batch(source.batch(D, Duration::from_millis(10)));
         r.write_batch(source.batch(D + Duration::from_millis(10), Duration::from_millis(10)));
@@ -141,7 +141,7 @@ mod fresh {
     fn input_ends_within_request() {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
-        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono, stats_sender()).unwrap();
 
         r.write_batch(source.batch(D, Duration::from_millis(10)));
         r.write_batch(source.batch(D + Duration::from_millis(10), Duration::from_millis(20)));
@@ -171,7 +171,7 @@ mod fresh {
     fn input_covers_request() {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
-        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono, stats_sender()).unwrap();
 
         r.write_batch(source.batch(D + Duration::from_millis(10), Duration::from_millis(60)));
         r.write_batch(source.batch(D + Duration::from_millis(70), Duration::from_millis(60)));
@@ -198,7 +198,7 @@ mod fresh {
     fn input_covers_request_grid_aligned() {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
-        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono, stats_sender()).unwrap();
 
         for i in 0..6 {
             r.write_batch(
@@ -235,7 +235,7 @@ mod fresh {
         let source = SignalSource::new(RATE, test_signal());
         let shift = Duration::from_micros(500);
         let first_pts = D + Duration::from_millis(20) - shift;
-        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono, stats_sender()).unwrap();
 
         r.write_batch(source.batch(first_pts, Duration::from_millis(50)));
         r.write_batch(source.batch(
@@ -270,7 +270,7 @@ mod fresh {
     fn input_starts_at_request_start() {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
-        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono, stats_sender()).unwrap();
 
         r.write_batch(source.batch(D + Duration::from_millis(20), Duration::from_millis(50)));
         r.write_batch(source.batch(D + Duration::from_millis(70), Duration::from_millis(50)));
@@ -312,7 +312,7 @@ mod fresh {
         let source = SignalSource::new(RATE, test_signal());
         let shift = Duration::from_micros(500);
         let first_pts = D + Duration::from_millis(20) + shift;
-        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono, stats_sender()).unwrap();
 
         r.write_batch(source.batch(first_pts, Duration::from_millis(50)));
         r.write_batch(source.batch(
@@ -356,7 +356,7 @@ mod fresh {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
         let first_pts = D + Duration::from_millis(30);
-        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono, stats_sender()).unwrap();
 
         r.write_batch(source.batch(first_pts, Duration::from_millis(40)));
         r.write_batch(source.batch(D + Duration::from_millis(70), Duration::from_millis(40)));
@@ -391,7 +391,7 @@ mod fresh {
     fn input_after_request() {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
-        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono, stats_sender()).unwrap();
 
         r.write_batch(source.batch(D + Duration::from_millis(60), Duration::from_millis(10)));
         r.write_batch(source.batch(D + Duration::from_millis(70), Duration::from_millis(10)));
@@ -421,7 +421,8 @@ mod fresh {
         let out_start = D + Duration::from_millis(20);
         let out_end = D + Duration::from_millis(40);
 
-        let mut short = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+        let mut short =
+            InputResampler::new(RATE, RATE, AudioChannels::Mono, stats_sender()).unwrap();
         let threshold = out_end + short.resampler.input_frame_duration() + RESYNC_LEAD;
         let short_len = threshold - out_start - Timestamp::from_millis(1);
         short.write_batch(source.batch(out_start, short_len.to_duration_saturating()));
@@ -433,7 +434,8 @@ mod fresh {
         .assert();
         assert!(short.needs_input_resync);
 
-        let mut long = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+        let mut long =
+            InputResampler::new(RATE, RATE, AudioChannels::Mono, stats_sender()).unwrap();
         let long_len = threshold - out_start + Timestamp::from_millis(1);
         long.write_batch(source.batch(out_start, long_len.to_duration_saturating()));
         let samples = mono(long.get_samples((out_start, out_end)));
@@ -455,7 +457,7 @@ mod fresh {
     fn gate_keeps_short_input() {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
-        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono, stats_sender()).unwrap();
 
         r.write_batch(source.batch(D + Duration::from_millis(20), Duration::from_millis(30)));
         let first =
@@ -499,7 +501,7 @@ mod resync {
     fn gap_is_padded() {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
-        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono, stats_sender()).unwrap();
 
         r.write_batch(source.batch(D + Duration::from_millis(20), Duration::from_millis(20)));
         r.write_batch(source.batch(D + Duration::from_millis(55), Duration::from_millis(85)));
@@ -541,7 +543,7 @@ mod resync {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
         let other = SignalSource::new(RATE, |_| 0.5);
-        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono, stats_sender()).unwrap();
 
         r.write_batch(source.batch(D + Duration::from_millis(20), Duration::from_millis(120)));
         r.write_batch(other.batch(D + Duration::from_millis(40), Duration::from_millis(120)));
@@ -579,7 +581,7 @@ mod resync {
     fn small_overlap_places_earlier_input_early() {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
-        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono, stats_sender()).unwrap();
 
         r.write_batch(source.batch(D + Duration::from_millis(20), Duration::from_millis(80)));
         let samples = source.samples(
@@ -627,7 +629,7 @@ mod running {
     fn primed() -> (SignalSource, InputResampler, Vec<f64>) {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
-        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono, stats_sender()).unwrap();
         r.write_batch(source.batch(D + Duration::from_millis(10), Duration::from_millis(60)));
         r.write_batch(source.batch(D + Duration::from_millis(70), Duration::from_millis(60)));
         let first =
@@ -1093,7 +1095,7 @@ mod running {
     fn drift_shift_backward_600ms() {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal_5s());
-        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono, stats_sender()).unwrap();
         r.write_batch(source.batch(D + Duration::from_millis(1010), Duration::from_millis(60)));
         r.write_batch(source.batch(D + Duration::from_millis(1070), Duration::from_millis(60)));
         let out_chunk_1 = mono(r.get_samples((
@@ -1181,7 +1183,7 @@ mod drained {
     fn primed() -> (SignalSource, InputResampler, Vec<f64>) {
         try_init_logger();
         let source = SignalSource::new(RATE, test_signal());
-        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono).unwrap();
+        let mut r = InputResampler::new(RATE, RATE, AudioChannels::Mono, stats_sender()).unwrap();
         r.write_batch(source.batch(D + Duration::from_millis(10), Duration::from_millis(30)));
         r.write_batch(source.batch(D + Duration::from_millis(40), Duration::from_millis(30)));
         let prev = read_chunks(&mut r, D + Duration::from_millis(20), 3);

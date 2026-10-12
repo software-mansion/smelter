@@ -1,6 +1,8 @@
 use tracing::error;
 
+pub(super) mod audio_mixer;
 pub(super) mod hls;
+pub(super) mod media;
 pub(super) mod moq_client;
 pub(super) mod moq_server;
 pub(super) mod mp4;
@@ -14,14 +16,16 @@ use crate::{
     InputProtocolKind,
     pipeline::utils::input_sync::TrackKind,
     stats::{
-        input::hls::HlsInputState, input::moq_client::MoqClientInputState,
+        input::audio_mixer::AudioMixerInputStatsState, input::hls::HlsInputState,
+        input::media::InputMediaStatsState, input::moq_client::MoqClientInputState,
         input::moq_server::MoqServerInputState, input::mp4::Mp4InputState,
         input::rtmp::RtmpInputState, input::rtp::RtpInputState, input::whep::WhepInputState,
         input::whip::WhipInputState, input_reports::InputStatsReport,
     },
 };
 
-pub(crate) use mp4::{Mp4InputStatsEvent, Mp4InputTrackStatsEvent};
+pub(crate) use audio_mixer::AudioMixerInputStatsEvent;
+pub(crate) use media::InputMediaStatsEvent;
 pub(crate) use rtmp::RtmpInputStatsEvent;
 pub(crate) use rtp::{RtpInputStatsEvent, RtpJitterBufferStatsEvent};
 pub(crate) use sync::{
@@ -42,21 +46,13 @@ pub(crate) enum InputStatsEvent {
         event: InputSyncTrackStatsEvent,
     },
     Rtmp(RtmpInputStatsEvent),
-    Mp4(Mp4InputStatsEvent),
-}
-
-impl InputStatsEvent {
-    /// Protocol the event belongs to; `None` for events shared by many protocols.
-    pub fn protocol_kind(&self) -> Option<InputProtocolKind> {
-        match self {
-            InputStatsEvent::Rtp(_) => Some(InputProtocolKind::Rtp),
-            InputStatsEvent::Whip(_) => Some(InputProtocolKind::Whip),
-            InputStatsEvent::Whep(_) => Some(InputProtocolKind::Whep),
-            InputStatsEvent::Sync { .. } => None,
-            InputStatsEvent::Rtmp(_) => Some(InputProtocolKind::Rtmp),
-            InputStatsEvent::Mp4(_) => Some(InputProtocolKind::Mp4),
-        }
-    }
+    /// Sent by decoders for every input.
+    Media {
+        track: TrackKind,
+        event: InputMediaStatsEvent,
+    },
+    /// Sent by the audio mixer for every input.
+    AudioMixer(AudioMixerInputStatsEvent),
 }
 
 #[derive(Debug)]
@@ -72,8 +68,9 @@ pub enum InputStatsState {
 }
 
 impl InputStatsState {
-    pub fn new(kind: InputProtocolKind) -> Self {
-        match kind {
+    /// `None` for inputs without stats.
+    pub fn new(kind: InputProtocolKind) -> Option<Self> {
+        let state = match kind {
             InputProtocolKind::Whip => InputStatsState::Whip(WhipInputState::new()),
             InputProtocolKind::Whep => InputStatsState::Whep(WhepInputState::new()),
             InputProtocolKind::Rtp => InputStatsState::Rtp(RtpInputState::new()),
@@ -82,10 +79,11 @@ impl InputStatsState {
             InputProtocolKind::Hls => InputStatsState::Hls(HlsInputState::new()),
             InputProtocolKind::MoqServer => InputStatsState::MoqServer(MoqServerInputState::new()),
             InputProtocolKind::MoqClient => InputStatsState::MoqClient(MoqClientInputState::new()),
-            InputProtocolKind::V4l2 => unimplemented!(),
-            InputProtocolKind::DeckLink => unimplemented!(),
-            InputProtocolKind::RawDataChannel => unimplemented!(),
-        }
+            InputProtocolKind::V4l2
+            | InputProtocolKind::DeckLink
+            | InputProtocolKind::RawDataChannel => return None,
+        };
+        Some(state)
     }
 
     pub fn handle_event(&mut self, event: InputStatsEvent) {
@@ -112,12 +110,41 @@ impl InputStatsState {
             (InputStatsState::MoqClient(state), InputStatsEvent::Sync { track, event }) => {
                 state.sync.handle_event(track, event);
             }
-            (InputStatsState::Mp4(state), InputStatsEvent::Mp4(event)) => {
-                state.handle_event(event);
+            (state, InputStatsEvent::Media { track, event }) => {
+                state.media().handle_event(track, event);
+            }
+            (state, InputStatsEvent::AudioMixer(event)) => {
+                state.audio_mixer().handle_event(event);
             }
             (state, event) => {
                 error!(?state, ?event, "Wrong event type for input")
             }
+        }
+    }
+
+    fn media(&mut self) -> &mut InputMediaStatsState {
+        match self {
+            InputStatsState::Rtp(state) => &mut state.media,
+            InputStatsState::Whip(state) => &mut state.media,
+            InputStatsState::Whep(state) => &mut state.media,
+            InputStatsState::Hls(state) => &mut state.media,
+            InputStatsState::Rtmp(state) => &mut state.media,
+            InputStatsState::MoqServer(state) => &mut state.media,
+            InputStatsState::MoqClient(state) => &mut state.media,
+            InputStatsState::Mp4(state) => &mut state.media,
+        }
+    }
+
+    fn audio_mixer(&mut self) -> &mut AudioMixerInputStatsState {
+        match self {
+            InputStatsState::Rtp(state) => &mut state.audio_mixer,
+            InputStatsState::Whip(state) => &mut state.audio_mixer,
+            InputStatsState::Whep(state) => &mut state.audio_mixer,
+            InputStatsState::Hls(state) => &mut state.audio_mixer,
+            InputStatsState::Rtmp(state) => &mut state.audio_mixer,
+            InputStatsState::MoqServer(state) => &mut state.audio_mixer,
+            InputStatsState::MoqClient(state) => &mut state.audio_mixer,
+            InputStatsState::Mp4(state) => &mut state.audio_mixer,
         }
     }
 

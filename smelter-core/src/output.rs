@@ -39,6 +39,18 @@ pub enum ProtocolOutputOptions {
 }
 
 impl ProtocolOutputOptions {
+    pub fn kind(&self) -> OutputProtocolKind {
+        match self {
+            ProtocolOutputOptions::Rtp(_) => OutputProtocolKind::Rtp,
+            ProtocolOutputOptions::Rtmp(_) => OutputProtocolKind::Rtmp,
+            ProtocolOutputOptions::Mp4(_) => OutputProtocolKind::Mp4,
+            ProtocolOutputOptions::Hls(_) => OutputProtocolKind::Hls,
+            ProtocolOutputOptions::Whip(_) => OutputProtocolKind::Whip,
+            ProtocolOutputOptions::Whep(_) => OutputProtocolKind::Whep,
+            ProtocolOutputOptions::MoqClient(_) => OutputProtocolKind::MoqClient,
+        }
+    }
+
     /// Timestamp (relative to the queue start) the output should start producing data
     /// at. Only supported by protocols that write to a file/playlist, where delaying the
     /// start does not mean stalling a live connection.

@@ -57,10 +57,6 @@ impl WhipInput {
         let Some(state) = &ctx.whip_whep_state else {
             return Err(WebrtcServerError::ServerNotRunning.into());
         };
-        ctx.stats_sender.send(StatsEvent::NewInput {
-            input_ref: input_ref.clone(),
-            kind: InputProtocolKind::Whip,
-        });
 
         let queue_input = QueueInput::new(&ctx, &input_ref, options.queue_options);
         queue_input.set_stale_frame_timeout(ctx.stale_frame_timeout);
