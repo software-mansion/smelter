@@ -28,6 +28,10 @@ impl AudioSamplesBuffer {
         self.buffer.push_front((batch, 0));
     }
 
+    pub fn clear(&mut self) {
+        self.buffer.clear();
+    }
+
     pub fn drain_samples(&mut self, mut samples_to_read: usize) {
         while let Some((batch, read_samples)) = self.buffer.front()
             && batch.len() - read_samples <= samples_to_read
@@ -90,6 +94,15 @@ impl AudioSamplesBuffer {
             AudioSamples::Stereo(samples) => samples.extend(range.map(|_| (0.0, 0.0))),
         };
         samples
+    }
+}
+
+impl From<AudioSamples> for AudioSamplesBuffer {
+    fn from(batch: AudioSamples) -> Self {
+        Self {
+            channels: batch.channels(),
+            buffer: VecDeque::from([(batch, 0)]),
+        }
     }
 }
 

@@ -25,9 +25,9 @@ use crate::prelude::*;
 /// - Input samples need to be delivered a bit earlier than samples_set.start_pts. Resampler has
 ///   it's own latency, so for correct synchronization we need that buffer. Additionally, we have
 ///   more space to stretch audio if it's falling behind real time clock.
-///   - For example, if samples_set has start_pts=40ms and end_pts=60ms, then it's best that sample
-///     batches for each input already contain data for e.g. 80ms. Currently, queue enforces 40ms
-///     "buffer"
+///   - For example, if samples_set has start_pts=40ms and end_pts=60ms, then sample batches for
+///     each input should already contain data up to 140ms. Queue enforces that 80ms "buffer"
+///     (`MIXER_STRETCH_BUFFER`).
 /// - Output samples will always be continuous. Even if mix_samples won't be called
 ///   for a specific range the zero output samples will be returned on output.
 ///   - The consequence for downstream elements (encoder, resampler) is that they can
