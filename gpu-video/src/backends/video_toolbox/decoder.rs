@@ -271,6 +271,18 @@ pub(super) fn download_to_bytes(
     })
 }
 
+type DecodeOutputBlock = block2::RcBlock<
+    dyn Fn(i32, vt::VTDecodeInfoFlags, *mut cv::CVImageBuffer, cm::CMTime, cm::CMTime),
+>;
+
+fn decode_output_block(
+    on_output: impl Fn(i32, vt::VTDecodeInfoFlags, *mut cv::CVImageBuffer, cm::CMTime, cm::CMTime)
+    + Send
+    + 'static,
+) -> DecodeOutputBlock {
+    block2::RcBlock::new(on_output)
+}
+
 struct Session {
     session: cf::CFRetained<vt::VTDecompressionSession>,
     format_description: cf::CFRetained<cm::CMFormatDescription>,
@@ -345,7 +357,7 @@ impl Session {
             })?
         };
 
-        let block = block2::RcBlock::new(
+        let block = decode_output_block(
             move |status: i32,
                   info_flags: vt::VTDecodeInfoFlags,
                   image: *mut cv::CVImageBuffer,

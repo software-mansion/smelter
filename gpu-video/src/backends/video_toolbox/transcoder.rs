@@ -1,8 +1,7 @@
 use std::{
     any::Any,
     panic::AssertUnwindSafe,
-    ptr::NonNull,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, OnceLock},
 };
 
 use crate::{
@@ -13,7 +12,8 @@ use crate::{
         encoder::{H264Codec, H265Codec, MetalInputFrame},
         error::{VTEncoderError, VTTranscoderError},
         metal_interop::{
-            PlaneTextures, SendSyncCVBuffer, SyncCache, plane_textures_from_pixel_buffer,
+            PlaneTextures, SendSyncCVBuffer, SharedEventTimeline, SyncCache, TimelinePoint,
+            add_completed_handler, plane_textures_from_pixel_buffer,
         },
     },
     device::{DecoderParameters, Rational, VideoParameters},
@@ -27,7 +27,7 @@ use crate::{
 use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_core_foundation as cf;
 use objc2_core_video as cv;
-use objc2_metal::{self as mtl, MTLCommandBuffer, MTLCommandQueue, MTLDevice, MTLSharedEvent};
+use objc2_metal::{self as mtl, MTLCommandBuffer, MTLCommandQueue, MTLDevice};
 
 mod resize;
 
@@ -41,27 +41,16 @@ impl AnyEncoder {
         &mut self,
         buffer: cf::CFRetained<cv::CVBuffer>,
         pts: Option<u64>,
-        event: &ProtocolObject<dyn mtl::MTLSharedEvent>,
-        value: u64,
-        check_input_ready: impl FnOnce() -> Result<(), VTEncoderError> + 'static,
+        at: TimelinePoint,
+        check_input_ready: impl FnOnce() -> Result<(), VTEncoderError> + Send + 'static,
     ) -> Result<(), VTEncoderError> {
         match self {
-            AnyEncoder::H264(encoder) => encoder.submit_when_event_reaches(
-                buffer,
-                pts,
-                false,
-                event,
-                value,
-                check_input_ready,
-            ),
-            AnyEncoder::H265(encoder) => encoder.submit_when_event_reaches(
-                buffer,
-                pts,
-                false,
-                event,
-                value,
-                check_input_ready,
-            ),
+            AnyEncoder::H264(encoder) => {
+                encoder.submit_when_event_reaches(buffer, pts, false, at, check_input_ready)
+            }
+            AnyEncoder::H265(encoder) => {
+                encoder.submit_when_event_reaches(buffer, pts, false, at, check_input_ready)
+            }
         }
     }
 
@@ -145,20 +134,46 @@ pub(crate) struct Transcoder {
     pipeline: Arc<Mutex<ResizeEncodePipeline>>,
 }
 
-struct DecodedPlanesKeptAlive(PlaneTextures);
+struct TexturesUsedByResize {
+    _input: PlaneTextures,
+    _outputs: Vec<PlaneTextures>,
+}
 
-// Safety: the wrapped textures are only held to keep the decoded pixel buffer alive and are never
-// accessed through this wrapper, only retained and released, which is thread-safe.
-unsafe impl Send for DecodedPlanesKeptAlive {}
-unsafe impl Sync for DecodedPlanesKeptAlive {}
+// Safety: the wrapped textures are never accessed through this wrapper, only dropped, and releasing
+// MTLTextures and CVMetalTextures only decrements thread-safe retain counts.
+unsafe impl Send for TexturesUsedByResize {}
+
+#[derive(Clone)]
+struct ResizeOutcome(Arc<OnceLock<Result<(), String>>>);
+
+impl ResizeOutcome {
+    fn new() -> Self {
+        Self(Arc::new(OnceLock::new()))
+    }
+
+    fn write(&self, result: Result<(), String>) {
+        let _ = self.0.set(result);
+    }
+
+    fn read(&self) -> Result<(), VTEncoderError> {
+        match self.0.get() {
+            Some(Ok(())) => Ok(()),
+            Some(Err(description)) => {
+                Err(VTEncoderError::InputPreparationFailed(description.clone()))
+            }
+            None => Err(VTEncoderError::InputPreparationFailed(
+                "the resize command buffer did not report an outcome".to_string(),
+            )),
+        }
+    }
+}
 
 struct ResizeEncodePipeline {
     decoder_texture_cache: SyncCache,
     backends: Vec<Backend>,
     _device: Retained<ProtocolObject<dyn mtl::MTLDevice>>,
     queue: Retained<ProtocolObject<dyn mtl::MTLCommandQueue>>,
-    resize_finished_event: Retained<ProtocolObject<dyn mtl::MTLSharedEvent>>,
-    next_event_value: u64,
+    resize_finished: SharedEventTimeline,
     error: Option<VTTranscoderError>,
     panic: Option<Box<dyn Any + Send>>,
 }
@@ -210,8 +225,7 @@ impl Transcoder {
             backends,
             _device: device,
             queue,
-            resize_finished_event,
-            next_event_value: 1,
+            resize_finished: SharedEventTimeline::new(resize_finished_event),
             error: None,
             panic: None,
         }));
@@ -295,50 +309,50 @@ impl ResizeEncodePipeline {
         &mut self,
         decoded: OutputFrame<SendSyncCVBuffer>,
     ) -> Result<(), VTTranscoderError> {
-        let input_planes = Arc::new(DecodedPlanesKeptAlive(plane_textures_from_pixel_buffer(
-            &self.decoder_texture_cache,
-            &decoded.data.0,
-        )?));
+        let input_planes =
+            plane_textures_from_pixel_buffer(&self.decoder_texture_cache, &decoded.data.0)?;
 
         let cmd = self
             .queue
             .commandBuffer()
             .ok_or(VTTranscoderError::CommandBufferCreationFailed)?;
 
-        let mut encoder_inputs = Vec::with_capacity(self.backends.len());
+        let mut encoder_buffers = Vec::with_capacity(self.backends.len());
+        let mut output_planes = Vec::with_capacity(self.backends.len());
         for backend in &mut self.backends {
-            let output = backend.encoder.acquire_input_frame()?;
-            backend.encode_resize(&cmd, &input_planes.0, &output.planes);
-            encoder_inputs.push(output);
+            let MetalInputFrame { buffer, planes } = backend.encoder.acquire_input_frame()?;
+            backend.encode_resize(&cmd, &input_planes, &planes);
+            encoder_buffers.push(buffer);
+            output_planes.push(planes);
         }
 
-        let event_value = self.next_event_value;
-        self.next_event_value += 1;
-        let resize_finished_event = self.resize_finished_event.clone();
-        let signal_event_when_completed = block2::RcBlock::new(
-            move |_cmd: NonNull<ProtocolObject<dyn mtl::MTLCommandBuffer>>| {
-                resize_finished_event.setSignaledValue(event_value);
-            },
-        );
-        unsafe { cmd.addCompletedHandler(block2::RcBlock::as_ptr(&signal_event_when_completed)) };
+        let timeline_point = self.resize_finished.next_timeline_point();
+        let outcome = ResizeOutcome::new();
+        let handler_outcome = outcome.clone();
+        let handler_timeline_point = timeline_point.clone();
+        let textures_used_by_resize = TexturesUsedByResize {
+            _input: input_planes,
+            _outputs: output_planes,
+        };
+        add_completed_handler(&cmd, move |cmd| {
+            let result = if cmd.status() == mtl::MTLCommandBufferStatus::Error {
+                Err(cmd.error().map(|e| e.to_string()).unwrap_or_default())
+            } else {
+                Ok(())
+            };
+            handler_outcome.write(result);
+            drop(textures_used_by_resize);
+            handler_timeline_point.signal();
+        });
         cmd.commit();
 
-        for (backend, input) in self.backends.iter_mut().zip(encoder_inputs) {
-            let cmd = cmd.clone();
-            let input_planes = input_planes.clone();
+        for (backend, buffer) in self.backends.iter_mut().zip(encoder_buffers) {
+            let outcome = outcome.clone();
             backend.encoder.submit_when_event_reaches(
-                input.buffer,
+                buffer,
                 decoded.metadata.pts,
-                &self.resize_finished_event,
-                event_value,
-                move || {
-                    let _decoded_planes_kept_alive_until_resize_finished = input_planes;
-                    if cmd.status() == mtl::MTLCommandBufferStatus::Error {
-                        let description = cmd.error().map(|e| e.to_string()).unwrap_or_default();
-                        return Err(VTEncoderError::InputPreparationFailed(description));
-                    }
-                    Ok(())
-                },
+                timeline_point.clone(),
+                move || outcome.read(),
             )?;
         }
 

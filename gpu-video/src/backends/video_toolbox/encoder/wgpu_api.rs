@@ -10,7 +10,7 @@ use crate::{
     EncodedOutputChunk, InputFrame, VideoEncoderError, VideoTexture,
     backends::video_toolbox::{
         error::{VTEncoderError, VTInitError},
-        metal_interop::SendSyncCVBuffer,
+        metal_interop::{SendSyncCVBuffer, SharedEventTimeline},
         wgpu_api::video_texture_from_pixel_buffer,
     },
     device::{EncoderOutputParameters, VideoParameters},
@@ -21,7 +21,7 @@ use super::{EncodeCodec, VTEncoder};
 
 pub(crate) struct VTWgpuEncodeState {
     fence: wgpu::hal::metal::Fence,
-    next_fence_value: u64,
+    fence_timeline: SharedEventTimeline,
     issued_input_textures: Arc<Mutex<HashMap<VideoTexture, SendSyncCVBuffer>>>,
 }
 
@@ -33,14 +33,15 @@ impl VTWgpuEncodeState {
             unsafe { hal_device.create_fence() }.map_err(WgpuTextureEncoderError::from)?
         };
 
-        if fence.raw_shared_event().is_none() {
+        let Some(shared_event) = fence.raw_shared_event() else {
             // TODO: may need a fallback sometimes?
             return Err(VTEncoderError::SharedEventUnavailable);
-        }
+        };
+        let fence_timeline = SharedEventTimeline::new(Retained::from(shared_event));
 
         Ok(Self {
             fence,
-            next_fence_value: 1,
+            fence_timeline,
             issued_input_textures: Default::default(),
         })
     }
@@ -127,31 +128,16 @@ impl<C: EncodeCodec> VTEncoder<C> {
             .ok_or(WgpuTextureEncoderError::TextureNotFromEncoder)?;
 
         let state = self.wgpu.as_mut().unwrap();
-        let value = state.next_fence_value;
-        state.next_fence_value += 1;
+        let timeline_point = state.fence_timeline.next_timeline_point();
 
         {
             let hal_queue =
                 unsafe { wgpu_queue.as_hal::<MtlApi>() }.ok_or(VTInitError::NotMetalBackend)?;
-            unsafe { hal_queue.submit(&[], &[], (&state.fence, value)) }
+            unsafe { hal_queue.submit(&[], &[], (&state.fence, timeline_point.value())) }
                 .map_err(WgpuTextureEncoderError::from)?;
         }
 
-        let shared_event = Retained::from(
-            state
-                .fence
-                .raw_shared_event()
-                .expect("presence was checked when the state was constructed"),
-        );
-
-        self.submit_when_event_reaches(
-            buffer,
-            frame.pts,
-            force_idr,
-            &shared_event,
-            value,
-            || Ok(()),
-        )
+        self.submit_when_event_reaches(buffer, frame.pts, force_idr, timeline_point, || Ok(()))
     }
 }
 

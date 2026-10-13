@@ -1,9 +1,11 @@
-use std::sync::Mutex;
+use std::{cell::Cell, ptr::NonNull, sync::Mutex};
 
 use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_core_foundation as cf;
 use objc2_core_video as cv;
-use objc2_metal as mtl;
+#[cfg(feature = "transcoder")]
+use objc2_metal::MTLCommandBuffer as _;
+use objc2_metal::{self as mtl, MTLSharedEvent as _};
 
 use crate::backends::video_toolbox::{
     allocate_retained,
@@ -110,4 +112,88 @@ fn plane_texture(
         cv::CVMetalTextureGetTexture(&cv_texture).ok_or(MetalTextureError::ExtractionFailed)?;
 
     Ok((texture, SendSyncCVBuffer(cv_texture)))
+}
+
+pub(crate) struct SharedEventTimeline {
+    event: Retained<ProtocolObject<dyn mtl::MTLSharedEvent>>,
+    next_value: u64,
+}
+
+impl SharedEventTimeline {
+    pub(crate) fn new(event: Retained<ProtocolObject<dyn mtl::MTLSharedEvent>>) -> Self {
+        Self {
+            event,
+            next_value: 1,
+        }
+    }
+
+    pub(crate) fn next_timeline_point(&mut self) -> TimelinePoint {
+        let value = self.next_value;
+        self.next_value += 1;
+        TimelinePoint {
+            event: self.event.clone(),
+            value,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct TimelinePoint {
+    event: Retained<ProtocolObject<dyn mtl::MTLSharedEvent>>,
+    value: u64,
+}
+
+impl TimelinePoint {
+    #[cfg(feature = "wgpu")]
+    pub(crate) fn value(&self) -> u64 {
+        self.value
+    }
+
+    #[cfg(feature = "transcoder")]
+    pub(crate) fn signal(&self) {
+        self.event.setSignaledValue(self.value);
+    }
+
+    pub(crate) fn notify_listener(
+        &self,
+        listener: &mtl::MTLSharedEventListener,
+        on_reached: impl FnOnce() + Send + 'static,
+    ) {
+        let on_reached = Cell::new(Some(on_reached));
+        let block = block2::RcBlock::new(
+            move |_event: NonNull<ProtocolObject<dyn mtl::MTLSharedEvent>>, _value: u64| {
+                if let Some(on_reached) = on_reached.take() {
+                    on_reached();
+                }
+            },
+        );
+
+        // Safety: Metal copies the block, which owns everything it needs.
+        unsafe {
+            self.event.notifyListener_atValue_block(
+                listener,
+                self.value,
+                block2::RcBlock::as_ptr(&block),
+            )
+        };
+    }
+}
+
+#[cfg(feature = "transcoder")]
+pub(crate) fn add_completed_handler(
+    cmd: &ProtocolObject<dyn mtl::MTLCommandBuffer>,
+    on_completed: impl FnOnce(&ProtocolObject<dyn mtl::MTLCommandBuffer>) + Send + 'static,
+) {
+    let on_completed = Cell::new(Some(on_completed));
+    let block = block2::RcBlock::new(
+        move |cmd: NonNull<ProtocolObject<dyn mtl::MTLCommandBuffer>>| {
+            if let Some(on_completed) = on_completed.take() {
+                // Safety: Metal passes a valid command buffer that outlives the handler call.
+                on_completed(unsafe { cmd.as_ref() });
+            }
+        },
+    );
+
+    // Safety: Metal copies the block, which owns everything it needs.
+    unsafe { cmd.addCompletedHandler(block2::RcBlock::as_ptr(&block)) };
 }
