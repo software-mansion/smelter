@@ -31,6 +31,9 @@ mod decklink;
 #[cfg(target_os = "linux")]
 mod v4l2;
 
+#[cfg(target_os = "linux")]
+mod host_imports;
+
 mod channel;
 mod hls;
 mod moq;

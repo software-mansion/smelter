@@ -9,10 +9,13 @@ use decklink::{
     InputCallbackResult, PixelFormat, VideoInputFlags, VideoInputFormatChangedEvents,
     VideoInputFrame,
 };
-use smelter_render::{FrameData, FramePreProcessor, Resolution, error::ErrorStack};
+use smelter_render::{
+    BufferFormat, BufferLayout, FrameData, FramePreProcessor, Resolution, error::ErrorStack,
+};
 use tracing::{Span, debug, info, trace, warn};
 
 use crate::pipeline::decklink::format::{BitDepth, Colorspace, Format};
+use crate::pipeline::host_imports::HostImports;
 use crate::queue::QueueSender;
 
 use crate::prelude::*;
@@ -24,6 +27,7 @@ pub(super) struct ChannelCallbackAdapter {
     audio_sender: Option<QueueSender<InputAudioSamples>>,
     /// Only set when a side channel is enabled (avoids duplicated processing).
     frame_pre_processor: Option<Mutex<FramePreProcessor>>,
+    pub(super) imports: Arc<Mutex<HostImports>>,
     span: Span,
 
     // I'm not sure, but I suspect that holding Arc here would create a circular
@@ -50,6 +54,10 @@ impl ChannelCallbackAdapter {
             video_sender,
             audio_sender,
             frame_pre_processor,
+            imports: Arc::new(Mutex::new(HostImports::new(
+                ctx.wgpu_ctx.device.clone(),
+                ctx.wgpu_ctx.queue.clone(),
+            ))),
             span,
             input,
             sync_point: ctx.queue_ctx.sync_point,
@@ -81,6 +89,7 @@ impl ChannelCallbackAdapter {
         };
         let pixel_format = video_frame.pixel_format()?;
 
+        let memory = data.clone();
         let frame = match pixel_format {
             PixelFormat::Format8BitYUV => {
                 Self::frame_from_yuv_422(width, height, bytes_per_row, data, pts)
@@ -99,10 +108,32 @@ impl ChannelCallbackAdapter {
 
         let frame = match &self.frame_pre_processor {
             Some(pre_processor) => {
-                let texture = pre_processor
-                    .lock()
-                    .unwrap()
-                    .process_to_texture(frame.into(), None);
+                let mut pre_processor = pre_processor.lock().unwrap();
+                let mut imports = self.imports.lock().unwrap();
+                imports.wait_for_copies();
+                let format = match pixel_format {
+                    PixelFormat::Format8BitYUV => Some(BufferFormat::InterleavedUyvy422),
+                    PixelFormat::Format8BitBGRA => Some(BufferFormat::Bgra),
+                    _ => None,
+                };
+                let layout = format
+                    .map(|format| BufferLayout {
+                        format,
+                        resolution: frame.resolution,
+                        bytes_per_row: bytes_per_row as u32,
+                    })
+                    .filter(BufferLayout::rows_aligned);
+                // SAFETY: DeckLink keeps its buffers until video is enabled
+                // again or the input is released, which both clear `imports`
+                // first.
+                let texture = match layout.zip(unsafe { imports.get(&memory) }) {
+                    Some((layout, buffer)) => {
+                        let texture = pre_processor.process_buffer(buffer, layout);
+                        imports.copy_submitted();
+                        texture
+                    }
+                    None => pre_processor.process_to_texture(frame.into(), None),
+                };
                 Frame {
                     data: FrameData::Rgba8UnormWgpuTexture(texture),
                     resolution: Resolution { width, height },
@@ -286,6 +317,7 @@ impl ChannelCallbackAdapter {
         info!(?pixel_format, ?flags, ?mode, "Detected new input format");
 
         input.pause_streams()?;
+        self.imports.lock().unwrap().clear();
         input.enable_video(
             mode,
             pixel_format,
