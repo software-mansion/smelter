@@ -138,6 +138,8 @@ HResult input_set_callback(IDeckLinkInput *input,
   auto wrapper = new InputCallbackWrapper(std::move(cb));
   auto result =
       input->SetCallback(static_cast<IDeckLinkInputCallback *>(wrapper));
+  // The input holds its own reference from here on.
+  wrapper->Release();
   return static_cast<HResult>(result);
 }
 
