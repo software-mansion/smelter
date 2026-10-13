@@ -2694,6 +2694,14 @@
           }
         }
       },
+      "JustifyContent": {
+        "type": "string",
+        "enum": [
+          "start",
+          "center",
+          "end"
+        ]
+      },
       "LiveSyncBufferStatsReport": {
         "oneOf": [
           {
@@ -7196,6 +7204,25 @@
               {
                 "$ref": "#/components/schemas/ViewDirection",
                 "description": "Direction defines how static children are positioned inside a View component."
+              }
+            ]
+          },
+          "flex": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Defines how much of the remaining space along the parent's direction this component takes,\nrelative to its siblings. Equivalent of CSS `flex: <number>` shorthand (`flex-grow:\n<number>`, `flex-shrink: 1`, `flex-basis: 0`).\n\nIf not defined, the component is sized based on its dimensions or content and does not\ngrow or shrink. Ignored for absolutely positioned components."
+          },
+          "justify_content": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JustifyContent",
+                "description": "Defines how static children are aligned along the main axis (defined by `direction`).\n\nDefaults to `\"start\"`."
               }
             ]
           },

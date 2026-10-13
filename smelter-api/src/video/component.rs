@@ -55,6 +55,19 @@ pub struct View {
     /// Direction defines how static children are positioned inside a View component.
     pub direction: Option<ViewDirection>,
 
+    /// Defines how much of the remaining space along the parent's direction this component takes,
+    /// relative to its siblings. Equivalent of CSS `flex: <number>` shorthand (`flex-grow:
+    /// <number>`, `flex-shrink: 1`, `flex-basis: 0`).
+    ///
+    /// If not defined, the component is sized based on its dimensions or content and does not
+    /// grow or shrink. Ignored for absolutely positioned components.
+    pub flex: Option<f32>,
+
+    /// Defines how static children are aligned along the main axis (defined by `direction`).
+    ///
+    /// Defaults to `"start"`.
+    pub justify_content: Option<JustifyContent>,
+
     /// Distance in pixels between this component's top edge and its parent's top edge (including a
     /// border). If this field is defined, then the component will ignore a layout defined by its
     /// parent.
@@ -156,6 +169,17 @@ pub enum ViewDirection {
     Row,
     /// Children positioned from top to bottom.
     Column,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum JustifyContent {
+    /// Children packed at the start of the main axis.
+    Start,
+    /// Children packed in the center of the main axis.
+    Center,
+    /// Children packed at the end of the main axis.
+    End,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]

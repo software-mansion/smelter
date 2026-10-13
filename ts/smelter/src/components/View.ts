@@ -26,6 +26,20 @@ export type ViewStyleProps = {
    */
   direction?: Api.ViewDirection;
   /**
+   * Defines how much of the remaining space along the parent's direction this component takes,
+   * relative to its siblings. Equivalent of CSS `flex: <number>` shorthand (`flex-grow: <number>`,
+   * `flex-shrink: 1`, `flex-basis: 0`).
+   *
+   * If not defined, the component is sized based on its dimensions or content and does not grow
+   * or shrink. Ignored for absolutely positioned components.
+   */
+  flex?: number;
+  /**
+   * Defines how static children are aligned along the main axis (defined by `direction`).
+   * Defaults to `"start"`.
+   */
+  justifyContent?: Api.JustifyContent;
+  /**
    * Distance in pixels between this component's top edge and its parent's top edge.
    * If this field is defined, then the component will ignore a layout defined by its parent.
    */
@@ -132,6 +146,8 @@ function sceneBuilder(
     width: style.width,
     height: style.height,
     direction: style.direction,
+    flex: style.flex,
+    justify_content: style.justifyContent,
 
     top: style.top,
     right: style.right,

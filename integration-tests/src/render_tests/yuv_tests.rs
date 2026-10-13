@@ -3,10 +3,7 @@ use std::{sync::Arc, time::Duration};
 
 use smelter_render::{
     OutputFrameFormat, RendererId, RendererSpec, Resolution,
-    scene::{
-        BorderRadius, Component, Overflow, Position, RGBAColor, ShaderComponent, Size,
-        ViewChildrenDirection, ViewComponent,
-    },
+    scene::{Component, RGBAColor, ShaderComponent, Size, ViewComponent},
     shader::ShaderSpec,
 };
 
@@ -89,21 +86,8 @@ fn yuv_test_uniform_color() {
         resolution: Resolution { width, height },
         steps: vec![
             Step::UpdateScene(Component::View(ViewComponent {
-                id: None,
-                children: vec![],
-                direction: ViewChildrenDirection::Row,
-                position: Position::Static {
-                    width: None,
-                    height: None,
-                },
-                transition: None,
-                overflow: Overflow::Hidden,
                 background_color: RGBAColor(50, 0, 0, 255),
-                border_radius: BorderRadius::ZERO,
-                border_width: 0.0,
-                border_color: RGBAColor(0, 0, 0, 0),
-                box_shadow: vec![],
-                padding: Default::default(),
+                ..Default::default()
             })),
             Step::RenderWithSnapshot(Duration::ZERO),
         ],

@@ -662,6 +662,18 @@ export type Component =
        */
       direction?: ViewDirection | null;
       /**
+       * Defines how much of the remaining space along the parent's direction this component takes, relative to its siblings. Equivalent of CSS `flex: <number>` shorthand (`flex-grow: <number>`, `flex-shrink: 1`, `flex-basis: 0`).
+       *
+       * If not defined, the component is sized based on its dimensions or content and does not grow or shrink. Ignored for absolutely positioned components.
+       */
+      flex?: number | null;
+      /**
+       * Defines how static children are aligned along the main axis (defined by `direction`).
+       *
+       * Defaults to `"start"`.
+       */
+      justify_content?: JustifyContent | null;
+      /**
        * Distance in pixels between this component's top edge and its parent's top edge (including a border). If this field is defined, then the component will ignore a layout defined by its parent.
        */
       top?: number | null;
@@ -994,6 +1006,7 @@ export type Component =
     };
 export type ComponentId = string;
 export type ViewDirection = "row" | "column";
+export type JustifyContent = "start" | "center" | "end";
 /**
  * Easing functions are used to interpolate between two values over time.
  *

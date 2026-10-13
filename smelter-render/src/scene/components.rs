@@ -152,6 +152,8 @@ pub struct ViewComponent {
 
     pub direction: ViewChildrenDirection,
     pub position: Position,
+    pub flex: Option<f32>,
+    pub justify_content: JustifyContent,
     pub transition: Option<Transition>,
     pub overflow: Overflow,
 
@@ -193,6 +195,13 @@ pub enum Position {
 pub enum ViewChildrenDirection {
     Row,
     Column,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JustifyContent {
+    Start,
+    Center,
+    End,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -273,6 +282,8 @@ impl Default for ViewComponent {
                 width: None,
                 height: None,
             },
+            flex: None,
+            justify_content: JustifyContent::Start,
             transition: None,
             overflow: Overflow::Hidden,
             background_color: RGBAColor(0, 0, 0, 0),

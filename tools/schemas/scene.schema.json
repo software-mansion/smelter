@@ -143,6 +143,25 @@
                 }
               ]
             },
+            "flex": {
+              "description": "Defines how much of the remaining space along the parent's direction this component takes, relative to its siblings. Equivalent of CSS `flex: <number>` shorthand (`flex-grow: <number>`, `flex-shrink: 1`, `flex-basis: 0`).\n\nIf not defined, the component is sized based on its dimensions or content and does not grow or shrink. Ignored for absolutely positioned components.",
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "float"
+            },
+            "justify_content": {
+              "description": "Defines how static children are aligned along the main axis (defined by `direction`).\n\nDefaults to `\"start\"`.",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/JustifyContent"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "top": {
               "description": "Distance in pixels between this component's top edge and its parent's top edge (including a border). If this field is defined, then the component will ignore a layout defined by its parent.",
               "type": [
@@ -941,6 +960,31 @@
           "type": "string",
           "enum": [
             "column"
+          ]
+        }
+      ]
+    },
+    "JustifyContent": {
+      "oneOf": [
+        {
+          "description": "Children packed at the start of the main axis.",
+          "type": "string",
+          "enum": [
+            "start"
+          ]
+        },
+        {
+          "description": "Children packed in the center of the main axis.",
+          "type": "string",
+          "enum": [
+            "center"
+          ]
+        },
+        {
+          "description": "Children packed at the end of the main axis.",
+          "type": "string",
+          "enum": [
+            "end"
           ]
         }
       ]

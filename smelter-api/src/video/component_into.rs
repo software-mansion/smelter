@@ -78,6 +78,15 @@ impl TryFrom<View> for scene::ViewComponent {
             Some(ViewDirection::Column) => scene::ViewChildrenDirection::Column,
             None => scene::ViewChildrenDirection::Row,
         };
+        if view.flex.is_some_and(|flex| flex < 0.0) {
+            return Err(TypeError::new("Flex value cannot be negative."));
+        }
+        let justify_content = match view.justify_content {
+            Some(JustifyContent::Start) => scene::JustifyContent::Start,
+            Some(JustifyContent::Center) => scene::JustifyContent::Center,
+            Some(JustifyContent::End) => scene::JustifyContent::End,
+            None => scene::JustifyContent::Start,
+        };
         let overflow = match view.overflow {
             Some(Overflow::Visible) => scene::Overflow::Visible,
             Some(Overflow::Hidden) => scene::Overflow::Hidden,
@@ -121,6 +130,8 @@ impl TryFrom<View> for scene::ViewComponent {
                 .collect::<Result<Vec<_>, _>>()?,
             direction,
             position,
+            flex: view.flex,
+            justify_content,
             overflow,
             background_color: view
                 .background_color
