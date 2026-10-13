@@ -7,7 +7,7 @@ use crate::pipeline::decoder::{AudioDecoder, EncodedInputEvent};
 use crate::prelude::*;
 
 /// Upper bound on audio synthesised by PLC in one outage. Concealment decays into noise long
-/// before that. The rest of a longer gap stays a gap in the timeline.
+/// before that. Longer gaps are not concealed at all.
 const MAX_PLC_DURATION: Duration = Duration::from_millis(120);
 
 /// Smallest opus frame, it also limits granularity of what can be concealed
@@ -90,10 +90,18 @@ impl AudioDecoder for OpusDecoder {
         // `get_nb_samples` fails only for an invalid packet, which also fails to decode below.
         if let Ok(samples_per_packet) = self.decoder.get_nb_samples(&encoded_chunk.data) {
             let packet_duration = self.samples_to_duration(samples_per_packet);
-            // `encoded_chunk` can carry a copy of the packet before it (FEC), so the last lost
-            // packet can be recovered. Anything earlier is synthesised with PLC.
-            samples.extend(self.conceal_until(encoded_chunk.pts - packet_duration));
-            samples.extend(self.recover_fec(&encoded_chunk, samples_per_packet));
+            // A gap that PLC and FEC can't fill entirely is left unconcealed. The mixer fades
+            // around it anyway, so partial concealment would only add synthetic audio there.
+            let can_conceal_gap = self.last_end_pts.is_some_and(|last_end_pts| {
+                let gap = (encoded_chunk.pts - last_end_pts).to_duration_saturating();
+                gap <= MAX_PLC_DURATION
+            });
+            if can_conceal_gap {
+                // `encoded_chunk` can carry a copy of the packet before it (FEC), so the last lost
+                // packet can be recovered. Anything earlier is synthesised with PLC.
+                samples.extend(self.conceal_until(encoded_chunk.pts - packet_duration));
+                samples.extend(self.recover_fec(&encoded_chunk, samples_per_packet));
+            }
         }
 
         match self.decode_chunk(&encoded_chunk) {
