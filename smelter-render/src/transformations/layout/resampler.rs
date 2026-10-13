@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::{
     Resolution,
     state::node_texture::{NodeTexture, NodeTextureState},
@@ -191,7 +189,7 @@ impl Intermediate {
 }
 
 impl ResamplerShader {
-    pub fn new(wgpu_ctx: &Arc<WgpuCtx>) -> Result<Self, CreateShaderError> {
+    pub fn new(wgpu_ctx: &WgpuCtx) -> Result<Self, CreateShaderError> {
         let scope = WgpuErrorScope::push(&wgpu_ctx.device);
 
         let make_layout = |immediate_size| {
@@ -241,7 +239,7 @@ impl ResamplerShader {
 
     fn pass(
         &self,
-        wgpu_ctx: &Arc<WgpuCtx>,
+        wgpu_ctx: &WgpuCtx,
         pipeline: &wgpu::RenderPipeline,
         source_view: &wgpu::TextureView,
         immediates: &[u8],
@@ -304,7 +302,7 @@ impl ResampledChild {
 
     pub(super) fn render(
         &mut self,
-        wgpu_ctx: &Arc<WgpuCtx>,
+        wgpu_ctx: &WgpuCtx,
         shader: &ResamplerShader,
         source: &NodeTextureState,
         crop: &Crop,

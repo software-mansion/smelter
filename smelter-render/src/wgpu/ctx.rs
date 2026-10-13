@@ -26,14 +26,14 @@ pub struct WgpuCtx {
     pub empty_rgba_linear_texture: RgbaLinearTexture,
     pub empty_rgba_srgb_texture: RgbaSrgbTexture,
 
-    pub device: Arc<wgpu::Device>,
-    pub queue: Arc<wgpu::Queue>,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
 }
 
 impl WgpuCtx {
     pub fn new(
-        device: Arc<wgpu::Device>,
-        queue: Arc<wgpu::Queue>,
+        device: wgpu::Device,
+        queue: wgpu::Queue,
         mode: RenderingMode,
     ) -> Result<Arc<Self>, CreateWgpuCtxError> {
         Self::check_wgpu_ctx(&device, required_wgpu_features());
@@ -69,8 +69,8 @@ impl WgpuCtx {
     }
 
     fn new_from_device_queue(
-        device: Arc<wgpu::Device>,
-        queue: Arc<wgpu::Queue>,
+        device: wgpu::Device,
+        queue: wgpu::Queue,
         mode: RenderingMode,
     ) -> Result<Self, CreateWgpuCtxError> {
         let shader_header = crate::transformations::shader::validation::shader_header();

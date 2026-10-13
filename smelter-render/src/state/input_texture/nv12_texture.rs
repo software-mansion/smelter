@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use tracing::error;
 
 use crate::{
@@ -22,7 +20,7 @@ pub(super) struct NV12Input {
 impl NV12Input {
     pub fn new_from_texture(
         ctx: &WgpuCtx,
-        texture: Arc<wgpu::Texture>,
+        texture: wgpu::Texture,
     ) -> Result<Self, NV12TextureViewCreateError> {
         let size = texture.size();
         let nv12_texture = NV12Texture::from_wgpu_texture(texture)?;
@@ -59,7 +57,7 @@ impl NV12Input {
     pub fn update(
         &mut self,
         ctx: &WgpuCtx,
-        texture: Arc<wgpu::Texture>,
+        texture: wgpu::Texture,
     ) -> Result<(), NV12TextureViewCreateError> {
         self.nv12_texture = NV12Texture::from_wgpu_texture(texture)?;
         self.bind_group = self.nv12_texture.new_bind_group(ctx);

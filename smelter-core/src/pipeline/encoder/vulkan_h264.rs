@@ -161,7 +161,7 @@ impl VideoEncoder for VulkanH264Encoder {
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: Some("Vulkan H264 encoder input copy"),
                 });
-        VideoTexture::from_nv12_texture((*texture).clone())
+        VideoTexture::from_nv12_texture(texture.clone())
             .copy_to(&mut command_encoder, input_texture.texture());
         self.wgpu_ctx.queue.submit([command_encoder.finish()]);
 

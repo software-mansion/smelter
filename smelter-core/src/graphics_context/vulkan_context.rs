@@ -119,10 +119,10 @@ pub fn create_vulkan_graphics_ctx(
     })?;
 
     Ok(GraphicsContext {
-        device: device.into(),
-        queue: queue.into(),
-        adapter: adapter.into(),
-        instance: instance.into(),
+        device,
+        queue,
+        adapter,
+        instance,
         vulkan_ctx: Some(VulkanCtx {
             adapter_info: adapter_info.into(),
         }),

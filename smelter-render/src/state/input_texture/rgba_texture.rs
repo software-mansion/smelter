@@ -1,15 +1,13 @@
-use std::sync::Arc;
-
 use tracing::warn;
 
 use crate::{Resolution, state::node_texture::NodeTextureState, wgpu::WgpuCtx};
 
 pub(super) struct RgbaTextureInput {
-    texture: Arc<wgpu::Texture>,
+    texture: wgpu::Texture,
 }
 
 impl RgbaTextureInput {
-    pub fn new(texture: Arc<wgpu::Texture>) -> Self {
+    pub fn new(texture: wgpu::Texture) -> Self {
         Self { texture }
     }
 
@@ -17,7 +15,7 @@ impl RgbaTextureInput {
         self.texture.size().into()
     }
 
-    pub fn update(&mut self, texture: Arc<wgpu::Texture>) {
+    pub fn update(&mut self, texture: wgpu::Texture) {
         self.texture = texture;
     }
 

@@ -70,7 +70,7 @@ impl ShaderNode {
 
     pub fn render(
         &self,
-        wgpu_ctx: &Arc<WgpuCtx>,
+        wgpu_ctx: &WgpuCtx,
         sources: &[&NodeTexture],
         target: &mut NodeTexture,
         pts: Duration,

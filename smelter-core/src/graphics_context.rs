@@ -1,5 +1,4 @@
 use crate::graphics_context::wgpu_context::{BoxableHasDisplayHandle, create_wgpu_graphics_ctx};
-use std::sync::Arc;
 
 #[cfg(feature = "gpu-video")]
 pub mod vulkan_context;
@@ -8,15 +7,15 @@ pub mod wgpu_context;
 #[cfg(feature = "gpu-video")]
 #[derive(Debug, Clone)]
 pub struct VulkanCtx {
-    pub adapter_info: Arc<gpu_video::capabilities::VideoAdapterInfo>,
+    pub adapter_info: std::sync::Arc<gpu_video::capabilities::VideoAdapterInfo>,
 }
 
 #[derive(Debug, Clone)]
 pub struct GraphicsContext {
-    pub device: Arc<wgpu::Device>,
-    pub queue: Arc<wgpu::Queue>,
-    pub adapter: Arc<wgpu::Adapter>,
-    pub instance: Arc<wgpu::Instance>,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+    pub adapter: wgpu::Adapter,
+    pub instance: wgpu::Instance,
 
     #[cfg(feature = "gpu-video")]
     pub vulkan_ctx: Option<VulkanCtx>,

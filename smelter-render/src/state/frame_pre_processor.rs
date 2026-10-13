@@ -61,7 +61,7 @@ impl FramePreProcessor {
         &mut self,
         frame: Frame,
         resolution: Option<Resolution>,
-    ) -> Arc<wgpu::Texture> {
+    ) -> wgpu::Texture {
         self.upload_and_convert_to_node_texture(frame);
 
         let output_texture_views: &'static [wgpu::TextureFormat] = match self.wgpu_ctx.mode {
@@ -81,7 +81,7 @@ impl FramePreProcessor {
             None => self.node_texture.state().unwrap().texture(),
         };
 
-        Arc::new(texture.clone_texture(&self.wgpu_ctx, output_texture_views))
+        texture.clone_texture(&self.wgpu_ctx, output_texture_views)
     }
 
     pub fn process_to_bytes(

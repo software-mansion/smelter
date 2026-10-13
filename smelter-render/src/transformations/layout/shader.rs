@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use tracing::error;
 
 use crate::{
@@ -26,10 +24,7 @@ pub struct LayoutShader {
 }
 
 impl LayoutShader {
-    pub fn new(
-        wgpu_ctx: &Arc<WgpuCtx>,
-        max_layouts_count: usize,
-    ) -> Result<Self, CreateShaderError> {
+    pub fn new(wgpu_ctx: &WgpuCtx, max_layouts_count: usize) -> Result<Self, CreateShaderError> {
         let scope = WgpuErrorScope::push(&wgpu_ctx.device);
 
         assert!(
@@ -54,7 +49,7 @@ impl LayoutShader {
     }
 
     fn new_pipeline(
-        wgpu_ctx: &Arc<WgpuCtx>,
+        wgpu_ctx: &WgpuCtx,
         shader_module: wgpu::ShaderModule,
         max_layouts_count: usize,
     ) -> Result<Self, CreateShaderError> {
@@ -92,7 +87,7 @@ impl LayoutShader {
 
     pub fn render(
         &self,
-        wgpu_ctx: &Arc<WgpuCtx>,
+        wgpu_ctx: &WgpuCtx,
         output_resolution: Resolution,
         layouts: Vec<RenderLayout>,
         texture_views: &[&wgpu::TextureView],

@@ -50,14 +50,12 @@ impl WebRendererNode {
 
     fn ensure_buffers(&mut self, wgpu_ctx: &WgpuCtx, sources: &[&NodeTexture]) {
         self.embedding_data.buffers.resize_with(sources.len(), || {
-            let buffer = wgpu_ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            wgpu_ctx.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Temporary texture buffer"),
                 size: 0,
                 usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
                 mapped_at_creation: false,
-            });
-
-            Arc::new(buffer)
+            })
         });
 
         for (texture, buffer) in sources.iter().zip(&mut self.embedding_data.buffers) {
@@ -69,16 +67,16 @@ impl WebRendererNode {
         }
     }
 
-    fn ensure_buffer_size(ctx: &WgpuCtx, buffer: &mut Arc<wgpu::Buffer>, texture: &wgpu::Texture) {
+    fn ensure_buffer_size(ctx: &WgpuCtx, buffer: &mut wgpu::Buffer, texture: &wgpu::Texture) {
         let texture_size = texture.size();
         let texture_size = (pad_to_256(4 * texture_size.width) * texture_size.height) as u64;
         if buffer.size() != texture_size {
-            *buffer = Arc::new(texture.new_download_buffer(ctx));
+            *buffer = texture.new_download_buffer(ctx);
         }
     }
 }
 
 pub struct EmbeddingData {
-    pub buffers: Vec<Arc<wgpu::Buffer>>,
+    pub buffers: Vec<wgpu::Buffer>,
     pub children_ids: Vec<ComponentId>,
 }

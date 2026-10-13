@@ -177,7 +177,7 @@ fn generate_frames(device: &wgpu::Device, queue: &wgpu::Queue) -> Vec<Frame> {
     frames
 }
 
-fn create_texture(index: usize, device: &wgpu::Device, queue: &wgpu::Queue) -> Arc<wgpu::Texture> {
+fn create_texture(index: usize, device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Texture {
     let input = TestInput::new(index);
     let size = wgpu::Extent3d {
         width: input.resolution.width as u32,
@@ -214,5 +214,5 @@ fn create_texture(index: usize, device: &wgpu::Device, queue: &wgpu::Queue) -> A
         size,
     );
     queue.submit([]);
-    texture.into()
+    texture
 }

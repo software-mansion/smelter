@@ -79,7 +79,7 @@ impl ChromiumSender {
     pub fn update_shared_memory(
         &self,
         source_idx: usize,
-        buffer: Arc<wgpu::Buffer>,
+        buffer: wgpu::Buffer,
         size: wgpu::Extent3d,
     ) -> Result<(), ChromiumSenderError> {
         let info = UpdateSharedMemoryInfo {
@@ -125,7 +125,7 @@ pub(super) enum ChromiumSenderMessage {
 
 pub(super) struct UpdateSharedMemoryInfo {
     pub source_idx: usize,
-    pub buffer: Arc<wgpu::Buffer>,
+    pub buffer: wgpu::Buffer,
     pub size: wgpu::Extent3d,
 }
 

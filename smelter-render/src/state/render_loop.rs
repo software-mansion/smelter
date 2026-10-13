@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
 use tracing::{error, warn};
 
@@ -91,7 +91,7 @@ pub(super) fn read_outputs(
                     };
                     let frame = Frame {
                         resolution: texture.size().into(),
-                        data: FrameData::Rgba8UnormWgpuTexture(texture.into()),
+                        data: FrameData::Rgba8UnormWgpuTexture(texture),
                         pts,
                     };
                     partial_textures.push(PartialOutputFrame::CompleteFrame {
@@ -109,7 +109,7 @@ pub(super) fn read_outputs(
 
                     let frame = Frame {
                         resolution: *resolution,
-                        data: FrameData::Nv12WgpuTexture(texture.texture().clone().into()),
+                        data: FrameData::Nv12WgpuTexture(texture.texture().clone()),
                         pts,
                     };
                     partial_textures.push(PartialOutputFrame::CompleteFrame {
@@ -147,7 +147,7 @@ pub(super) fn read_outputs(
                     partial_textures.push(PartialOutputFrame::CompleteFrame {
                         output_id: output_id.clone(),
                         frame: Frame {
-                            data: FrameData::Rgba8UnormWgpuTexture(Arc::new(wgpu_texture)),
+                            data: FrameData::Rgba8UnormWgpuTexture(wgpu_texture),
                             resolution: *resolution,
                             pts,
                         },
@@ -159,7 +159,7 @@ pub(super) fn read_outputs(
                     partial_textures.push(PartialOutputFrame::CompleteFrame {
                         output_id: output_id.clone(),
                         frame: Frame {
-                            data: FrameData::Nv12WgpuTexture(Arc::new(texture.texture().clone())),
+                            data: FrameData::Nv12WgpuTexture(texture.texture().clone()),
                             resolution: *resolution,
                             pts,
                         },

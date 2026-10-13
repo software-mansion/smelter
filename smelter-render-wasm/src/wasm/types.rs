@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use smelter_render::{InputId, OutputId, Resolution, error::ErrorStack};
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 use wasm_bindgen::prelude::*;
 
 pub struct WgpuCtx {
@@ -84,8 +84,8 @@ impl From<FrameFormat> for smelter_render::OutputFrameFormat {
 }
 
 pub fn new_render_options(
-    device: Arc<wgpu::Device>,
-    queue: Arc<wgpu::Queue>,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
 ) -> smelter_render::RendererOptions {
     smelter_render::RendererOptions {
         chromium_context: None,

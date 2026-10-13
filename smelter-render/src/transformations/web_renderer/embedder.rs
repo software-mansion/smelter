@@ -87,7 +87,7 @@ impl EmbeddingHelper {
     fn copy_sources_to_buffers(
         &self,
         sources: &[&NodeTexture],
-        buffers: &[Arc<wgpu::Buffer>],
+        buffers: &[wgpu::Buffer],
     ) -> Result<(), EmbedError> {
         let mut encoder = self
             .wgpu_ctx
@@ -109,7 +109,7 @@ impl EmbeddingHelper {
         &self,
         source_idx: usize,
         size: wgpu::Extent3d,
-        buffer: Arc<wgpu::Buffer>,
+        buffer: wgpu::Buffer,
     ) -> impl FnOnce() -> Result<(), EmbedError> + '_ {
         let (s, r) = bounded(1);
         buffer

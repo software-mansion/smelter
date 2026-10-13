@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
 use futures::future::join_all;
 use smelter_render::{Frame, FrameData, FrameSet, InputId};
@@ -13,7 +13,7 @@ use super::{
 };
 
 pub struct RendererInputs {
-    textures: HashMap<InputId, Arc<wgpu::Texture>>,
+    textures: HashMap<InputId, wgpu::Texture>,
     use_copy_external: bool,
 }
 
@@ -75,7 +75,7 @@ impl RendererInputs {
     pub async fn upload_frame(
         wgpu_ctx: &WgpuCtx,
         input: InputFrame,
-        texture: Arc<wgpu::Texture>,
+        texture: wgpu::Texture,
         use_copy_external: bool,
     ) -> Result<Frame, JsValue> {
         let InputFrame { pts, frame, .. } = input;
@@ -95,7 +95,7 @@ impl RendererInputs {
     fn copy_direct_from_video_frame(
         wgpu_ctx: &WgpuCtx,
         video_frame: web_sys::VideoFrame,
-        texture: Arc<wgpu::Texture>,
+        texture: wgpu::Texture,
         pts: Duration,
     ) -> Result<Frame, JsValue> {
         wgpu_ctx.queue.copy_external_image_to_texture(
@@ -125,7 +125,7 @@ impl RendererInputs {
     async fn copy_via_cpu_from_video_frame(
         wgpu_ctx: &WgpuCtx,
         video_frame: web_sys::VideoFrame,
-        texture: Arc<wgpu::Texture>,
+        texture: wgpu::Texture,
         pts: Duration,
     ) -> Result<Frame, JsValue> {
         let size = video_frame.size();
@@ -152,7 +152,7 @@ impl RendererInputs {
     fn copy_from_video_element(
         wgpu_ctx: &WgpuCtx,
         video_element: web_sys::HtmlVideoElement,
-        texture: Arc<wgpu::Texture>,
+        texture: wgpu::Texture,
         pts: Duration,
     ) -> Result<Frame, JsValue> {
         wgpu_ctx.queue.copy_external_image_to_texture(
@@ -188,7 +188,7 @@ impl RendererInputs {
         input_id: &InputId,
         device: &wgpu::Device,
         size: wgpu::Extent3d,
-    ) -> Arc<wgpu::Texture> {
+    ) -> wgpu::Texture {
         let texture = self
             .textures
             .entry(input_id.clone())
@@ -199,22 +199,20 @@ impl RendererInputs {
         texture.clone()
     }
 
-    fn create_texture(device: &wgpu::Device, size: wgpu::Extent3d) -> Arc<wgpu::Texture> {
-        device
-            .create_texture(&wgpu::TextureDescriptor {
-                size,
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                view_formats: &[wgpu::TextureFormat::Rgba8UnormSrgb],
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                    | wgpu::TextureUsages::COPY_DST
-                    | wgpu::TextureUsages::COPY_SRC
-                    | wgpu::TextureUsages::TEXTURE_BINDING,
-                label: None,
-            })
-            .into()
+    fn create_texture(device: &wgpu::Device, size: wgpu::Extent3d) -> wgpu::Texture {
+        device.create_texture(&wgpu::TextureDescriptor {
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            view_formats: &[wgpu::TextureFormat::Rgba8UnormSrgb],
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::TEXTURE_BINDING,
+            label: None,
+        })
     }
 }
 

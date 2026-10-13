@@ -123,7 +123,7 @@ fn from_vk_frame(frame: gpu_video::OutputFrame<VideoTexture>) -> Option<Frame> {
 
     trace!(?pts, "H264 Vulkan decoder produced a frame.");
     Some(Frame {
-        data: FrameData::Nv12WgpuTexture(Arc::new(texture.clone())),
+        data: FrameData::Nv12WgpuTexture(texture.clone()),
         pts,
         resolution,
     })
