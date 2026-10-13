@@ -7,7 +7,7 @@ use crate::{
 
 use super::{context::V8ContextEntered, value::V8Value};
 
-pub struct V8ArrayBuffer(pub(super) CefRc<libcef_sys::cef_v8value_t>);
+pub struct V8ArrayBuffer(pub(super) CefRc<libcef_sys::cef_v8_value_t>);
 
 impl V8ArrayBuffer {
     /// Creates a new array buffer from raw pointer. It can be only created while in context.
@@ -25,7 +25,7 @@ impl V8ArrayBuffer {
         // We do not delete the buffer because it's not owned by this function
         let release_callback = V8ArrayBufferReleaseCallback::DoNotDelete;
         let inner = unsafe {
-            libcef_sys::cef_v8value_create_array_buffer(
+            libcef_sys::cef_v8_value_create_array_buffer(
                 ptr as *mut c_void,
                 ptr_len,
                 CefRefData::new_ptr(release_callback),
@@ -46,7 +46,7 @@ impl V8ArrayBuffer {
         _context_entered: &V8ContextEntered,
     ) -> Self {
         let inner = unsafe {
-            libcef_sys::cef_v8value_create_array_buffer_with_copy(ptr as *mut c_void, ptr_len)
+            libcef_sys::cef_v8_value_create_array_buffer_with_copy(ptr as *mut c_void, ptr_len)
         };
 
         Self(CefRc::new(inner))
@@ -93,10 +93,10 @@ enum V8ArrayBufferReleaseCallback {
 }
 
 impl CefStruct for V8ArrayBufferReleaseCallback {
-    type CefType = libcef_sys::cef_v8array_buffer_release_callback_t;
+    type CefType = libcef_sys::cef_v8_array_buffer_release_callback_t;
 
     fn new_cef_data() -> Self::CefType {
-        libcef_sys::cef_v8array_buffer_release_callback_t {
+        libcef_sys::cef_v8_array_buffer_release_callback_t {
             base: unsafe { std::mem::zeroed() },
             release_buffer: Some(Self::release_buffer),
         }
@@ -109,7 +109,7 @@ impl CefStruct for V8ArrayBufferReleaseCallback {
 
 impl V8ArrayBufferReleaseCallback {
     extern "C" fn release_buffer(
-        self_: *mut libcef_sys::cef_v8array_buffer_release_callback_t,
+        self_: *mut libcef_sys::cef_v8_array_buffer_release_callback_t,
         buffer: *mut c_void,
     ) {
         unsafe {

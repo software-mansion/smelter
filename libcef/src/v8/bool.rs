@@ -2,7 +2,7 @@ use crate::cef_ref::CefRc;
 
 use super::value::{V8Value, V8ValueError};
 
-pub struct V8Bool(pub(super) CefRc<libcef_sys::cef_v8value_t>);
+pub struct V8Bool(pub(super) CefRc<libcef_sys::cef_v8_value_t>);
 
 impl V8Bool {
     pub fn new(value: bool) -> Self {
@@ -11,7 +11,7 @@ impl V8Bool {
             false => 0,
         };
 
-        let inner = unsafe { libcef_sys::cef_v8value_create_bool(value) };
+        let inner = unsafe { libcef_sys::cef_v8_value_create_bool(value) };
         Self(CefRc::new(inner))
     }
 

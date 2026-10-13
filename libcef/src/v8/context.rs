@@ -10,11 +10,11 @@ use super::V8Object;
 /// JavaScript V8 engine context.
 /// Available only on the renderer process
 pub struct V8Context {
-    inner: CefRc<libcef_sys::cef_v8context_t>,
+    inner: CefRc<libcef_sys::cef_v8_context_t>,
 }
 
 impl V8Context {
-    pub(crate) fn new(v8_context: *mut libcef_sys::cef_v8context_t) -> Self {
+    pub(crate) fn new(v8_context: *mut libcef_sys::cef_v8_context_t) -> Self {
         let inner = CefRc::new(v8_context);
         Self { inner }
     }
@@ -44,8 +44,8 @@ impl V8Context {
             let ctx = self.inner.get_weak_with_validation()?;
             let eval = (*ctx).eval.unwrap();
             let code = CefString::new_raw(code);
-            let mut retval: *mut libcef_sys::cef_v8value_t = std::ptr::null_mut();
-            let mut exception: *mut libcef_sys::cef_v8exception_t = std::ptr::null_mut();
+            let mut retval: *mut libcef_sys::cef_v8_value_t = std::ptr::null_mut();
+            let mut exception: *mut libcef_sys::cef_v8_exception_t = std::ptr::null_mut();
 
             eval(ctx, &code, std::ptr::null(), 0, &mut retval, &mut exception);
             if !exception.is_null() {
@@ -75,7 +75,7 @@ impl Drop for V8ContextEntered<'_> {
     }
 }
 
-impl Validatable for libcef_sys::cef_v8context_t {
+impl Validatable for libcef_sys::cef_v8_context_t {
     fn is_valid(&mut self) -> bool {
         match self.is_valid {
             Some(is_valid) => unsafe { is_valid(self) == 1 },
@@ -84,7 +84,7 @@ impl Validatable for libcef_sys::cef_v8context_t {
     }
 }
 
-impl CefRefCountable for libcef_sys::cef_v8context_t {
+impl CefRefCountable for libcef_sys::cef_v8_context_t {
     fn base_mut(&mut self) -> *mut libcef_sys::cef_base_ref_counted_t {
         &mut self.base
     }
