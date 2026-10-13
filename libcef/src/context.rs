@@ -37,6 +37,7 @@ impl Context {
 
             Self::load_framework(framework_path)?;
         }
+        Self::configure_api_version();
 
         let mut main_args = MainArgs::from_program_args();
         let settings = settings.into_raw();
@@ -68,8 +69,13 @@ impl Context {
 
             Self::load_framework(framework_path)?;
         }
+        Self::configure_api_version();
 
         Ok(Context { _priv: () })
+    }
+
+    fn configure_api_version() {
+        unsafe { libcef_sys::cef_api_hash(libcef_sys::CEF_API_VERSION as i32, 0) };
     }
 
     #[cfg(target_os = "macos")]

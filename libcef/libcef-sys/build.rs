@@ -9,6 +9,8 @@ use std::{
     time::Duration,
 };
 
+const CEF_VERSION: &str = "154.0.34+g14c5a08+chromium-154.0.8037.98";
+
 fn main() -> Result<()> {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=CEF_ROOT");
@@ -17,7 +19,7 @@ fn main() -> Result<()> {
     let cache_dir = dirs::cache_dir().unwrap().join("smelter");
     let cef_root = env::var("CEF_ROOT")
         .map(PathBuf::from)
-        .unwrap_or(cache_dir.join("cef_root"));
+        .unwrap_or(cache_dir.join(format!("cef_root_{CEF_VERSION}")));
 
     if !cef_root.exists() {
         for i in 0..5 {
@@ -56,9 +58,17 @@ fn prepare(cef_root: &Path, target_path: &Path) -> Result<bindgen::Bindings> {
         .parse_callbacks(Box::new(RemoveCommentsCallback))
         .generate()?;
 
+    let cef_root_marker_path = target_path.join("cef_root_path");
+    let cef_root_path = cef_root.display().to_string();
+    let cef_root_changed =
+        fs::read_to_string(&cef_root_marker_path).ok().as_deref() != Some(&cef_root_path);
+
     #[cfg(target_os = "macos")]
     {
         let framework_out_path = target_path.join("Frameworks");
+        if cef_root_changed {
+            let _ = fs::remove_dir_all(&framework_out_path);
+        }
         fs::create_dir_all(&framework_out_path).expect("create frameworks output directory");
 
         let framework_path = PathBuf::from(cef_root)
@@ -85,10 +95,17 @@ fn prepare(cef_root: &Path, target_path: &Path) -> Result<bindgen::Bindings> {
         let release_path = cef_root.join("Release");
         let resources_path = cef_root.join("Resources");
         let lib_path = target_path.join("lib");
+        if cef_root_changed {
+            let _ = fs::remove_dir_all(&lib_path);
+        }
         let _ = fs::create_dir_all(&lib_path);
 
         dir::copy(release_path, &lib_path, &options)?;
         dir::copy(resources_path, &lib_path, &options)?;
+    }
+
+    if cef_root_changed {
+        fs::write(cef_root_marker_path, cef_root_path)?;
     }
 
     Ok(bindings)
@@ -128,21 +145,28 @@ impl ParseCallbacks for RemoveCommentsCallback {
     }
 }
 
-fn cef_url() -> &'static str {
-    if cfg!(target_os = "macos") {
+fn cef_url() -> String {
+    let platform = if cfg!(target_os = "macos") {
         if cfg!(target_arch = "aarch64") {
-            return "https://cef-builds.spotifycdn.com/cef_binary_132.3.1%2Bg144febe%2Bchromium-132.0.6834.83_macosarm64_minimal.tar.bz2";
+            "macosarm64"
         } else if cfg!(target_arch = "x86_64") {
-            return "https://cef-builds.spotifycdn.com/cef_binary_132.3.1%2Bg144febe%2Bchromium-132.0.6834.83_macosx64_minimal.tar.bz2";
+            "macosx64"
+        } else {
+            panic!("Unsupported platform");
         }
     } else if cfg!(target_os = "linux") {
         if cfg!(target_arch = "aarch64") {
-            return "https://cef-builds.spotifycdn.com/cef_binary_132.3.1%2Bg144febe%2Bchromium-132.0.6834.83_linuxarm64_minimal.tar.bz2";
+            "linuxarm64"
         } else if cfg!(target_arch = "x86_64") {
-            return "https://cef-builds.spotifycdn.com/cef_binary_132.3.1%2Bg144febe%2Bchromium-132.0.6834.83_linux64_minimal.tar.bz2";
+            "linux64"
+        } else {
+            panic!("Unsupported platform");
         }
+    } else {
+        panic!("Unsupported platform");
     };
-    panic!("Unsupported platform");
+    let version = CEF_VERSION.replace("+", "%2B");
+    format!("https://cef-builds.spotifycdn.com/cef_binary_{version}_{platform}_minimal.tar.bz2")
 }
 
 fn download_cef(cef_root_path: &Path) -> Result<()> {
@@ -153,7 +177,7 @@ fn download_cef(cef_root_path: &Path) -> Result<()> {
     let client = reqwest::blocking::ClientBuilder::new()
         .timeout(Duration::from_secs(2 * 60))
         .build()?;
-    let resp = client.get(url).send()?;
+    let resp = client.get(&url).send()?;
     if resp.status() != StatusCode::OK {
         panic!("Request to {} failed. Status code: {}", url, resp.status());
     }

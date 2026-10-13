@@ -57,6 +57,7 @@ impl Settings {
             accept_language_list: CefString::empty_raw(),
             cookieable_schemes_list: CefString::empty_raw(),
             cookieable_schemes_exclude_defaults: false as c_int,
+            use_views_default_popup: false as c_int,
         }
     }
 }
