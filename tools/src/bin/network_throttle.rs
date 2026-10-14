@@ -9,149 +9,365 @@
 //!
 //! Profiles without a prefix approximate typical networks (periodic events are more frequent than
 //! in reality to make testing faster). `Stress:` profiles are harsher than typical networks.
+//!
+//! After a profile is applied, its delay, jitter and loss can be adjusted live. Ramp mode raises
+//! one value step by step until any key is pressed, to find a value at which things break.
 
 use std::{
-    fmt, fs,
+    fmt::{self, Write as _},
+    fs,
+    io::{self, Write},
     process::Command,
-    sync::mpsc::{self, Receiver, RecvTimeoutError, Sender},
+    sync::{
+        Mutex,
+        mpsc::{self, Receiver, RecvTimeoutError, Sender},
+    },
     thread::{self, ScopedJoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::{Context, Result, bail};
+use crossterm::{
+    cursor,
+    event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
+    queue,
+    terminal::{self, ClearType},
+};
 use inquire::{InquireError, Select, Text};
+
+const REFRESH_INTERVAL: Duration = Duration::from_millis(250);
+const RAMP_INTERVAL: Duration = Duration::from_secs(5);
+const DELAY_STEP_MS: i32 = 1;
+const JITTER_STEP_MS: i32 = 1;
+const LOSS_STEP_PERCENT: f64 = 0.01;
+/// Step multiplier when shift is held.
+const BIG_STEP: i32 = 10;
 
 struct Profile {
     name: &'static str,
-    netem: &'static str,
+    netem: Netem,
     outage: Option<Outage>,
 }
 
 /// Periodically switches to a degraded netem config.
 struct Outage {
+    /// Netem options without delay, delay stays the same as outside of the outage.
     netem: &'static str,
     every: Duration,
     duration: Duration,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+struct Netem {
+    delay_ms: u32,
+    jitter_ms: u32,
+    /// Jitter distribution, uniform if not set.
+    distribution: Option<&'static str>,
+    loss: Loss,
+    /// Remaining netem options, passed as is.
+    rest: &'static str,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Loss {
+    /// Independent loss, in percent.
+    Random(f64),
+    /// Gilbert-Elliott model, chances to start and to end a loss burst, in percent.
+    Gemodel(f64, f64),
+}
+
+const NO_IMPAIRMENT: Netem = Netem {
+    delay_ms: 0,
+    jitter_ms: 0,
+    distribution: None,
+    loss: Loss::Random(0.0),
+    rest: "",
+};
+
+const MOBILE: Netem = Netem {
+    delay_ms: 35,
+    jitter_ms: 10,
+    distribution: Some("normal"),
+    loss: Loss::Random(0.1),
+    rest: "rate 1gbit",
+};
+
 // `rate 1gbit` does not limit anything, it keeps netem from reordering jittered packets.
 const PROFILES: &[Profile] = &[
     Profile {
         name: "No impairment",
-        netem: "",
+        netem: NO_IMPAIRMENT,
         outage: None,
     },
     Profile {
         name: "Wired, same region (RTT ~20ms)",
-        netem: "delay 10ms 1ms distribution normal rate 1gbit loss 0.01%",
+        netem: Netem {
+            delay_ms: 10,
+            jitter_ms: 1,
+            distribution: Some("normal"),
+            loss: Loss::Random(0.01),
+            rest: "rate 1gbit",
+        },
         outage: None,
     },
     Profile {
         name: "Internet, same continent (RTT ~60ms)",
-        netem: "delay 30ms 3ms distribution normal rate 1gbit loss 0.05%",
+        netem: Netem {
+            delay_ms: 30,
+            jitter_ms: 3,
+            distribution: Some("normal"),
+            loss: Loss::Random(0.05),
+            rest: "rate 1gbit",
+        },
         outage: None,
     },
     Profile {
         name: "Internet, intercontinental (RTT ~180ms)",
-        netem: "delay 90ms 5ms distribution normal rate 1gbit loss 0.1%",
+        netem: Netem {
+            delay_ms: 90,
+            jitter_ms: 5,
+            distribution: Some("normal"),
+            loss: Loss::Random(0.1),
+            rest: "rate 1gbit",
+        },
         outage: None,
     },
     Profile {
         name: "Home Wi-Fi",
-        netem: "delay 25ms 8ms distribution normal rate 1gbit loss gemodel 0.1% 30%",
+        netem: Netem {
+            delay_ms: 25,
+            jitter_ms: 8,
+            distribution: Some("normal"),
+            loss: Loss::Gemodel(0.1, 30.0),
+            rest: "rate 1gbit",
+        },
         outage: None,
     },
     Profile {
         name: "Congested Wi-Fi",
-        netem: "delay 30ms 20ms distribution normal rate 1gbit loss gemodel 0.5% 25%",
+        netem: Netem {
+            delay_ms: 30,
+            jitter_ms: 20,
+            distribution: Some("normal"),
+            loss: Loss::Gemodel(0.5, 25.0),
+            rest: "rate 1gbit",
+        },
         outage: None,
     },
     Profile {
         name: "Mobile (LTE)",
-        netem: "delay 35ms 10ms distribution normal rate 1gbit loss 0.1%",
+        netem: MOBILE,
         outage: None,
     },
     Profile {
         name: "Uplink 3 Mbit/s, 500ms queue",
-        netem: "delay 25ms rate 3mbit limit 125",
+        netem: Netem {
+            delay_ms: 25,
+            jitter_ms: 0,
+            distribution: None,
+            loss: Loss::Random(0.0),
+            rest: "rate 3mbit limit 125",
+        },
         outage: None,
     },
     Profile {
         name: "Uplink 1 Mbit/s, 500ms queue",
-        netem: "delay 25ms rate 1mbit limit 40",
+        netem: Netem {
+            delay_ms: 25,
+            jitter_ms: 0,
+            distribution: None,
+            loss: Loss::Random(0.0),
+            rest: "rate 1mbit limit 40",
+        },
         outage: None,
     },
     Profile {
         name: "Mobile handover (50ms outage every 30s)",
-        netem: "delay 35ms 10ms distribution normal rate 1gbit loss 0.1%",
+        netem: MOBILE,
         outage: Some(Outage {
-            netem: "delay 35ms loss 100%",
+            netem: "loss 100%",
             every: Duration::from_secs(30),
             duration: Duration::from_millis(50),
         }),
     },
     Profile {
         name: "Mobile bandwidth dip (1 Mbit/s for 5s every 30s)",
-        netem: "delay 35ms 10ms distribution normal rate 1gbit loss 0.1%",
+        netem: MOBILE,
         outage: Some(Outage {
-            netem: "delay 35ms rate 1mbit limit 40",
+            netem: "rate 1mbit limit 40",
             every: Duration::from_secs(30),
             duration: Duration::from_secs(5),
         }),
     },
     Profile {
         name: "Mobile coverage gap (3s outage every 2min)",
-        netem: "delay 35ms 10ms distribution normal rate 1gbit loss 0.1%",
+        netem: MOBILE,
         outage: Some(Outage {
-            netem: "delay 35ms loss 100%",
+            netem: "loss 100%",
             every: Duration::from_secs(120),
             duration: Duration::from_secs(3),
         }),
     },
     Profile {
         name: "Stress: 1% random loss (RTT 100ms)",
-        netem: "delay 50ms rate 1gbit loss 1%",
+        netem: Netem {
+            delay_ms: 50,
+            jitter_ms: 0,
+            distribution: None,
+            loss: Loss::Random(1.0),
+            rest: "rate 1gbit",
+        },
         outage: None,
     },
     Profile {
         name: "Stress: 5% random loss (RTT 100ms)",
-        netem: "delay 50ms rate 1gbit loss 5%",
+        netem: Netem {
+            delay_ms: 50,
+            jitter_ms: 0,
+            distribution: None,
+            loss: Loss::Random(5.0),
+            rest: "rate 1gbit",
+        },
         outage: None,
     },
     Profile {
         name: "Stress: heavy reordering",
-        netem: "delay 50ms 20ms distribution normal",
+        netem: Netem {
+            delay_ms: 50,
+            jitter_ms: 20,
+            distribution: Some("normal"),
+            loss: Loss::Random(0.0),
+            rest: "",
+        },
         outage: None,
     },
     Profile {
         name: "Stress: 1% loss + heavy reordering",
-        netem: "delay 100ms 50ms loss 1%",
+        netem: Netem {
+            delay_ms: 100,
+            jitter_ms: 50,
+            distribution: None,
+            loss: Loss::Random(1.0),
+            rest: "",
+        },
         outage: None,
     },
     Profile {
         name: "Stress: batched delivery (20-40ms slots)",
-        netem: "delay 30ms slot 20ms 40ms",
+        netem: Netem {
+            delay_ms: 30,
+            jitter_ms: 0,
+            distribution: None,
+            loss: Loss::Random(0.0),
+            rest: "slot 20ms 40ms",
+        },
         outage: None,
     },
     Profile {
         name: "Stress: 3s outage every 40s",
-        netem: "delay 50ms",
+        netem: Netem {
+            delay_ms: 50,
+            jitter_ms: 0,
+            distribution: None,
+            loss: Loss::Random(0.0),
+            rest: "",
+        },
         outage: Some(Outage {
-            netem: "delay 50ms loss 100%",
+            netem: "loss 100%",
             every: Duration::from_secs(40),
             duration: Duration::from_secs(3),
         }),
     },
     Profile {
         name: "Stress: 10s outage every 40s",
-        netem: "delay 50ms",
+        netem: Netem {
+            delay_ms: 50,
+            jitter_ms: 0,
+            distribution: None,
+            loss: Loss::Random(0.0),
+            rest: "",
+        },
         outage: Some(Outage {
-            netem: "delay 50ms loss 100%",
+            netem: "loss 100%",
             every: Duration::from_secs(40),
             duration: Duration::from_secs(10),
         }),
     },
 ];
+
+impl Netem {
+    fn step(&mut self, field: Field, steps: i32) {
+        match field {
+            Field::Delay => {
+                self.delay_ms = self.delay_ms.saturating_add_signed(steps * DELAY_STEP_MS)
+            }
+            Field::Jitter => {
+                self.jitter_ms = self.jitter_ms.saturating_add_signed(steps * JITTER_STEP_MS)
+            }
+            Field::Loss => {
+                let (Loss::Random(loss) | Loss::Gemodel(loss, _)) = &mut self.loss;
+                // rounding drops float error accumulated over many steps
+                let stepped = ((*loss + f64::from(steps) * LOSS_STEP_PERCENT) * 100.0).round();
+                *loss = f64::clamp(stepped / 100.0, 0.0, 100.0);
+            }
+        }
+    }
+
+    fn value(&self, field: Field) -> String {
+        match field {
+            Field::Delay => format!("{}ms", self.delay_ms),
+            Field::Jitter => format!("{}ms", self.jitter_ms),
+            Field::Loss => match self.loss {
+                Loss::Random(loss) => format!("{loss}%"),
+                Loss::Gemodel(start, end) => format!("gemodel {start}% {end}%"),
+            },
+        }
+    }
+}
+
+impl fmt::Display for Netem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "delay {}ms", self.delay_ms)?;
+        if self.jitter_ms > 0 {
+            write!(f, " {}ms", self.jitter_ms)?;
+        }
+        // tc rejects a distribution unless both delay and jitter are set
+        if let Some(distribution) = self.distribution
+            && self.delay_ms > 0
+            && self.jitter_ms > 0
+        {
+            write!(f, " distribution {distribution}")?;
+        }
+        match self.loss {
+            Loss::Random(loss) if loss > 0.0 => write!(f, " loss {loss}%")?,
+            Loss::Random(_) => {}
+            Loss::Gemodel(start, end) => write!(f, " loss gemodel {start}% {end}%")?,
+        }
+        if !self.rest.is_empty() {
+            write!(f, " {}", self.rest)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy)]
+enum Field {
+    Delay,
+    Jitter,
+    Loss,
+}
+
+const FIELDS: [Field; 3] = [Field::Delay, Field::Jitter, Field::Loss];
+
+impl fmt::Display for Field {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.pad(match self {
+            Field::Delay => "delay",
+            Field::Jitter => "jitter",
+            Field::Loss => "loss",
+        })
+    }
+}
 
 enum Choice {
     Profile(&'static Profile),
@@ -188,8 +404,12 @@ fn main() -> Result<()> {
         .unwrap_or(0);
     let device = Select::new("Network device:", devices)
         .with_starting_cursor(lo_index)
+        .with_help_message(
+            "Only outgoing traffic is throttled. On lo that covers both directions, on other \
+             devices incoming traffic is not affected",
+        )
         .prompt()?;
-    let port = Text::new("UDP port to throttle:")
+    let port = Text::new("UDP port to throttle (outgoing):")
         .with_help_message("Leave empty to throttle all UDP traffic on the device")
         .prompt()?;
     let port = match port.trim() {
@@ -226,19 +446,26 @@ fn main() -> Result<()> {
             }
 
             throttle.refresh_sudo()?;
-            throttle.set_netem(profile.netem)?;
+            throttle.update(|shaping| {
+                *shaping = Shaping {
+                    base: profile.netem,
+                    outage: None,
+                }
+            })?;
             outage_loop = profile.outage.as_ref().map(|outage| {
                 let (stop_sender, stop_receiver) = mpsc::channel::<()>();
-                let handle = scope
-                    .spawn(move || run_outage_loop(throttle, profile.netem, outage, stop_receiver));
+                let handle = scope.spawn(move || run_outage_loop(throttle, outage, stop_receiver));
                 (stop_sender, handle)
             });
-            println!("Applied: {}", profile.name);
+            match tune(throttle, profile)? {
+                TuneExit::Profiles => {}
+                TuneExit::Quit => return Ok(()),
+            }
         }
     })
 }
 
-fn run_outage_loop(throttle: &Throttle, netem: &str, outage: &Outage, stop_receiver: Receiver<()>) {
+fn run_outage_loop(throttle: &Throttle, outage: &'static Outage, stop_receiver: Receiver<()>) {
     let wait = |duration| {
         matches!(
             stop_receiver.recv_timeout(duration),
@@ -249,16 +476,183 @@ fn run_outage_loop(throttle: &Throttle, netem: &str, outage: &Outage, stop_recei
         if !wait(outage.every.saturating_sub(outage.duration)) {
             return;
         }
-        if let Err(err) = throttle.set_netem(outage.netem) {
+        if let Err(err) = throttle.update(|shaping| shaping.outage = Some(outage.netem)) {
             eprintln!("Failed to start outage: {err:#}");
             return;
         }
         if !wait(outage.duration) {
             return;
         }
-        if let Err(err) = throttle.set_netem(netem) {
+        if let Err(err) = throttle.update(|shaping| shaping.outage = None) {
             eprintln!("Failed to end outage: {err:#}");
             return;
+        }
+    }
+}
+
+enum TuneExit {
+    Profiles,
+    Quit,
+}
+
+struct Ramp {
+    field: Field,
+    started: Instant,
+    next_step: Instant,
+}
+
+/// Live adjustment of delay, jitter and loss on top of the profile, applied on every change.
+fn tune(throttle: &Throttle, profile: &Profile) -> Result<TuneExit> {
+    let _raw_mode = RawMode::enable()?;
+    let mut screen = Screen::default();
+    let mut netem = profile.netem;
+    let mut selected = 0;
+    let mut ramp: Option<Ramp> = None;
+    let mut status = String::new();
+    loop {
+        let mut frame = String::new();
+        writeln!(frame, "{}", profile.name)?;
+        for (index, field) in FIELDS.into_iter().enumerate() {
+            let marker = if index == selected { '>' } else { ' ' };
+            let value = netem.value(field);
+            let preset = profile.netem.value(field);
+            writeln!(frame, "{marker} {field:<7} {value:<22} preset {preset}")?;
+        }
+        if profile.outage.is_some() {
+            let outage = if throttle.outage_active() {
+                "active"
+            } else {
+                "waiting"
+            };
+            writeln!(frame, "outage: {outage}")?;
+        }
+        writeln!(frame, "netem: {netem}")?;
+        match &ramp {
+            Some(ramp) => writeln!(
+                frame,
+                "Ramping {} every {}s, any key stops ({}s elapsed)",
+                ramp.field,
+                RAMP_INTERVAL.as_secs(),
+                ramp.started.elapsed().as_secs()
+            )?,
+            None => writeln!(frame, "{status}")?,
+        }
+        writeln!(
+            frame,
+            "↑/↓ select  ←/→ adjust  shift ×{BIG_STEP}  a ramp  r reset  p profiles  q quit"
+        )?;
+        screen.draw(&frame)?;
+
+        let previous = netem;
+        if let Some(ramp) = &mut ramp
+            && ramp.next_step <= Instant::now()
+        {
+            netem.step(ramp.field, 1);
+            ramp.next_step += RAMP_INTERVAL;
+        } else if event::poll(REFRESH_INTERVAL)?
+            && let Event::Key(key) = event::read()?
+            && key.kind == KeyEventKind::Press
+        {
+            if let Some(ramp) = ramp.take() {
+                status = format!(
+                    "Ramp stopped at {} {} after {}s",
+                    ramp.field,
+                    netem.value(ramp.field),
+                    ramp.started.elapsed().as_secs()
+                );
+                continue;
+            }
+            let steps = match key.modifiers.contains(KeyModifiers::SHIFT) {
+                true => BIG_STEP,
+                false => 1,
+            };
+            match key.code {
+                KeyCode::Up => selected = selected.saturating_sub(1),
+                KeyCode::Down => selected = usize::min(selected + 1, FIELDS.len() - 1),
+                KeyCode::Left => netem.step(FIELDS[selected], -steps),
+                KeyCode::Right => netem.step(FIELDS[selected], steps),
+                KeyCode::Char('a') => {
+                    let now = Instant::now();
+                    ramp = Some(Ramp {
+                        field: FIELDS[selected],
+                        started: now,
+                        next_step: now + RAMP_INTERVAL,
+                    });
+                }
+                KeyCode::Char('r') => netem = profile.netem,
+                KeyCode::Char('p') => return Ok(TuneExit::Profiles),
+                KeyCode::Char('q') => return Ok(TuneExit::Quit),
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    return Ok(TuneExit::Quit);
+                }
+                _ => {}
+            }
+        }
+        if netem != previous {
+            status = match throttle.update(|shaping| shaping.base = netem) {
+                Ok(()) => String::new(),
+                Err(err) => format!("{err:#}"),
+            };
+        }
+    }
+}
+
+struct RawMode;
+
+impl RawMode {
+    fn enable() -> Result<Self> {
+        terminal::enable_raw_mode()?;
+        Ok(Self)
+    }
+}
+
+impl Drop for RawMode {
+    fn drop(&mut self) {
+        _ = terminal::disable_raw_mode();
+    }
+}
+
+/// Redraws a frame in place of the previous one.
+#[derive(Default)]
+struct Screen {
+    lines: u16,
+}
+
+impl Screen {
+    fn draw(&mut self, frame: &str) -> Result<()> {
+        let mut stdout = io::stdout();
+        if self.lines > 0 {
+            queue!(stdout, cursor::MoveUp(self.lines))?;
+        }
+        queue!(
+            stdout,
+            cursor::MoveToColumn(0),
+            terminal::Clear(ClearType::FromCursorDown)
+        )?;
+        self.lines = 0;
+        // raw mode does not move to the line start on `\n`
+        for line in frame.lines() {
+            write!(stdout, "{line}\r\n")?;
+            self.lines += 1;
+        }
+        stdout.flush()?;
+        Ok(())
+    }
+}
+
+/// What is applied to the qdisc.
+struct Shaping {
+    /// Profile netem with live adjustments.
+    base: Netem,
+    /// Netem options of an ongoing outage.
+    outage: Option<&'static str>,
+}
+
+impl fmt::Display for Shaping {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.outage {
+            None => write!(f, "{}", self.base),
+            Some(outage) => write!(f, "delay {}ms {outage}", self.base.delay_ms),
         }
     }
 }
@@ -268,6 +662,7 @@ fn run_outage_loop(throttle: &Throttle, netem: &str, outage: &Outage, stop_recei
 struct Throttle {
     device: String,
     use_sudo: bool,
+    shaping: Mutex<Shaping>,
 }
 
 impl Throttle {
@@ -279,6 +674,10 @@ impl Throttle {
         let throttle = Self {
             device,
             use_sudo: !is_root,
+            shaping: Mutex::new(Shaping {
+                base: NO_IMPAIRMENT,
+                outage: None,
+            }),
         };
         throttle.refresh_sudo()?;
 
@@ -321,6 +720,18 @@ impl Throttle {
             }
         }
         Ok(throttle)
+    }
+
+    /// Changes the shaping and applies the result. Lock is held during `tc` call, so concurrent
+    /// updates are applied in order.
+    fn update(&self, change: impl FnOnce(&mut Shaping)) -> Result<()> {
+        let mut shaping = self.shaping.lock().unwrap();
+        change(&mut shaping);
+        self.set_netem(&shaping.to_string())
+    }
+
+    fn outage_active(&self) -> bool {
+        self.shaping.lock().unwrap().outage.is_some()
     }
 
     fn set_netem(&self, netem: &str) -> Result<()> {

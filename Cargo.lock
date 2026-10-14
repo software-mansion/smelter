@@ -7085,6 +7085,7 @@ dependencies = [
  "anyhow",
  "bytes",
  "crossbeam-channel",
+ "crossterm",
  "ffmpeg-next",
  "flate2",
  "fs_extra",
