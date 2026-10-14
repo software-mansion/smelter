@@ -16,9 +16,9 @@ use crate::{
         vulkan_encoder::{
             FullEncoderParameters, VulkanEncoderError, async_encoder::DynVulkanEncoder,
         },
-        vulkan_transcoder::pipeline::{OutputConfig, ResizingPipeline},
+        vulkan_transcoder::pipeline::{OutputConfig, ResizeOutput, ResizingPipeline},
         waiter_thread::{SubmissionTracker, WaiterThreadHandle},
-        wrappers::{CommandBufferPoolStorage, EncodeImagePoolConfig, EncodeInputImage},
+        wrappers::{CommandBufferPoolStorage, EncodeImagePoolConfig},
     },
     device::DecoderParameters,
     frame_sorter::{DecodeResult, FrameSorter},
@@ -37,7 +37,7 @@ enum AnyFullEncoderParameters {
 
 pub struct VulkanTranscoder {
     decoder: VulkanDecoderH264,
-    sorter: FrameSorter<Box<[EncodeInputImage]>>,
+    sorter: FrameSorter<Box<[ResizeOutput]>>,
     resizing_pipeline: ResizingPipeline,
     resize_submission_tracker: SubmissionTracker,
     encoders: Vec<Box<dyn DynVulkanEncoder>>,
@@ -196,14 +196,19 @@ impl VulkanTranscoder {
 
     fn encode_resized_images(
         &mut self,
-        resized_images: OutputFrame<Box<[EncodeInputImage]>>,
+        resized_images: OutputFrame<Box<[ResizeOutput]>>,
     ) -> Result<(), VulkanTranscoderError> {
         for encoder in self.encoders.iter_mut() {
             encoder.wait_if_full()?;
         }
 
-        for (encoder, image) in self.encoders.iter_mut().zip(resized_images.data) {
-            encoder.encode(image, false, resized_images.metadata.pts)?;
+        for (encoder, output) in self.encoders.iter_mut().zip(resized_images.data) {
+            encoder.encode(
+                output.image,
+                Some(output.wait_for),
+                false,
+                resized_images.metadata.pts,
+            )?;
         }
 
         Ok(())
