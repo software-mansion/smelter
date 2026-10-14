@@ -25,6 +25,8 @@ mod frame_sorter;
 #[cfg(all(supported, feature = "wgpu"))]
 mod global_registry;
 #[cfg(supported)]
+mod in_flight_tracker;
+#[cfg(supported)]
 mod instance;
 #[cfg(all(supported, feature = "transcoder"))]
 mod transcoder;

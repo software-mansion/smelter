@@ -1,13 +1,21 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
+use objc2_core_foundation as cf;
+use objc2_core_video as cv;
+use objc2_metal as mtl;
 use objc2_metal::MTLDevice;
 
 use crate::{
-    EncodedOutputChunk, OutputFrame, VideoEncoderError, VideoTexture, WgpuTexturesDecoderH264,
+    EncodedOutputChunk, OutputFrame, VideoTexture, WgpuTexturesDecoderH264,
     adapter::VideoAdapterInfo,
     backends::{
         WgpuBackend,
-        video_toolbox::{VTBackend, VTDevice, decoders_h264::VTDecoderH264, error::VTInitError},
+        video_toolbox::{
+            VTBackend, VTDevice, allocate_retained,
+            decoders_h264::VTDecoderH264,
+            encoder::{H264Codec, H265Codec, VTEncoder},
+            error::{OSStatusError, VTInitError},
+        },
     },
     device::WgpuVideoDeviceBackend,
     global_registry::{GlobalRegistry, VideoDeviceKey},
@@ -90,21 +98,209 @@ impl WgpuVideoDeviceBackend for VTDevice {
 
     fn create_wgpu_textures_encoder_h264(
         self: Arc<Self>,
-        _wgpu_device: wgpu::Device,
-        _wgpu_queue: wgpu::Queue,
-        _parameters: crate::device::EncoderParametersH264,
-        _on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
+        wgpu_device: wgpu::Device,
+        wgpu_queue: wgpu::Queue,
+        parameters: crate::device::EncoderParametersH264,
+        on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<crate::WgpuTexturesEncoderH264, crate::VideoEncoderError> {
-        Err(VideoEncoderError::EncoderUnsupported)
+        let encoder = VTEncoder::<H264Codec>::new_wgpu(
+            &wgpu_device,
+            parameters.input_parameters,
+            parameters.output_parameters,
+            parameters.max_in_flight_submissions.unwrap_or(3),
+            on_chunk_callback,
+        )?;
+
+        Ok(crate::WgpuTexturesEncoderH264 {
+            wgpu_device,
+            wgpu_queue,
+            backend: Box::new(encoder),
+        })
     }
 
     fn create_wgpu_textures_encoder_h265(
         self: Arc<Self>,
-        _wgpu_device: wgpu::Device,
-        _wgpu_queue: wgpu::Queue,
-        _parameters: crate::device::EncoderParametersH265,
-        _on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
+        wgpu_device: wgpu::Device,
+        wgpu_queue: wgpu::Queue,
+        parameters: crate::device::EncoderParametersH265,
+        on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<crate::WgpuTexturesEncoderH265, crate::VideoEncoderError> {
-        Err(VideoEncoderError::EncoderUnsupported)
+        let encoder = VTEncoder::<H265Codec>::new_wgpu(
+            &wgpu_device,
+            parameters.input_parameters,
+            parameters.output_parameters,
+            parameters.max_in_flight_submissions.unwrap_or(3),
+            on_chunk_callback,
+        )?;
+
+        Ok(crate::WgpuTexturesEncoderH265 {
+            wgpu_device,
+            wgpu_queue,
+            backend: Box::new(encoder),
+        })
+    }
+}
+
+pub(crate) fn make_texture_cache(
+    device: &wgpu::Device,
+    usage: mtl::MTLTextureUsage,
+) -> Result<SyncCache, VTInitError> {
+    let metal_device = unsafe {
+        device
+            .as_hal::<wgpu::hal::metal::Api>()
+            .ok_or(VTInitError::NotMetalBackend)?
+            .raw_device()
+            .clone()
+    };
+
+    let texture_attributes = unsafe {
+        cf::CFDictionary::<cf::CFString, cf::CFNumber>::from_slices(
+            &[cv::kCVMetalTextureUsage],
+            &[cf::CFNumber::new_i64(usage.0 as i64).as_ref()],
+        )
+    };
+
+    let texture_cache = unsafe {
+        allocate_retained(|ptr| {
+            cv::CVMetalTextureCache::create(
+                None,
+                None,
+                &metal_device,
+                Some(texture_attributes.as_ref()),
+                ptr,
+            )
+        })?
+    };
+
+    Ok(SyncCache(Mutex::new(MetalTextureCache(texture_cache))))
+}
+
+pub(crate) struct SyncCache(Mutex<MetalTextureCache>);
+
+struct MetalTextureCache(cf::CFRetained<cv::CVMetalTextureCache>);
+
+// Safety: texture caches are not marked in docs as thread-affine (required to be used on the
+// thread that created them)
+unsafe impl Send for MetalTextureCache {}
+
+pub(crate) struct SendSyncCVBuffer(pub(crate) cf::CFRetained<cv::CVBuffer>);
+unsafe impl Send for SendSyncCVBuffer {}
+unsafe impl Sync for SendSyncCVBuffer {}
+
+#[derive(Debug, thiserror::Error)]
+pub enum MetalTextureError {
+    #[error(transparent)]
+    OSStatus(#[from] OSStatusError),
+
+    #[error("Failed to extract Metal texture from CVMetalTexture")]
+    ExtractionFailed,
+}
+
+pub(crate) fn video_texture_from_pixel_buffer(
+    cache: &SyncCache,
+    device: &wgpu::Device,
+    buffer: &cv::CVBuffer,
+    usage: wgpu::TextureUsages,
+    initial_use: wgpu::TextureUses,
+    label: &str,
+) -> Result<VideoTexture, MetalTextureError> {
+    let cache = cache.0.lock().unwrap();
+    cache.0.flush(0);
+
+    let y_texture = plane_texture_from_pixel_buffer(
+        &cache,
+        device,
+        buffer,
+        0,
+        wgpu::TextureFormat::R8Unorm,
+        mtl::MTLPixelFormat::R8Unorm,
+        usage,
+        initial_use,
+        &format!("{label} y plane"),
+    )?;
+    let uv_texture = plane_texture_from_pixel_buffer(
+        &cache,
+        device,
+        buffer,
+        1,
+        wgpu::TextureFormat::Rg8Unorm,
+        mtl::MTLPixelFormat::RG8Unorm,
+        usage,
+        initial_use,
+        &format!("{label} uv plane"),
+    )?;
+
+    Ok(VideoTexture::from_planes(y_texture, uv_texture))
+}
+
+#[expect(clippy::too_many_arguments)]
+fn plane_texture_from_pixel_buffer(
+    cache: &MetalTextureCache,
+    device: &wgpu::Device,
+    buffer: &cv::CVBuffer,
+    plane_index: usize,
+    format: wgpu::TextureFormat,
+    mtl_format: mtl::MTLPixelFormat,
+    usage: wgpu::TextureUsages,
+    initial_use: wgpu::TextureUses,
+    label: &str,
+) -> Result<wgpu::Texture, MetalTextureError> {
+    let width = cv::CVPixelBufferGetWidthOfPlane(buffer, plane_index);
+    let height = cv::CVPixelBufferGetHeightOfPlane(buffer, plane_index);
+
+    let cv_texture = unsafe {
+        allocate_retained(|ptr| {
+            cv::CVMetalTextureCache::create_texture_from_image(
+                None,
+                &cache.0,
+                buffer,
+                None,
+                mtl_format,
+                width,
+                height,
+                plane_index,
+                ptr,
+            )
+        })?
+    };
+    let mtl_texture =
+        cv::CVMetalTextureGetTexture(&cv_texture).ok_or(MetalTextureError::ExtractionFailed)?;
+    let guard = SendSyncCVBuffer(cv_texture);
+
+    let size = wgpu::Extent3d {
+        width: width as u32,
+        height: height as u32,
+        depth_or_array_layers: 1,
+    };
+
+    unsafe {
+        let hal_texture = wgpu::hal::metal::Device::texture_from_raw(
+            mtl_texture,
+            format,
+            mtl::MTLTextureType::Type2D,
+            1,
+            1,
+            wgpu::hal::CopyExtent {
+                width: size.width,
+                height: size.height,
+                depth: 1,
+            },
+            Some(Box::new(move || drop(guard))),
+        );
+
+        Ok(device.create_texture_from_hal::<wgpu::hal::metal::Api>(
+            hal_texture,
+            &wgpu::TextureDescriptor {
+                label: Some(label),
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage,
+                view_formats: &[],
+            },
+            initial_use,
+        ))
     }
 }

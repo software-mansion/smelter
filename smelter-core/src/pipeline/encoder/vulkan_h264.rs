@@ -4,7 +4,7 @@ use std::{
 };
 
 use gpu_video::{
-    InputFrame, VideoDeviceExt, VideoTexture, WgpuTexturesEncoderH264,
+    InputFrame, VideoDeviceExt, WgpuTexturesEncoderH264,
     parameters::{EncoderParametersH264, RateControl, Rational, VideoParameters},
 };
 use smelter_render::{FrameData, OutputFrameFormat, WgpuCtx};
@@ -161,8 +161,16 @@ impl VideoEncoder for VulkanH264Encoder {
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: Some("Vulkan H264 encoder input copy"),
                 });
-        VideoTexture::from_nv12_texture(texture.clone())
-            .copy_to(&mut command_encoder, input_texture.texture());
+
+        let Some(destination) = input_texture.texture().nv12_texture() else {
+            error!("Encoder input texture is not an NV12 texture. Dropping frame.");
+            return self.collect_chunks();
+        };
+        command_encoder.copy_texture_to_texture(
+            texture.as_image_copy(),
+            destination.as_image_copy(),
+            texture.size(),
+        );
         self.wgpu_ctx.queue.submit([command_encoder.finish()]);
 
         let result = self.encoder.encode(
