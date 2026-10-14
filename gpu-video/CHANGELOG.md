@@ -2,29 +2,73 @@
 
 ## Unreleased
 
+### ‼️ Major changes
+#### Asynchronous API
+We've long known that gpu-video's performance is limited by the synchronous nature of its API.
+The GPU could do more work, but instead the CPU waits for previous work to finish before scheduling more.
+With this release, gpu-video can finally work asynchronously, keeping the GPU busy. Decoders, encoders and transcoders
+now receive results via a callback passed at creation:
+```rs
+let mut decoder = device.create_wgpu_textures_decoder_h264(
+    &queue,
+    gpu_video::parameters::DecoderParameters::default(),
+    |decoded_frame| {
+        // ...
+    },
+).unwrap();
+```
+The callbacks should only do lightweight work, such as passing the results to another thread. Depending on the backend, all callbacks run on one shared thread, so heavy work done in one callback can block all other callbacks.
+
+By @noituri ([#2143](https://github.com/software-mansion/smelter/pull/2143), [#2215](https://github.com/software-mansion/smelter/pull/2215), [#2239](https://github.com/software-mansion/smelter/pull/2239), [#2241](https://github.com/software-mansion/smelter/pull/2241), [#2251](https://github.com/software-mansion/smelter/pull/2251) and [#2264](https://github.com/software-mansion/smelter/pull/2264))
+
+#### macOS support
+Vulkan is no longer the only supported backend. We have reworked the internal APIs to make room for new backends, which allowed us to add support for macOS
+via VideoToolbox. Many types have been renamed to reflect that change (the `Vulkan` prefix has been replaced with `Video`):
+- `VulkanInstance` -> `VideoInstance`
+- `VulkanAdapter` -> `VideoAdapter`
+- `VulkanDevice` -> `VideoDevice`
+- etc
+
+macOS support by @jerzywilczek ([#2186](https://github.com/software-mansion/smelter/pull/2186), [#2187](https://github.com/software-mansion/smelter/pull/2187) and [#2214](https://github.com/software-mansion/smelter/pull/2214)). \
+Backend-agnostic API by @noituri ([#2090](https://github.com/software-mansion/smelter/pull/2090), [#2091](https://github.com/software-mansion/smelter/pull/2091), [#2100](https://github.com/software-mansion/smelter/pull/2100), [#2103](https://github.com/software-mansion/smelter/pull/2103) and [#2107](https://github.com/software-mansion/smelter/pull/2107)).
+
+#### New wgpu-based initialization
+Previously, `wgpu::Device` and `wgpu::Queue` could only be retrieved after `VulkanDevice` was created. The new approach follows the typical
+wgpu initialization process, but instead of `wgpu::Adapter::request_device` you use `gpu_video::VideoAdapterExt::request_device_with_video_support`.
+Decoders, encoders and transcoders are created with `VideoDevice`, which is retrieved from `wgpu::Device` via `gpu_video::VideoDeviceExt::video`.
+When wgpu is not used, initialization is done via `VideoInstance` (previously `VulkanInstance`).
+
+```rs
+use gpu_video::{VideoAdapterExt, VideoDeviceExt, parameters::VideoDeviceDescriptor};
+
+let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+let adapter = instance.enumerate_adapters(Default::default())
+    .await
+    .into_iter()
+    .find(|a| {
+        a.video_adapter_info()
+            .is_some_and(|info| info.decode_capabilities.h264.is_some())
+    })
+    .unwrap();
+let (device, queue) = adapter
+    .request_device_with_video_support(&VideoDeviceDescriptor::default())
+    .unwrap();
+
+let video_device = device.video().unwrap();
+// use video_device to create decoders/encoders/transcoders...
+```
+
+By @noituri ([#2039](https://github.com/software-mansion/smelter/pull/2039))
+
 ### 💥 Breaking changes
-- Complete API overhaul ([#2039](https://github.com/software-mansion/smelter/pull/2039) by @noituri):
-  - There are now 2 initialization paths:
-    - with `wgpu` support:
-      You can follow the typical `wgpu` initialization path, but to create a `wgpu::Device`, you need to use `VideoAdapterExt::request_device_with_video_support`.
-      Decoders and encoders can be created from `wgpu::Device` via `VideoDeviceExt::video` (the device has to be created from `VideoAdapterExt`).
-    - without `wgpu` support:
-      For the most part the API remains unchanged, but some structs have been renamed:
-      - `VulkanInstance` -> `VideoInstance`
-      - `VulkanAdapter` -> `VideoAdapter`
-      - `VulkanDevice` -> `VideoDevice`
-      - etc...
-  - Removed `vk-validation` and `vk-api-dump` features. Instead you can enable them when creating a `VideoInstance` or `wgpu::Instance`
 - Updated `wgpu` to `30.0.0` ([#2111](https://github.com/software-mansion/smelter/pull/2111) by @noituri)
-- `WgpuTexturesDecoderH264` now returns frames via a callback, the same way `BytesDecoderH264` does ([#2186](https://github.com/software-mansion/smelter/pull/2186) by @jerzywilczek)
+- Removed `vk-validation` and `vk-api-dump` features. Instead you can enable them when creating a `VideoInstance` or `wgpu::Instance` ([#2039](https://github.com/software-mansion/smelter/pull/2039) by @noituri)
+- Removed `EncodeProfileCapabilities::quality_levels` ([#2145](https://github.com/software-mansion/smelter/pull/2145) by @noituri)
 - Encoders now take `InputFrame<RawFrameRef>`s as input. `RawFrameRef` is similar to `RawFrameData`, but it borrows the contents. ([#2244](https://github.com/software-mansion/smelter/pull/2244) by @jerzywilczek)
 - wgpu decoders and encoders exchange frames as `VideoTexture` instead of `wgpu::Texture`, which lets NV12 frames work on Metal ([#2245](https://github.com/software-mansion/smelter/pull/2245) by @jerzywilczek)
 
 ### ✨ New features
 - Added VUI support to H.265 encoder ([#1995](https://github.com/software-mansion/smelter/pull/1995) by @noituri)
-- Made decoders work asynchronously. Bytes decoder now returns frames via callback ([#2143](https://github.com/software-mansion/smelter/pull/2143) by @noituri)
-- Made encoders work asynchronously. Encoded frames are returned via callback ([#2215](https://github.com/software-mansion/smelter/pull/2215) by @noituri)
-- Added an asynchronous H.264 decoder backed by VideoToolbox on macOS (by @jerzywilczek)
 - Improved encoder performance on Vulkan by using a better synchronisation approach ([#2269](https://github.com/software-mansion/smelter/pull/2269) by @noituri)
 
 ### 🐛 Bug fixes
@@ -36,6 +80,8 @@
 - Fix decoding video with a dynamic resolution ([#2080](https://github.com/software-mansion/smelter/pull/2080) by @noituri)
 - Fix vulkan validation errors produced by the encoder ([#2178](https://github.com/software-mansion/smelter/pull/2178) by @noituri)
 - Fix artifacts on AMD GPUs on Windows when multiple encoders or decoders are used at the same time ([#2249](https://github.com/software-mansion/smelter/pull/2249) by @noituri)
+- Fix the RGBA to NV12 conversion shader to output limited range NV12 ([#2050](https://github.com/software-mansion/smelter/pull/2050) by @jerzywilczek)
+- Fix device feature collisions when gpu-video is used with wgpu ([#2255](https://github.com/software-mansion/smelter/pull/2255) by @noituri)
 
 ## [v0.4.0](https://github.com/software-mansion/smelter/releases/tag/gpu-video%2Fv0.4.0)
 
