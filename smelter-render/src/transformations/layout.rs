@@ -1,9 +1,11 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::{
-    Resolution,
+    InputId, Resolution,
     scene::{BorderRadius, BoxShadow, RGBAColor, Size},
-    state::{RenderCtx, node_texture::NodeTexture},
+    state::{
+        RenderCtx, input_texture::InputTexture, node::RenderNode, node_texture::NodeTexture,
+    },
 };
 
 mod flatten;
@@ -168,11 +170,20 @@ impl LayoutNode {
 
     pub fn render(
         &mut self,
-        ctx: &RenderCtx,
-        sources: &[&NodeTexture],
+        ctx: &mut RenderCtx,
+        inputs: &HashMap<InputId, (NodeTexture, InputTexture)>,
+        children: &mut [RenderNode],
         target: &mut NodeTexture,
         pts: Duration,
     ) {
+        let sources: &[&NodeTexture] = &children
+            .iter_mut()
+            .map(|child| {
+                child.render(ctx, inputs, pts);
+                child.output_texture(inputs)
+            })
+            .collect::<Vec<_>>();
+
         let input_resolutions: Vec<Option<Resolution>> = sources
             .iter()
             .map(|node_texture| node_texture.resolution())

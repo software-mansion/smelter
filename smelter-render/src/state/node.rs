@@ -28,19 +28,24 @@ pub(super) enum InnerRenderNode {
     InputStreamRef(InputId),
 }
 
-impl InnerRenderNode {
-    pub fn render(
+pub(crate) struct RenderNode {
+    pub(super) output: NodeTexture,
+    pub(super) renderer: InnerRenderNode,
+    pub(super) children: Vec<RenderNode>,
+}
+
+impl RenderNode {
+    pub(crate) fn render(
         &mut self,
         ctx: &mut RenderCtx,
-        sources: &[&NodeTexture],
-        target: &mut NodeTexture,
+        inputs: &HashMap<InputId, (NodeTexture, InputTexture)>,
         pts: Duration,
     ) {
-        match self {
-            InnerRenderNode::Shader(shader) => {
-                shader.render(ctx.wgpu_ctx, sources, target, pts);
-            }
-            InnerRenderNode::Web(renderer) => renderer.render(ctx, sources, target),
+        let children = &mut self.children;
+        let target = &mut self.output;
+        match &mut self.renderer {
+            InnerRenderNode::Shader(shader) => shader.render(ctx, inputs, children, target, pts),
+            InnerRenderNode::Web(renderer) => renderer.render(ctx, inputs, children, target, pts),
             InnerRenderNode::Text(renderer) => {
                 renderer.render(ctx, target);
             }
@@ -49,18 +54,10 @@ impl InnerRenderNode {
                 // Nothing to do, textures on input nodes should be populated
                 // at the start of render loop
             }
-            InnerRenderNode::Layout(node) => node.render(ctx, sources, target, pts),
+            InnerRenderNode::Layout(node) => node.render(ctx, inputs, children, target, pts),
         }
     }
-}
 
-pub(super) struct RenderNode {
-    pub(super) output: NodeTexture,
-    pub(super) renderer: InnerRenderNode,
-    pub(super) children: Vec<RenderNode>,
-}
-
-impl RenderNode {
     pub(super) fn new(
         ctx: &RenderCtx,
         params: scene::NodeParams,
@@ -89,7 +86,7 @@ impl RenderNode {
     /// Helper to access real texture backing up specific node. For all nodes this is
     /// equivalent of accessing output field, but in case of InputStreamRef `output` field
     /// is just a stub that does not do anything.
-    pub(super) fn output_texture<'a>(
+    pub(crate) fn output_texture<'a>(
         &'a self,
         inputs: &'a HashMap<InputId, (NodeTexture, InputTexture)>,
     ) -> &'a NodeTexture {

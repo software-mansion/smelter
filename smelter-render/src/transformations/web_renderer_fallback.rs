@@ -1,9 +1,12 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::{
-    Framerate, RendererId, Resolution,
+    Framerate, InputId, RendererId, Resolution,
     scene::ComponentId,
-    state::{RegisterCtx, RenderCtx, node_texture::NodeTexture},
+    state::{
+        RegisterCtx, RenderCtx, input_texture::InputTexture, node::RenderNode,
+        node_texture::NodeTexture,
+    },
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -58,8 +61,10 @@ impl WebRendererNode {
     pub fn render(
         &mut self,
         _ctx: &mut RenderCtx,
-        _sources: &[&NodeTexture],
+        _inputs: &HashMap<InputId, (NodeTexture, InputTexture)>,
+        _children: &mut [RenderNode],
         _target: &mut NodeTexture,
+        _pts: Duration,
     ) {
         unreachable!()
     }

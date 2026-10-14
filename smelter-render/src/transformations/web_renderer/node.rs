@@ -1,11 +1,14 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use tracing::error;
 
 use crate::{
+    InputId,
     error::ErrorStack,
     scene::ComponentId,
-    state::{RenderCtx, node_texture::NodeTexture},
+    state::{
+        RenderCtx, input_texture::InputTexture, node::RenderNode, node_texture::NodeTexture,
+    },
     wgpu::{
         WgpuCtx,
         texture::{TextureExt, utils::pad_to_256},
@@ -33,13 +36,23 @@ impl WebRendererNode {
     pub fn render(
         &mut self,
         ctx: &mut RenderCtx,
-        sources: &[&NodeTexture],
+        inputs: &HashMap<InputId, (NodeTexture, InputTexture)>,
+        children: &mut [RenderNode],
         target: &mut NodeTexture,
+        pts: Duration,
     ) {
-        self.ensure_buffers(ctx.wgpu_ctx, sources);
+        let sources: Vec<_> = children
+            .iter_mut()
+            .map(|child| {
+                child.render(ctx, inputs, pts);
+                child.output_texture(inputs)
+            })
+            .collect();
+
+        self.ensure_buffers(ctx.wgpu_ctx, &sources);
         if let Err(err) = self
             .renderer
-            .render(ctx, sources, &self.embedding_data, target)
+            .render(ctx, &sources, &self.embedding_data, target)
         {
             error!(
                 "Failed to run web render: {}",

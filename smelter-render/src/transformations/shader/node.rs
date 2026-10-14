@@ -1,11 +1,13 @@
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use wgpu::util::DeviceExt;
 
 use crate::{
-    Resolution,
+    InputId, Resolution,
     scene::ShaderParam,
-    state::{RenderCtx, node_texture::NodeTexture},
+    state::{
+        RenderCtx, input_texture::InputTexture, node::RenderNode, node_texture::NodeTexture,
+    },
     wgpu::WgpuCtx,
 };
 
@@ -70,17 +72,26 @@ impl ShaderNode {
 
     pub fn render(
         &self,
-        wgpu_ctx: &WgpuCtx,
-        sources: &[&NodeTexture],
+        ctx: &mut RenderCtx,
+        inputs: &HashMap<InputId, (NodeTexture, InputTexture)>,
+        children: &mut [RenderNode],
         target: &mut NodeTexture,
         pts: Duration,
     ) {
-        let target = target.ensure_size(wgpu_ctx, self.resolution);
+        let sources: Vec<_> = children
+            .iter_mut()
+            .map(|child| {
+                child.render(ctx, inputs, pts);
+                child.output_texture(inputs)
+            })
+            .collect();
+
+        let target = target.ensure_size(ctx.wgpu_ctx, self.resolution);
 
         self.shader.pipeline.render(
-            wgpu_ctx,
+            ctx.wgpu_ctx,
             &self.params_bind_group,
-            sources,
+            &sources,
             target,
             pts,
             self.shader.clear_color,

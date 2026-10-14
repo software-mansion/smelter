@@ -5,16 +5,14 @@ use tracing::{error, warn};
 use crate::{
     Frame, FrameData, FrameSet, InputId, OutputId, RenderingMode, Resolution,
     scene::RGBColor,
-    state::{RenderCtx, node::RenderNode, render_graph::RenderGraph},
+    state::{RenderCtx, render_graph::RenderGraph},
     wgpu::texture::{
         NV12Texture, PlanarYuvPendingDownload, PlanarYuvVariant, RgbaLinearTexture,
         RgbaMultiViewTexture, RgbaSrgbTexture, TextureExt,
     },
 };
 
-use super::{
-    input_texture::InputTexture, node_texture::NodeTexture, output_texture::OutputTexture,
-};
+use super::output_texture::OutputTexture;
 
 pub(super) fn populate_inputs(
     ctx: &RenderCtx,
@@ -226,25 +224,6 @@ pub(super) fn read_outputs(
 
 pub(super) fn run_transforms(ctx: &mut RenderCtx, scene: &mut RenderGraph, pts: Duration) {
     for output in scene.outputs.values_mut() {
-        render_node(ctx, &scene.inputs, pts, &mut output.root);
+        output.root.render(ctx, &scene.inputs, pts);
     }
-}
-
-pub(super) fn render_node(
-    ctx: &mut RenderCtx,
-    inputs: &HashMap<InputId, (NodeTexture, InputTexture)>,
-    pts: Duration,
-    node: &mut RenderNode,
-) {
-    for child_node in node.children.iter_mut() {
-        render_node(ctx, inputs, pts, child_node);
-    }
-
-    let input_textures: Vec<_> = node
-        .children
-        .iter()
-        .map(|node| node.output_texture(inputs))
-        .collect();
-    node.renderer
-        .render(ctx, &input_textures, &mut node.output, pts);
 }
