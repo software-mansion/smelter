@@ -3,9 +3,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use crate::{
     InputId, Resolution,
     scene::{BorderRadius, BoxShadow, RGBAColor, Size},
-    state::{
-        RenderCtx, input_texture::InputTexture, node::RenderNode, node_texture::NodeTexture,
-    },
+    state::{RenderCtx, input_texture::InputTexture, node::RenderNode, node_texture::NodeTexture},
 };
 
 mod flatten;

@@ -5,9 +5,7 @@ use wgpu::util::DeviceExt;
 use crate::{
     InputId, Resolution,
     scene::ShaderParam,
-    state::{
-        RenderCtx, input_texture::InputTexture, node::RenderNode, node_texture::NodeTexture,
-    },
+    state::{RenderCtx, input_texture::InputTexture, node::RenderNode, node_texture::NodeTexture},
     wgpu::WgpuCtx,
 };
 

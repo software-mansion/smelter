@@ -6,9 +6,7 @@ use crate::{
     InputId,
     error::ErrorStack,
     scene::ComponentId,
-    state::{
-        RenderCtx, input_texture::InputTexture, node::RenderNode, node_texture::NodeTexture,
-    },
+    state::{RenderCtx, input_texture::InputTexture, node::RenderNode, node_texture::NodeTexture},
     wgpu::{
         WgpuCtx,
         texture::{TextureExt, utils::pad_to_256},

@@ -6,9 +6,10 @@ use crate::{
 };
 
 use super::{
-    AbsolutePosition, BorderRadius, ComponentId, HorizontalPosition, Position, RGBAColor, Size,
-    StatefulComponent, VerticalPosition, rescaler_component::StatefulRescalerComponent,
-    tiles_component::StatefulTilesComponent, view_component::StatefulViewComponent,
+    AbsolutePosition, BorderRadius, ComponentId, HorizontalPosition, Position, RGBAColor,
+    SceneError, Size, StatefulComponent, VerticalPosition,
+    rescaler_component::StatefulRescalerComponent, tiles_component::StatefulTilesComponent,
+    view_component::StatefulViewComponent,
 };
 
 #[derive(Debug, Clone)]
@@ -55,6 +56,29 @@ impl StatefulLayoutComponent {
             StatefulLayoutComponent::View(view) => view.position(pts),
             StatefulLayoutComponent::Tiles(tiles) => tiles.position(pts),
             StatefulLayoutComponent::Rescaler(rescaler) => rescaler.position(pts),
+        }
+    }
+
+    /// Size of a layout that is a root of a `RenderNode`, but not a root of an output.
+    pub(super) fn root_size(&self, pts: Duration) -> Result<Size, SceneError> {
+        let (width, height) = match self.position(pts) {
+            Position::Static { width, height } => (width, height),
+            // Technically absolute positioning is a bug here, but I think throwing error
+            // in this case would be to invasive. It's better to just ignore those values.
+            Position::Absolute(position) => (position.width, position.height),
+        };
+        if let (Some(width), Some(height)) = (width, height) {
+            Ok(Size { width, height })
+        } else {
+            Err(SceneError::UnknownDimensionsForLayoutNodeRoot {
+                component: self.component_type(),
+                msg: match self.component_id() {
+                    Some(id) => format!(
+                        "Please provide width and height values for component with id \"{id}\""
+                    ),
+                    None => "Please provide width and height values.".to_string(),
+                },
+            })
         }
     }
 

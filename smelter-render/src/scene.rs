@@ -1,4 +1,3 @@
-use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -11,14 +10,14 @@ use crate::{InputId, OutputId, RendererId, Resolution};
 
 use self::image_component::StatefulImageComponent;
 use self::input_stream_component::StatefulInputStreamComponent;
-use self::layout::StatefulLayoutComponent;
-use self::scene_state::{BuildStateTreeCtx, IntermediateNode};
+use self::layout::{SizedLayoutComponent, StatefulLayoutComponent};
+use self::scene_state::BuildStateTreeCtx;
 use self::shader_component::StatefulShaderComponent;
 use self::text_component::StatefulTextComponent;
 use self::web_view_component::StatefulWebViewComponent;
 
 pub(crate) use layout::LayoutNode;
-pub(crate) use scene_state::{OutputNode, SceneState};
+pub(crate) use scene_state::SceneState;
 pub(crate) use shader_component::ShaderComponentParams;
 
 pub use components::*;
@@ -72,21 +71,6 @@ enum StatefulComponent {
     Layout(Box<StatefulLayoutComponent>),
 }
 
-/// Defines a tree structure that is a base to construct a `RenderGraph`.
-/// Each `prams` element defines a parameters to construct a `RenderNode`
-/// and `children` define connections between them.
-///
-/// In most cases each `Node` will be used to construct a RenderNode, but
-/// in some cases multiple Nodes might be reduced to just one RenderNode
-/// e.g. `NodeParams::InputStream` for the same input stream might be present
-/// multiple times inside the tree, but it will result in only one `RenderNode`
-/// in the `RenderGraph`
-#[derive(Debug)]
-pub(crate) struct Node {
-    pub(crate) params: NodeParams,
-    pub(crate) children: Vec<Node>,
-}
-
 /// Set of params used to construct a `RenderNode`.
 #[derive(Debug)]
 pub(crate) enum NodeParams {
@@ -127,19 +111,50 @@ impl StatefulComponent {
         }
     }
 
-    fn intermediate_node(&self) -> IntermediateNode {
+    /// Children of a `RenderNode` created from this component. Nested layout components are
+    /// rendered by a single `RenderNode`, so their non-layout descendants are flattened.
+    fn node_children(&self) -> Vec<&StatefulComponent> {
         match self {
-            StatefulComponent::InputStream(input) => input.intermediate_node(),
-            StatefulComponent::Shader(shader) => shader.intermediate_node(),
-            StatefulComponent::WebView(web) => web.intermediate_node(),
-            StatefulComponent::Image(image) => image.intermediate_node(),
-            StatefulComponent::Text(text) => text.intermediate_node(),
-            StatefulComponent::Layout(layout) => match layout.deref() {
-                StatefulLayoutComponent::View(view) => view.intermediate_node(),
-                StatefulLayoutComponent::Tiles(tiles) => tiles.intermediate_node(),
-                StatefulLayoutComponent::Rescaler(rescaler) => rescaler.intermediate_node(),
-            },
+            StatefulComponent::Shader(shader) => shader.children.iter().collect(),
+            StatefulComponent::WebView(web) => web.children.iter().collect(),
+            StatefulComponent::Layout(layout) => layout.node_children(),
+            StatefulComponent::InputStream(_)
+            | StatefulComponent::Image(_)
+            | StatefulComponent::Text(_) => vec![],
         }
+    }
+
+    /// * `resolution` - Forces resolution of a node, primary use case for this param is to force
+    ///   resolution on a top level component to match resolution of an output stream.
+    ///   TODO: Currently only layouts respect that value
+    fn node_params(
+        &self,
+        resolution: Option<Resolution>,
+        pts: Duration,
+    ) -> Result<NodeParams, SceneError> {
+        let params = match self {
+            StatefulComponent::InputStream(input) => {
+                NodeParams::InputStream(input.component.input_id.clone())
+            }
+            StatefulComponent::Shader(shader) => {
+                NodeParams::Shader(shader.component.clone(), shader.shader.clone())
+            }
+            StatefulComponent::WebView(web) => {
+                NodeParams::Web(web.children_ids.clone(), web.instance.clone())
+            }
+            StatefulComponent::Image(image) => NodeParams::Image(image.image_render_params()),
+            StatefulComponent::Text(text) => NodeParams::Text(text.params.clone()),
+            StatefulComponent::Layout(layout) => {
+                let size = match resolution {
+                    Some(resolution) => resolution.into(),
+                    None => layout.root_size(pts)?,
+                };
+                NodeParams::Layout(LayoutNode {
+                    root: SizedLayoutComponent::new(layout.clone(), size),
+                })
+            }
+        };
+        Ok(params)
     }
 
     fn children_mut(&mut self) -> Vec<&mut StatefulComponent> {

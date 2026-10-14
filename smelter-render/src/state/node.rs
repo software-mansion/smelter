@@ -31,7 +31,7 @@ pub(super) enum InnerRenderNode {
 pub(crate) struct RenderNode {
     pub(super) output: NodeTexture,
     pub(super) renderer: InnerRenderNode,
-    pub(super) children: Vec<RenderNode>,
+    pub(crate) children: Vec<RenderNode>,
 }
 
 impl RenderNode {
@@ -58,7 +58,7 @@ impl RenderNode {
         }
     }
 
-    pub(super) fn new(
+    pub(crate) fn new(
         ctx: &RenderCtx,
         params: scene::NodeParams,
         children: Vec<RenderNode>,

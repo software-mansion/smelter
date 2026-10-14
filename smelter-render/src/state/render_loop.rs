@@ -56,7 +56,11 @@ pub(super) fn read_outputs(
 ) -> HashMap<OutputId, Frame> {
     let mut partial_textures = Vec::with_capacity(scene.outputs.len());
     for (output_id, output) in &scene.outputs {
-        match output.root.output_texture(&scene.inputs).state() {
+        let root_texture = output
+            .root
+            .as_ref()
+            .and_then(|root| root.output_texture(&scene.inputs).state());
+        match root_texture {
             Some(node) => match &output.output_texture {
                 OutputTexture::PlanarYuvTextures(yuv_output) => {
                     ctx.wgpu_ctx.format.rgba_to_yuv.convert(
@@ -224,6 +228,8 @@ pub(super) fn read_outputs(
 
 pub(super) fn run_transforms(ctx: &mut RenderCtx, scene: &mut RenderGraph, pts: Duration) {
     for output in scene.outputs.values_mut() {
-        output.root.render(ctx, &scene.inputs, pts);
+        if let Some(root) = &mut output.root {
+            root.render(ctx, &scene.inputs, pts);
+        }
     }
 }
