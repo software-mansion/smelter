@@ -122,7 +122,7 @@ pub fn audio_mixing_with_offset() -> Result<()> {
         OUTPUT_DUMP_FILE,
         &new_output_dump,
         AudioCompareConfig {
-            fft: Some(artificial_fft(0)),
+            fft: Some(artificial_fft(2)),
             ..Default::default()
         },
     )?;
@@ -342,7 +342,7 @@ pub fn audio_mixing_track_insertion_with_offset() -> Result<()> {
         OUTPUT_DUMP_FILE,
         &new_output_dump,
         AudioCompareConfig {
-            fft: Some(artificial_fft(0)),
+            fft: Some(artificial_fft(2)),
             ..Default::default()
         },
     )?;
@@ -419,7 +419,7 @@ pub fn single_input_opus() -> Result<()> {
         OUTPUT_DUMP_FILE,
         &new_output_dump,
         AudioCompareConfig {
-            fft: Some(artificial_fft(0)),
+            fft: Some(artificial_fft(2)),
             ..Default::default()
         },
     )?;
