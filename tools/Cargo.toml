@@ -34,6 +34,7 @@ regex = { workspace = true }
 tar = "0.4.46"
 flate2 = "1.1.4"
 inquire = "0.7.5"
+crossterm = "0.25.0"
 
 [lints]
 workspace = true
