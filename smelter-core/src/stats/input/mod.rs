@@ -1,14 +1,17 @@
 use tracing::error;
 
 pub(super) mod audio_mixer;
+pub(super) mod decklink;
 pub(super) mod hls;
 pub(super) mod media;
 pub(super) mod moq_client;
 pub(super) mod moq_server;
 pub(super) mod mp4;
+pub(super) mod raw_data;
 pub(super) mod rtmp;
 pub(super) mod rtp;
 pub(super) mod sync;
+pub(super) mod v4l2;
 pub(super) mod whep;
 pub(super) mod whip;
 
@@ -16,10 +19,11 @@ use crate::{
     InputProtocolKind,
     pipeline::utils::input_sync::TrackKind,
     stats::{
-        input::audio_mixer::AudioMixerInputStatsState, input::hls::HlsInputState,
-        input::media::InputMediaStatsState, input::moq_client::MoqClientInputState,
-        input::moq_server::MoqServerInputState, input::mp4::Mp4InputState,
-        input::rtmp::RtmpInputState, input::rtp::RtpInputState, input::whep::WhepInputState,
+        input::audio_mixer::AudioMixerInputStatsState, input::decklink::DeckLinkInputState,
+        input::hls::HlsInputState, input::media::InputMediaStatsState,
+        input::moq_client::MoqClientInputState, input::moq_server::MoqServerInputState,
+        input::mp4::Mp4InputState, input::raw_data::RawDataInputState, input::rtmp::RtmpInputState,
+        input::rtp::RtpInputState, input::v4l2::V4l2InputState, input::whep::WhepInputState,
         input::whip::WhipInputState, input_reports::InputStatsReport,
     },
 };
@@ -65,12 +69,14 @@ pub enum InputStatsState {
     MoqServer(MoqServerInputState),
     MoqClient(MoqClientInputState),
     Mp4(Mp4InputState),
+    V4l2(V4l2InputState),
+    DeckLink(DeckLinkInputState),
+    RawData(RawDataInputState),
 }
 
 impl InputStatsState {
-    /// `None` for inputs without stats.
-    pub fn new(kind: InputProtocolKind) -> Option<Self> {
-        let state = match kind {
+    pub fn new(kind: InputProtocolKind) -> Self {
+        match kind {
             InputProtocolKind::Whip => InputStatsState::Whip(WhipInputState::new()),
             InputProtocolKind::Whep => InputStatsState::Whep(WhepInputState::new()),
             InputProtocolKind::Rtp => InputStatsState::Rtp(RtpInputState::new()),
@@ -79,11 +85,10 @@ impl InputStatsState {
             InputProtocolKind::Hls => InputStatsState::Hls(HlsInputState::new()),
             InputProtocolKind::MoqServer => InputStatsState::MoqServer(MoqServerInputState::new()),
             InputProtocolKind::MoqClient => InputStatsState::MoqClient(MoqClientInputState::new()),
-            InputProtocolKind::V4l2
-            | InputProtocolKind::DeckLink
-            | InputProtocolKind::RawDataChannel => return None,
-        };
-        Some(state)
+            InputProtocolKind::V4l2 => InputStatsState::V4l2(V4l2InputState),
+            InputProtocolKind::DeckLink => InputStatsState::DeckLink(DeckLinkInputState),
+            InputProtocolKind::RawDataChannel => InputStatsState::RawData(RawDataInputState),
+        }
     }
 
     pub fn handle_event(&mut self, event: InputStatsEvent) {
@@ -111,10 +116,14 @@ impl InputStatsState {
                 state.sync.handle_event(track, event);
             }
             (state, InputStatsEvent::Media { track, event }) => {
-                state.media().handle_event(track, event);
+                if let Some(media) = state.media() {
+                    media.handle_event(track, event);
+                }
             }
             (state, InputStatsEvent::AudioMixer(event)) => {
-                state.audio_mixer().handle_event(event);
+                if let Some(audio_mixer) = state.audio_mixer() {
+                    audio_mixer.handle_event(event);
+                }
             }
             (state, event) => {
                 error!(?state, ?event, "Wrong event type for input")
@@ -122,29 +131,35 @@ impl InputStatsState {
         }
     }
 
-    fn media(&mut self) -> &mut InputMediaStatsState {
+    fn media(&mut self) -> Option<&mut InputMediaStatsState> {
         match self {
-            InputStatsState::Rtp(state) => &mut state.media,
-            InputStatsState::Whip(state) => &mut state.media,
-            InputStatsState::Whep(state) => &mut state.media,
-            InputStatsState::Hls(state) => &mut state.media,
-            InputStatsState::Rtmp(state) => &mut state.media,
-            InputStatsState::MoqServer(state) => &mut state.media,
-            InputStatsState::MoqClient(state) => &mut state.media,
-            InputStatsState::Mp4(state) => &mut state.media,
+            InputStatsState::Rtp(state) => Some(&mut state.media),
+            InputStatsState::Whip(state) => Some(&mut state.media),
+            InputStatsState::Whep(state) => Some(&mut state.media),
+            InputStatsState::Hls(state) => Some(&mut state.media),
+            InputStatsState::Rtmp(state) => Some(&mut state.media),
+            InputStatsState::MoqServer(state) => Some(&mut state.media),
+            InputStatsState::MoqClient(state) => Some(&mut state.media),
+            InputStatsState::Mp4(state) => Some(&mut state.media),
+            InputStatsState::V4l2(_)
+            | InputStatsState::DeckLink(_)
+            | InputStatsState::RawData(_) => None,
         }
     }
 
-    fn audio_mixer(&mut self) -> &mut AudioMixerInputStatsState {
+    fn audio_mixer(&mut self) -> Option<&mut AudioMixerInputStatsState> {
         match self {
-            InputStatsState::Rtp(state) => &mut state.audio_mixer,
-            InputStatsState::Whip(state) => &mut state.audio_mixer,
-            InputStatsState::Whep(state) => &mut state.audio_mixer,
-            InputStatsState::Hls(state) => &mut state.audio_mixer,
-            InputStatsState::Rtmp(state) => &mut state.audio_mixer,
-            InputStatsState::MoqServer(state) => &mut state.audio_mixer,
-            InputStatsState::MoqClient(state) => &mut state.audio_mixer,
-            InputStatsState::Mp4(state) => &mut state.audio_mixer,
+            InputStatsState::Rtp(state) => Some(&mut state.audio_mixer),
+            InputStatsState::Whip(state) => Some(&mut state.audio_mixer),
+            InputStatsState::Whep(state) => Some(&mut state.audio_mixer),
+            InputStatsState::Hls(state) => Some(&mut state.audio_mixer),
+            InputStatsState::Rtmp(state) => Some(&mut state.audio_mixer),
+            InputStatsState::MoqServer(state) => Some(&mut state.audio_mixer),
+            InputStatsState::MoqClient(state) => Some(&mut state.audio_mixer),
+            InputStatsState::Mp4(state) => Some(&mut state.audio_mixer),
+            InputStatsState::V4l2(_)
+            | InputStatsState::DeckLink(_)
+            | InputStatsState::RawData(_) => None,
         }
     }
 
@@ -158,6 +173,9 @@ impl InputStatsState {
             InputStatsState::MoqServer(state) => InputStatsReport::MoqServer(state.report()),
             InputStatsState::MoqClient(state) => InputStatsReport::MoqClient(state.report()),
             InputStatsState::Mp4(state) => InputStatsReport::Mp4(state.report()),
+            InputStatsState::V4l2(state) => InputStatsReport::V4l2(state.report()),
+            InputStatsState::DeckLink(state) => InputStatsReport::DeckLink(state.report()),
+            InputStatsState::RawData(state) => InputStatsReport::RawData(state.report()),
         }
     }
 }

@@ -74,7 +74,11 @@ impl TrackMediaStatsState {
             return 0;
         };
         let end = max_pts - self.delay.max();
-        let bytes: u64 = self.chunks.range(end - window..end).map(|(_, size)| size).sum();
+        let bytes: u64 = self
+            .chunks
+            .range(end - window..end)
+            .map(|(_, size)| size)
+            .sum();
         (8.0 * bytes as f64 / window.as_secs_f64()) as u64
     }
 

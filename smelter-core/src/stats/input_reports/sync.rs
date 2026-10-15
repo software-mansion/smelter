@@ -15,9 +15,11 @@ pub enum InputSyncTrackStatsReport {
 /// Stats report for a track of a non-live stream.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct SimpleSyncTrackStatsReport {
-    /// Bitrate in the 1-second window.
+    /// Bitrate of the network traffic in the 1-second window, measured by arrival time. It is
+    /// not the bitrate of the media.
     pub bitrate_1_second: u64,
-    /// Bitrate in the 1-minute window.
+    /// Bitrate of the network traffic in the 1-minute window, measured by arrival time. It is
+    /// not the bitrate of the media.
     pub bitrate_1_minute: u64,
 
     /// State of the synchronization.
@@ -36,9 +38,11 @@ pub enum SimpleSyncTrackState {
 /// Stats report for a track of a live stream.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct LiveSyncTrackStatsReport {
-    /// Bitrate in the 1-second window.
+    /// Bitrate of the network traffic in the 1-second window, measured by arrival time. It is
+    /// not the bitrate of the media.
     pub bitrate_1_second: u64,
-    /// Bitrate in the 1-minute window.
+    /// Bitrate of the network traffic in the 1-minute window, measured by arrival time. It is
+    /// not the bitrate of the media.
     pub bitrate_1_minute: u64,
 
     /// State of the live edge synchronization.

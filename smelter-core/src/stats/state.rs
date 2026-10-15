@@ -66,9 +66,8 @@ impl StatsState {
     pub fn handle_event(&mut self, event: StatsEvent) {
         match event {
             StatsEvent::InputRegistered { input_ref, kind } => {
-                if let Some(state) = InputStatsState::new(kind) {
-                    self.inputs.insert(input_ref, StatsEntry::new(state));
-                }
+                self.inputs
+                    .insert(input_ref, StatsEntry::new(InputStatsState::new(kind)));
             }
             StatsEvent::InputRemoved { input_ref } => {
                 if let Some(entry) = self.inputs.get_mut(&input_ref) {

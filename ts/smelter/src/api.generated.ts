@@ -1728,6 +1728,15 @@ export type InputStatsReport =
        * Stats for the audio track. `None` before any audio arrives.
        */
       audio?: Mp4InputAudioTrackStatsReport | null;
+    }
+  | {
+      type: "v4l2";
+    }
+  | {
+      type: "decklink";
+    }
+  | {
+      type: "raw_data";
     };
 /**
  * State of the input playback in the audio mixer.
@@ -1744,11 +1753,11 @@ export type InputSyncTrackStatsReport =
   | {
       mode: "simple";
       /**
-       * Bitrate in the 1-second window.
+       * Bitrate of the network traffic in the 1-second window, measured by arrival time. It is not the bitrate of the media.
        */
       bitrate_1_second: number;
       /**
-       * Bitrate in the 1-minute window.
+       * Bitrate of the network traffic in the 1-minute window, measured by arrival time. It is not the bitrate of the media.
        */
       bitrate_1_minute: number;
       /**
@@ -1759,11 +1768,11 @@ export type InputSyncTrackStatsReport =
   | {
       mode: "live";
       /**
-       * Bitrate in the 1-second window.
+       * Bitrate of the network traffic in the 1-second window, measured by arrival time. It is not the bitrate of the media.
        */
       bitrate_1_second: number;
       /**
-       * Bitrate in the 1-minute window.
+       * Bitrate of the network traffic in the 1-minute window, measured by arrival time. It is not the bitrate of the media.
        */
       bitrate_1_minute: number;
       /**

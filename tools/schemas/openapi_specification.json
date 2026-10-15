@@ -1759,6 +1759,10 @@
         },
         "additionalProperties": false
       },
+      "DeckLinkInputStatsReport": {
+        "type": "object",
+        "description": "Stats report for `DeckLink` input. No stats are collected yet."
+      },
       "EasingFunction": {
         "oneOf": [
           {
@@ -2714,6 +2718,69 @@
                 }
               }
             ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/V4l2InputStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "v4l2"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DeckLinkInputStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "decklink"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RawDataInputStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "raw_data"
+                    ]
+                  }
+                }
+              }
+            ]
           }
         ],
         "description": "Stats report for inputs."
@@ -3095,13 +3162,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the 1-second window.",
+            "description": "Bitrate of the network traffic in the 1-second window, measured by arrival time. It is\nnot the bitrate of the media.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the 1-minute window.",
+            "description": "Bitrate of the network traffic in the 1-minute window, measured by arrival time. It is\nnot the bitrate of the media.",
             "minimum": 0
           },
           "state": {
@@ -5122,6 +5189,10 @@
       },
       "RGBAColor": {
         "type": "string"
+      },
+      "RawDataInputStatsReport": {
+        "type": "object",
+        "description": "Stats report for raw data input. No stats are collected yet."
       },
       "RegisterFontRequest": {
         "type": "object",
@@ -7190,13 +7261,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the 1-second window.",
+            "description": "Bitrate of the network traffic in the 1-second window, measured by arrival time. It is\nnot the bitrate of the media.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the 1-minute window.",
+            "description": "Bitrate of the network traffic in the 1-minute window, measured by arrival time. It is\nnot the bitrate of the media.",
             "minimum": 0
           },
           "state": {
@@ -7692,6 +7763,10 @@
           "yuyv",
           "nv12"
         ]
+      },
+      "V4l2InputStatsReport": {
+        "type": "object",
+        "description": "Stats report for `V4L2` input. No stats are collected yet."
       },
       "VerticalAlign": {
         "type": "string",
