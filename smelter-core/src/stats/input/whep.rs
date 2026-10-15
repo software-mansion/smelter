@@ -3,8 +3,14 @@ use smelter_render::InputId;
 use crate::{
     Ref,
     stats::{
-        input::rtp::{RtpJitterBufferState, RtpJitterBufferStatsEvent},
-        input_reports::WhepInputStatsReport,
+        input::{
+            audio_mixer::AudioMixerInputStatsState,
+            media::InputMediaStatsState,
+            rtp::{RtpJitterBufferState, RtpJitterBufferStatsEvent},
+        },
+        input_reports::{
+            WhepInputAudioTrackStatsReport, WhepInputStatsReport, WhepInputVideoTrackStatsReport,
+        },
         state::StatsEvent,
     },
 };
@@ -30,6 +36,8 @@ impl WhepInputStatsEvent {
 pub struct WhepInputState {
     pub video: RtpJitterBufferState,
     pub audio: RtpJitterBufferState,
+    pub media: InputMediaStatsState,
+    pub audio_mixer: AudioMixerInputStatsState,
 }
 
 impl WhepInputState {
@@ -37,6 +45,8 @@ impl WhepInputState {
         Self {
             video: RtpJitterBufferState::new(),
             audio: RtpJitterBufferState::new(),
+            media: InputMediaStatsState::new(),
+            audio_mixer: AudioMixerInputStatsState::new(),
         }
     }
 
@@ -48,9 +58,22 @@ impl WhepInputState {
     }
 
     pub fn report(&mut self) -> WhepInputStatsReport {
+        let has_video = self.video.received_any() || self.media.video.received_any();
+        let has_audio = self.audio.received_any()
+            || self.media.audio.received_any()
+            || self.audio_mixer.received_any();
         WhepInputStatsReport {
-            video_rtp: self.video.report(),
-            audio_rtp: self.audio.report(),
+            video: has_video.then(|| WhepInputVideoTrackStatsReport {
+                bitrate_1_second: self.media.video.bitrate_1_second(),
+                bitrate_1_minute: self.media.video.bitrate_1_minute(),
+                jitter_buffer: self.video.report(),
+            }),
+            audio: has_audio.then(|| WhepInputAudioTrackStatsReport {
+                bitrate_1_second: self.media.audio.bitrate_1_second(),
+                bitrate_1_minute: self.media.audio.bitrate_1_minute(),
+                jitter_buffer: self.audio.report(),
+                mixer: self.audio_mixer.report(),
+            }),
         }
     }
 }

@@ -52,20 +52,6 @@ pub(crate) enum OutputStatsEvent {
     MoqClient(MoqClientOutputStatsEvent),
 }
 
-impl From<&OutputStatsEvent> for OutputProtocolKind {
-    fn from(value: &OutputStatsEvent) -> Self {
-        match value {
-            OutputStatsEvent::Whep(_) => Self::Whep,
-            OutputStatsEvent::Whip(_) => Self::Whip,
-            OutputStatsEvent::Hls(_) => Self::Hls,
-            OutputStatsEvent::Mp4(_) => Self::Mp4,
-            OutputStatsEvent::Rtmp(_) => Self::Rtmp,
-            OutputStatsEvent::Rtp(_) => Self::Rtp,
-            OutputStatsEvent::MoqClient(_) => Self::MoqClient,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub enum OutputStatsState {
     Whep(WhepOutputState),
@@ -78,8 +64,9 @@ pub enum OutputStatsState {
 }
 
 impl OutputStatsState {
-    pub fn new(kind: OutputProtocolKind) -> Self {
-        match kind {
+    /// `None` for outputs without stats.
+    pub fn new(kind: OutputProtocolKind) -> Option<Self> {
+        let state = match kind {
             OutputProtocolKind::Whep => OutputStatsState::Whep(WhepOutputState::new()),
             OutputProtocolKind::Whip => OutputStatsState::Whip(WhipOutputState::new()),
             OutputProtocolKind::Hls => OutputStatsState::Hls(HlsOutputState::new()),
@@ -89,9 +76,11 @@ impl OutputStatsState {
             OutputProtocolKind::MoqClient => {
                 OutputStatsState::MoqClient(MoqClientOutputState::new())
             }
-            OutputProtocolKind::RawDataChannel => unimplemented!(),
-            OutputProtocolKind::EncodedDataChannel => unimplemented!(),
-        }
+            OutputProtocolKind::RawDataChannel | OutputProtocolKind::EncodedDataChannel => {
+                return None;
+            }
+        };
+        Some(state)
     }
 
     pub fn report(&mut self) -> OutputStatsReport {

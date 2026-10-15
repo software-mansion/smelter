@@ -1640,46 +1640,46 @@ export type InputStatsReport =
   | {
       type: "rtp";
       /**
-       * Stats for the video track.
+       * Stats for the video track. `None` before any video arrives.
        */
-      video_rtp: RtpJitterBufferStatsReport;
+      video?: RtpInputVideoTrackStatsReport | null;
       /**
-       * Stats for the audio track.
+       * Stats for the audio track. `None` before any audio arrives.
        */
-      audio_rtp: RtpJitterBufferStatsReport;
+      audio?: RtpInputAudioTrackStatsReport | null;
     }
   | {
       type: "whip";
       /**
-       * Stats for the video track.
+       * Stats for the video track. `None` before any video arrives.
        */
-      video_rtp: RtpJitterBufferStatsReport;
+      video?: WhipInputVideoTrackStatsReport | null;
       /**
-       * Stats for the audio track.
+       * Stats for the audio track. `None` before any audio arrives.
        */
-      audio_rtp: RtpJitterBufferStatsReport;
+      audio?: WhipInputAudioTrackStatsReport | null;
     }
   | {
       type: "whep";
       /**
-       * Stats for the video track.
+       * Stats for the video track. `None` before any video arrives.
        */
-      video_rtp: RtpJitterBufferStatsReport;
+      video?: WhepInputVideoTrackStatsReport | null;
       /**
-       * Stats for the audio track.
+       * Stats for the audio track. `None` before any audio arrives.
        */
-      audio_rtp: RtpJitterBufferStatsReport;
+      audio?: WhepInputAudioTrackStatsReport | null;
     }
   | {
       type: "hls";
       /**
-       * Stats for the video track. `None` when the track is not active.
+       * Stats for the video track. `None` before any video arrives.
        */
-      video?: InputSyncTrackStatsReport | null;
+      video?: HlsInputVideoTrackStatsReport | null;
       /**
-       * Stats for the audio track. `None` when the track is not active.
+       * Stats for the audio track. `None` before any audio arrives.
        */
-      audio?: InputSyncTrackStatsReport | null;
+      audio?: HlsInputAudioTrackStatsReport | null;
     }
   | {
       type: "rtmp";
@@ -1688,47 +1688,64 @@ export type InputStatsReport =
        */
       is_connected: boolean;
       /**
-       * Stats for the video track. `None` when the track is not active.
+       * Stats for the video track. `None` before any video arrives.
        */
-      video?: InputSyncTrackStatsReport | null;
+      video?: RtmpInputVideoTrackStatsReport | null;
       /**
-       * Stats for the audio track. `None` when the track is not active.
+       * Stats for the audio track. `None` before any audio arrives.
        */
-      audio?: InputSyncTrackStatsReport | null;
+      audio?: RtmpInputAudioTrackStatsReport | null;
     }
   | {
       type: "moq_server";
       /**
-       * Stats for the video track. `None` when the track is not active.
+       * Stats for the video track. `None` before any video arrives.
        */
-      video?: InputSyncTrackStatsReport | null;
+      video?: MoqServerInputVideoTrackStatsReport | null;
       /**
-       * Stats for the audio track. `None` when the track is not active.
+       * Stats for the audio track. `None` before any audio arrives.
        */
-      audio?: InputSyncTrackStatsReport | null;
+      audio?: MoqServerInputAudioTrackStatsReport | null;
     }
   | {
       type: "moq_client";
       /**
-       * Stats for the video track. `None` when the track is not active.
+       * Stats for the video track. `None` before any video arrives.
        */
-      video?: InputSyncTrackStatsReport | null;
+      video?: MoqClientInputVideoTrackStatsReport | null;
       /**
-       * Stats for the audio track. `None` when the track is not active.
+       * Stats for the audio track. `None` before any audio arrives.
        */
-      audio?: InputSyncTrackStatsReport | null;
+      audio?: MoqClientInputAudioTrackStatsReport | null;
     }
   | {
       type: "mp4";
       /**
-       * Stats for the video track.
+       * Stats for the video track. `None` before any video arrives.
        */
-      video: Mp4InputTrackStatsReport;
+      video?: Mp4InputVideoTrackStatsReport | null;
       /**
-       * Stats for the audio track.
+       * Stats for the audio track. `None` before any audio arrives.
        */
-      audio: Mp4InputTrackStatsReport;
+      audio?: Mp4InputAudioTrackStatsReport | null;
+    }
+  | {
+      type: "v4l2";
+    }
+  | {
+      type: "decklink";
+    }
+  | {
+      type: "raw_data";
     };
+/**
+ * State of the input playback in the audio mixer.
+ */
+export type AudioMixerInputResamplerState = "playing" | "waiting_for_input";
+/**
+ * Channel layout of the input audio.
+ */
+export type AudioMixerInputChannels = "mono" | "stereo";
 /**
  * Stats report for a track synchronized by the input sync (`RTMP`, `HLS`, `MoQ`).
  */
@@ -1736,11 +1753,11 @@ export type InputSyncTrackStatsReport =
   | {
       mode: "simple";
       /**
-       * Bitrate in the 1-second window.
+       * Bitrate of the network traffic in the 1-second window, measured by arrival time. It is not the bitrate of the media.
        */
       bitrate_1_second: number;
       /**
-       * Bitrate in the 1-minute window.
+       * Bitrate of the network traffic in the 1-minute window, measured by arrival time. It is not the bitrate of the media.
        */
       bitrate_1_minute: number;
       /**
@@ -1751,11 +1768,11 @@ export type InputSyncTrackStatsReport =
   | {
       mode: "live";
       /**
-       * Bitrate in the 1-second window.
+       * Bitrate of the network traffic in the 1-second window, measured by arrival time. It is not the bitrate of the media.
        */
       bitrate_1_second: number;
       /**
-       * Bitrate in the 1-minute window.
+       * Bitrate of the network traffic in the 1-minute window, measured by arrival time. It is not the bitrate of the media.
        */
       bitrate_1_minute: number;
       /**
@@ -2347,6 +2364,23 @@ export interface StatsReport {
   };
 }
 /**
+ * Stats report for the video track in `RTP` input.
+ */
+export interface RtpInputVideoTrackStatsReport {
+  /**
+   * Bitrate of the media in the 1-second window, calculated from timestamps.
+   */
+  bitrate_1_second: number;
+  /**
+   * Bitrate of the media in the 1-minute window, calculated from timestamps.
+   */
+  bitrate_1_minute: number;
+  /**
+   * Stats for the jitter buffer.
+   */
+  jitter_buffer: RtpJitterBufferStatsReport;
+}
+/**
  * Stats report for `RTP` jitter buffer used in `RTP`, `WHIP` and `WHEP` inputs.
  */
 export interface RtpJitterBufferStatsReport {
@@ -2421,6 +2455,237 @@ export interface RtpJitterBufferSlidingWindowStatsReport {
   input_buffer_min_seconds: number;
 }
 /**
+ * Stats report for the audio track in `RTP` input.
+ */
+export interface RtpInputAudioTrackStatsReport {
+  /**
+   * Bitrate of the media in the 1-second window, calculated from timestamps.
+   */
+  bitrate_1_second: number;
+  /**
+   * Bitrate of the media in the 1-minute window, calculated from timestamps.
+   */
+  bitrate_1_minute: number;
+  /**
+   * Stats for the jitter buffer.
+   */
+  jitter_buffer: RtpJitterBufferStatsReport;
+  /**
+   * Stats for the audio mixer.
+   */
+  mixer: AudioMixerInputStatsReport;
+}
+/**
+ * Stats report for the audio mixer processing of an input.
+ *
+ * The mixer places input audio on the output timeline based on its timestamps, but plays it back sample by sample. When timestamps diverge from the amount of received audio, the mixer corrects the difference (drift): small drift by adjusting the playback speed, larger by inserting silence or dropping audio.
+ */
+export interface AudioMixerInputStatsReport {
+  /**
+   * State of the input playback.
+   */
+  state: AudioMixerInputResamplerState;
+  /**
+   * Format of the input audio. `None` before any audio reaches the mixer.
+   */
+  input_format?: AudioMixerInputFormat | null;
+  /**
+   * Total count of gaps or overlaps (10ms or longer) between timestamps of consecutive input chunks.
+   */
+  timestamp_discontinuities: number;
+  /**
+   * Total count of cases when the mixer ran out of input audio and had to interrupt the playback until more arrived.
+   */
+  underruns: number;
+  /**
+   * Total count of cases when silence was inserted because input timestamps got ahead of the received audio by more than 40ms.
+   */
+  gaps_inserted: number;
+  /**
+   * Total count of cases when audio was dropped because input timestamps fell behind the received audio by more than 500ms.
+   */
+  drops: number;
+  /**
+   * Total count of cases when the end of input audio was extended with generated audio to cover a gap.
+   */
+  concealments: number;
+  /**
+   * Total count of fade-ins applied when the playback resumed.
+   */
+  fade_ins: number;
+  /**
+   * Total count of fade-outs applied when the playback was interrupted.
+   */
+  fade_outs: number;
+  /**
+   * Audio mixer stats in the 10-second window.
+   */
+  last_10_seconds: AudioMixerInputSlidingWindowStatsReport;
+}
+/**
+ * Format of the input audio.
+ */
+export interface AudioMixerInputFormat {
+  /**
+   * Sample rate of the input audio.
+   */
+  sample_rate: number;
+  /**
+   * Channel layout of the input audio.
+   */
+  channels: AudioMixerInputChannels;
+}
+/**
+ * Stats report for the given time window in the audio mixer processing of an input.
+ */
+export interface AudioMixerInputSlidingWindowStatsReport {
+  /**
+   * Count of gaps or overlaps (10ms or longer) between timestamps of consecutive input chunks during the given time window.
+   */
+  timestamp_discontinuities: number;
+  /**
+   * Count of cases when the mixer ran out of input audio and had to interrupt the playback during the given time window.
+   */
+  underruns: number;
+  /**
+   * Count of cases when silence was inserted because input timestamps got ahead of the received audio by more than 40ms during the given time window.
+   */
+  gaps_inserted: number;
+  /**
+   * Count of cases when audio was dropped because input timestamps fell behind the received audio by more than 500ms during the given time window.
+   */
+  drops: number;
+  /**
+   * Count of cases when the end of input audio was extended with generated audio during the given time window.
+   */
+  concealments: number;
+  /**
+   * Count of fade-ins applied during the given time window.
+   */
+  fade_ins: number;
+  /**
+   * Count of fade-outs applied during the given time window.
+   */
+  fade_outs: number;
+  /**
+   * Difference between input timestamps and the position on the output timeline where the input audio is played. It is the audio/video desynchronization introduced by the input. Positive when audio is played ahead of its timestamps, negative when behind. Values within 2ms are not corrected.
+   */
+  drift_avg_seconds: number;
+  /**
+   * Difference between input timestamps and the position on the output timeline where the input audio is played. It is the audio/video desynchronization introduced by the input. Positive when audio is played ahead of its timestamps, negative when behind. Values within 2ms are not corrected.
+   */
+  drift_max_seconds: number;
+  /**
+   * Difference between input timestamps and the position on the output timeline where the input audio is played. It is the audio/video desynchronization introduced by the input. Positive when audio is played ahead of its timestamps, negative when behind. Values within 2ms are not corrected.
+   */
+  drift_min_seconds: number;
+  /**
+   * Duration of input audio buffered in the audio mixer, waiting to be played.
+   */
+  input_buffer_avg_seconds: number;
+  /**
+   * Duration of input audio buffered in the audio mixer, waiting to be played.
+   */
+  input_buffer_max_seconds: number;
+  /**
+   * Duration of input audio buffered in the audio mixer, waiting to be played.
+   */
+  input_buffer_min_seconds: number;
+}
+/**
+ * Stats report for the video track in `WHIP` input.
+ */
+export interface WhipInputVideoTrackStatsReport {
+  /**
+   * Bitrate of the media in the 1-second window, calculated from timestamps.
+   */
+  bitrate_1_second: number;
+  /**
+   * Bitrate of the media in the 1-minute window, calculated from timestamps.
+   */
+  bitrate_1_minute: number;
+  /**
+   * Stats for the jitter buffer.
+   */
+  jitter_buffer: RtpJitterBufferStatsReport;
+}
+/**
+ * Stats report for the audio track in `WHIP` input.
+ */
+export interface WhipInputAudioTrackStatsReport {
+  /**
+   * Bitrate of the media in the 1-second window, calculated from timestamps.
+   */
+  bitrate_1_second: number;
+  /**
+   * Bitrate of the media in the 1-minute window, calculated from timestamps.
+   */
+  bitrate_1_minute: number;
+  /**
+   * Stats for the jitter buffer.
+   */
+  jitter_buffer: RtpJitterBufferStatsReport;
+  /**
+   * Stats for the audio mixer.
+   */
+  mixer: AudioMixerInputStatsReport;
+}
+/**
+ * Stats report for the video track in `WHEP` input.
+ */
+export interface WhepInputVideoTrackStatsReport {
+  /**
+   * Bitrate of the media in the 1-second window, calculated from timestamps.
+   */
+  bitrate_1_second: number;
+  /**
+   * Bitrate of the media in the 1-minute window, calculated from timestamps.
+   */
+  bitrate_1_minute: number;
+  /**
+   * Stats for the jitter buffer.
+   */
+  jitter_buffer: RtpJitterBufferStatsReport;
+}
+/**
+ * Stats report for the audio track in `WHEP` input.
+ */
+export interface WhepInputAudioTrackStatsReport {
+  /**
+   * Bitrate of the media in the 1-second window, calculated from timestamps.
+   */
+  bitrate_1_second: number;
+  /**
+   * Bitrate of the media in the 1-minute window, calculated from timestamps.
+   */
+  bitrate_1_minute: number;
+  /**
+   * Stats for the jitter buffer.
+   */
+  jitter_buffer: RtpJitterBufferStatsReport;
+  /**
+   * Stats for the audio mixer.
+   */
+  mixer: AudioMixerInputStatsReport;
+}
+/**
+ * Stats report for the video track in `HLS` input.
+ */
+export interface HlsInputVideoTrackStatsReport {
+  /**
+   * Bitrate of the media in the 1-second window, calculated from timestamps.
+   */
+  bitrate_1_second: number;
+  /**
+   * Bitrate of the media in the 1-minute window, calculated from timestamps.
+   */
+  bitrate_1_minute: number;
+  /**
+   * Stats for the synchronization. `None` when the track is not active.
+   */
+  sync?: InputSyncTrackStatsReport | null;
+}
+/**
  * Stats report for the given time window in a live stream track.
  */
 export interface LiveSyncTrackSlidingWindowStatsReport {
@@ -2454,17 +2719,169 @@ export interface LiveSyncTrackSlidingWindowStatsReport {
   effective_buffer_on_output_min_seconds: number;
 }
 /**
- * Stats report for a track in `MP4` input.
+ * Stats report for the audio track in `HLS` input.
  */
-export interface Mp4InputTrackStatsReport {
+export interface HlsInputAudioTrackStatsReport {
   /**
-   * Bitrate in the 1-second window.
+   * Bitrate of the media in the 1-second window, calculated from timestamps.
    */
   bitrate_1_second: number;
   /**
-   * Bitrate in the 1-minute window.
+   * Bitrate of the media in the 1-minute window, calculated from timestamps.
    */
   bitrate_1_minute: number;
+  /**
+   * Stats for the synchronization. `None` when the track is not active.
+   */
+  sync?: InputSyncTrackStatsReport | null;
+  /**
+   * Stats for the audio mixer.
+   */
+  mixer: AudioMixerInputStatsReport;
+}
+/**
+ * Stats report for the video track in `RTMP` input.
+ */
+export interface RtmpInputVideoTrackStatsReport {
+  /**
+   * Bitrate of the media in the 1-second window, calculated from timestamps.
+   */
+  bitrate_1_second: number;
+  /**
+   * Bitrate of the media in the 1-minute window, calculated from timestamps.
+   */
+  bitrate_1_minute: number;
+  /**
+   * Stats for the synchronization. `None` when the track is not active.
+   */
+  sync?: InputSyncTrackStatsReport | null;
+}
+/**
+ * Stats report for the audio track in `RTMP` input.
+ */
+export interface RtmpInputAudioTrackStatsReport {
+  /**
+   * Bitrate of the media in the 1-second window, calculated from timestamps.
+   */
+  bitrate_1_second: number;
+  /**
+   * Bitrate of the media in the 1-minute window, calculated from timestamps.
+   */
+  bitrate_1_minute: number;
+  /**
+   * Stats for the synchronization. `None` when the track is not active.
+   */
+  sync?: InputSyncTrackStatsReport | null;
+  /**
+   * Stats for the audio mixer.
+   */
+  mixer: AudioMixerInputStatsReport;
+}
+/**
+ * Stats report for the video track in `MoQ` server input.
+ */
+export interface MoqServerInputVideoTrackStatsReport {
+  /**
+   * Bitrate of the media in the 1-second window, calculated from timestamps.
+   */
+  bitrate_1_second: number;
+  /**
+   * Bitrate of the media in the 1-minute window, calculated from timestamps.
+   */
+  bitrate_1_minute: number;
+  /**
+   * Stats for the synchronization. `None` when the track is not active.
+   */
+  sync?: InputSyncTrackStatsReport | null;
+}
+/**
+ * Stats report for the audio track in `MoQ` server input.
+ */
+export interface MoqServerInputAudioTrackStatsReport {
+  /**
+   * Bitrate of the media in the 1-second window, calculated from timestamps.
+   */
+  bitrate_1_second: number;
+  /**
+   * Bitrate of the media in the 1-minute window, calculated from timestamps.
+   */
+  bitrate_1_minute: number;
+  /**
+   * Stats for the synchronization. `None` when the track is not active.
+   */
+  sync?: InputSyncTrackStatsReport | null;
+  /**
+   * Stats for the audio mixer.
+   */
+  mixer: AudioMixerInputStatsReport;
+}
+/**
+ * Stats report for the video track in `MoQ` client input.
+ */
+export interface MoqClientInputVideoTrackStatsReport {
+  /**
+   * Bitrate of the media in the 1-second window, calculated from timestamps.
+   */
+  bitrate_1_second: number;
+  /**
+   * Bitrate of the media in the 1-minute window, calculated from timestamps.
+   */
+  bitrate_1_minute: number;
+  /**
+   * Stats for the synchronization. `None` when the track is not active.
+   */
+  sync?: InputSyncTrackStatsReport | null;
+}
+/**
+ * Stats report for the audio track in `MoQ` client input.
+ */
+export interface MoqClientInputAudioTrackStatsReport {
+  /**
+   * Bitrate of the media in the 1-second window, calculated from timestamps.
+   */
+  bitrate_1_second: number;
+  /**
+   * Bitrate of the media in the 1-minute window, calculated from timestamps.
+   */
+  bitrate_1_minute: number;
+  /**
+   * Stats for the synchronization. `None` when the track is not active.
+   */
+  sync?: InputSyncTrackStatsReport | null;
+  /**
+   * Stats for the audio mixer.
+   */
+  mixer: AudioMixerInputStatsReport;
+}
+/**
+ * Stats report for the video track in `MP4` input.
+ */
+export interface Mp4InputVideoTrackStatsReport {
+  /**
+   * Bitrate of the media in the 1-second window, calculated from timestamps.
+   */
+  bitrate_1_second: number;
+  /**
+   * Bitrate of the media in the 1-minute window, calculated from timestamps.
+   */
+  bitrate_1_minute: number;
+}
+/**
+ * Stats report for the audio track in `MP4` input.
+ */
+export interface Mp4InputAudioTrackStatsReport {
+  /**
+   * Bitrate of the media in the 1-second window, calculated from timestamps.
+   */
+  bitrate_1_second: number;
+  /**
+   * Bitrate of the media in the 1-minute window, calculated from timestamps.
+   */
+  bitrate_1_minute: number;
+  /**
+   * Stats for the audio mixer.
+   */
+  mixer: AudioMixerInputStatsReport;
 }
 /**
  * Stats report for a track in the `WHEP` output.

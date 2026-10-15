@@ -101,7 +101,7 @@ impl Pipeline {
         input_id: InputId,
         options: RegisterInputOptions,
     ) -> Result<InputInitInfo, RegisterInputError> {
-        register_pipeline_input(pipeline, input_id, |ctx, input_id| {
+        register_pipeline_input(pipeline, input_id, options.kind(), |ctx, input_id| {
             new_external_input(ctx, input_id, options)
         })
     }
@@ -111,9 +111,12 @@ impl Pipeline {
         input_id: InputId,
         raw_input_options: RawDataInputOptions,
     ) -> Result<RawDataInputSender, RegisterInputError> {
-        register_pipeline_input(pipeline, input_id, |ctx, input_id| {
-            RawDataInput::new_input(ctx, input_id, raw_input_options)
-        })
+        register_pipeline_input(
+            pipeline,
+            input_id,
+            InputProtocolKind::RawDataChannel,
+            |ctx, input_id| RawDataInput::new_input(ctx, input_id, raw_input_options),
+        )
     }
 
     pub fn update_input(
@@ -175,6 +178,7 @@ impl Pipeline {
         register_pipeline_output(
             pipeline,
             output_id,
+            output_options.kind(),
             video,
             audio,
             start_at,
@@ -190,6 +194,7 @@ impl Pipeline {
         register_pipeline_output(
             pipeline,
             output_id,
+            OutputProtocolKind::EncodedDataChannel,
             register_options.video,
             register_options.audio,
             None,
@@ -209,6 +214,7 @@ impl Pipeline {
         register_pipeline_output(
             pipeline,
             output_id,
+            OutputProtocolKind::RawDataChannel,
             register_options.video,
             register_options.audio,
             None,

@@ -3,7 +3,12 @@ use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender, bounded};
 use tracing::{error, trace};
 
-use crate::{audio_mixer::input::input_thread::start_input_thread, prelude::*};
+use crate::{
+    audio_mixer::input::input_thread::start_input_thread,
+    stats::{AudioMixerInputStatsEvent, InputStatsEvent, StatsEvent, StatsSender},
+};
+
+use crate::prelude::*;
 
 mod input_thread;
 mod resampler;
@@ -27,11 +32,40 @@ struct AudioMixerInputResult {
     pts_range: (Timestamp, Timestamp),
 }
 
+/// Reports the audio mixer processing of an input to the stats module.
+#[derive(Debug, Clone)]
+struct AudioMixerInputStatsSender {
+    input_ref: Ref<InputId>,
+    stats_sender: StatsSender,
+}
+
+impl AudioMixerInputStatsSender {
+    fn send(&self, event: AudioMixerInputStatsEvent) {
+        self.stats_sender.send(StatsEvent::Input {
+            input_ref: self.input_ref.clone(),
+            event: InputStatsEvent::AudioMixer(event),
+        });
+    }
+}
+
 impl AudioMixerInput {
-    pub fn new(mixing_sample_rate: u32) -> Self {
+    pub fn new(
+        mixing_sample_rate: u32,
+        input_ref: Ref<InputId>,
+        stats_sender: StatsSender,
+    ) -> Self {
         let (input_sender, input_receiver) = bounded(100);
         let (result_sender, result_receiver) = bounded(100);
-        start_input_thread(mixing_sample_rate, input_receiver, result_sender);
+        let stats_sender = AudioMixerInputStatsSender {
+            input_ref,
+            stats_sender,
+        };
+        start_input_thread(
+            mixing_sample_rate,
+            stats_sender,
+            input_receiver,
+            result_sender,
+        );
         Self {
             input_sender,
             result_receiver,

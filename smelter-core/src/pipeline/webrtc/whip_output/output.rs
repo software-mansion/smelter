@@ -40,11 +40,6 @@ impl WhipOutput {
         output_ref: Ref<OutputId>,
         options: WhipOutputOptions,
     ) -> Result<Self, OutputInitError> {
-        ctx.stats_sender.send(StatsEvent::NewOutput {
-            output_ref: output_ref.clone(),
-            kind: OutputProtocolKind::Whip,
-        });
-
         let span = span!(
             Level::INFO,
             "WHIP client task",

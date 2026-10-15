@@ -3,10 +3,13 @@ use std::sync::Arc;
 use smelter_render::error::ErrorStack;
 use tracing::error;
 
-use crate::pipeline::decoder::{
-    DecodeOnlyFilter, EncodedInputEvent, VideoDecoder, VideoDecoderInstance,
-    ffmpeg_h264::FfmpegH264Decoder, ffmpeg_vp8::FfmpegVp8Decoder, ffmpeg_vp9::FfmpegVp9Decoder,
-    vulkan_h264::VulkanH264Decoder,
+use crate::pipeline::{
+    decoder::{
+        DecodeOnlyFilter, DecoderStatsSender, EncodedInputEvent, VideoDecoder,
+        VideoDecoderInstance, ffmpeg_h264::FfmpegH264Decoder, ffmpeg_vp8::FfmpegVp8Decoder,
+        ffmpeg_vp9::FfmpegVp9Decoder, vulkan_h264::VulkanH264Decoder,
+    },
+    utils::input_sync::TrackKind,
 };
 
 use crate::prelude::*;
@@ -49,6 +52,7 @@ where
     ctx: Arc<PipelineCtx>,
     decoder: Option<Box<dyn VideoDecoderInstance>>,
     decode_only_filter: DecodeOnlyFilter,
+    stats: DecoderStatsSender,
     last_chunk_kind: Option<MediaKind>,
     source: Source,
     decoders_info: VideoDecoderMapping,
@@ -61,11 +65,13 @@ where
 {
     pub(crate) fn new(
         ctx: Arc<PipelineCtx>,
+        input_ref: Ref<InputId>,
         decoders_info: VideoDecoderMapping,
         source: Source,
         keyframe_request_sender: KeyframeRequestSender,
     ) -> Self {
         Self {
+            stats: DecoderStatsSender::new(&ctx, input_ref, TrackKind::Video),
             ctx,
             decoder: None,
             decode_only_filter: DecodeOnlyFilter::default(),
@@ -142,6 +148,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
             Some(PipelineEvent::Data(event)) => {
+                self.stats.on_event(&event);
                 // TODO: flush on decoder change
                 if let EncodedInputEvent::Chunk(chunk) = &event {
                     self.ensure_decoder(chunk.kind);

@@ -1243,6 +1243,213 @@
           "stereo"
         ]
       },
+      "AudioMixerInputChannels": {
+        "type": "string",
+        "description": "Channel layout of the input audio.",
+        "enum": [
+          "mono",
+          "stereo"
+        ]
+      },
+      "AudioMixerInputFormat": {
+        "type": "object",
+        "description": "Format of the input audio.",
+        "required": [
+          "sample_rate",
+          "channels"
+        ],
+        "properties": {
+          "sample_rate": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Sample rate of the input audio.",
+            "minimum": 0
+          },
+          "channels": {
+            "$ref": "#/components/schemas/AudioMixerInputChannels",
+            "description": "Channel layout of the input audio."
+          }
+        }
+      },
+      "AudioMixerInputResamplerState": {
+        "type": "string",
+        "description": "State of the input playback in the audio mixer.",
+        "enum": [
+          "playing",
+          "waiting_for_input"
+        ]
+      },
+      "AudioMixerInputSlidingWindowStatsReport": {
+        "type": "object",
+        "description": "Stats report for the given time window in the audio mixer processing of an input.",
+        "required": [
+          "timestamp_discontinuities",
+          "underruns",
+          "gaps_inserted",
+          "drops",
+          "concealments",
+          "fade_ins",
+          "fade_outs",
+          "drift_avg_seconds",
+          "drift_max_seconds",
+          "drift_min_seconds",
+          "input_buffer_avg_seconds",
+          "input_buffer_max_seconds",
+          "input_buffer_min_seconds"
+        ],
+        "properties": {
+          "timestamp_discontinuities": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Count of gaps or overlaps (10ms or longer) between timestamps of consecutive input chunks\nduring the given time window.",
+            "minimum": 0
+          },
+          "underruns": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Count of cases when the mixer ran out of input audio and had to interrupt the playback\nduring the given time window.",
+            "minimum": 0
+          },
+          "gaps_inserted": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Count of cases when silence was inserted because input timestamps got ahead of the\nreceived audio by more than 40ms during the given time window.",
+            "minimum": 0
+          },
+          "drops": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Count of cases when audio was dropped because input timestamps fell behind the received\naudio by more than 500ms during the given time window.",
+            "minimum": 0
+          },
+          "concealments": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Count of cases when the end of input audio was extended with generated audio during the\ngiven time window.",
+            "minimum": 0
+          },
+          "fade_ins": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Count of fade-ins applied during the given time window.",
+            "minimum": 0
+          },
+          "fade_outs": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Count of fade-outs applied during the given time window.",
+            "minimum": 0
+          },
+          "drift_avg_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Difference between input timestamps and the position on the output timeline where the\ninput audio is played. It is the audio/video desynchronization introduced by the input.\nPositive when audio is played ahead of its timestamps, negative when behind. Values within\n2ms are not corrected."
+          },
+          "drift_max_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Difference between input timestamps and the position on the output timeline where the\ninput audio is played. It is the audio/video desynchronization introduced by the input.\nPositive when audio is played ahead of its timestamps, negative when behind. Values within\n2ms are not corrected."
+          },
+          "drift_min_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Difference between input timestamps and the position on the output timeline where the\ninput audio is played. It is the audio/video desynchronization introduced by the input.\nPositive when audio is played ahead of its timestamps, negative when behind. Values within\n2ms are not corrected."
+          },
+          "input_buffer_avg_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Duration of input audio buffered in the audio mixer, waiting to be played."
+          },
+          "input_buffer_max_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Duration of input audio buffered in the audio mixer, waiting to be played."
+          },
+          "input_buffer_min_seconds": {
+            "type": "number",
+            "format": "double",
+            "description": "Duration of input audio buffered in the audio mixer, waiting to be played."
+          }
+        }
+      },
+      "AudioMixerInputStatsReport": {
+        "type": "object",
+        "description": "Stats report for the audio mixer processing of an input.\n\nThe mixer places input audio on the output timeline based on its timestamps, but plays it\nback sample by sample. When timestamps diverge from the amount of received audio, the mixer\ncorrects the difference (drift): small drift by adjusting the playback speed, larger by\ninserting silence or dropping audio.",
+        "required": [
+          "state",
+          "timestamp_discontinuities",
+          "underruns",
+          "gaps_inserted",
+          "drops",
+          "concealments",
+          "fade_ins",
+          "fade_outs",
+          "last_10_seconds"
+        ],
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/AudioMixerInputResamplerState",
+            "description": "State of the input playback."
+          },
+          "input_format": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AudioMixerInputFormat",
+                "description": "Format of the input audio. `None` before any audio reaches the mixer."
+              }
+            ]
+          },
+          "timestamp_discontinuities": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total count of gaps or overlaps (10ms or longer) between timestamps of consecutive input\nchunks.",
+            "minimum": 0
+          },
+          "underruns": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total count of cases when the mixer ran out of input audio and had to interrupt the\nplayback until more arrived.",
+            "minimum": 0
+          },
+          "gaps_inserted": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total count of cases when silence was inserted because input timestamps got ahead of the\nreceived audio by more than 40ms.",
+            "minimum": 0
+          },
+          "drops": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total count of cases when audio was dropped because input timestamps fell behind the\nreceived audio by more than 500ms.",
+            "minimum": 0
+          },
+          "concealments": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total count of cases when the end of input audio was extended with generated audio to\ncover a gap.",
+            "minimum": 0
+          },
+          "fade_ins": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total count of fade-ins applied when the playback resumed.",
+            "minimum": 0
+          },
+          "fade_outs": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total count of fade-outs applied when the playback was interrupted.",
+            "minimum": 0
+          },
+          "last_10_seconds": {
+            "$ref": "#/components/schemas/AudioMixerInputSlidingWindowStatsReport",
+            "description": "Audio mixer stats in the 10-second window."
+          }
+        }
+      },
       "AudioMixingStrategy": {
         "type": "string",
         "enum": [
@@ -1552,6 +1759,10 @@
         },
         "additionalProperties": false
       },
+      "DeckLinkInputStatsReport": {
+        "type": "object",
+        "description": "Stats report for `DeckLink` input. No stats are collected yet."
+      },
       "EasingFunction": {
         "oneOf": [
           {
@@ -1727,6 +1938,44 @@
         },
         "additionalProperties": false
       },
+      "HlsInputAudioTrackStatsReport": {
+        "type": "object",
+        "description": "Stats report for the audio track in `HLS` input.",
+        "required": [
+          "bitrate_1_second",
+          "bitrate_1_minute",
+          "mixer"
+        ],
+        "properties": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-second window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-minute window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "sync": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InputSyncTrackStatsReport",
+                "description": "Stats for the synchronization. `None` when the track is not active."
+              }
+            ]
+          },
+          "mixer": {
+            "$ref": "#/components/schemas/AudioMixerInputStatsReport",
+            "description": "Stats for the audio mixer."
+          }
+        }
+      },
       "HlsInputStatsReport": {
         "type": "object",
         "description": "Stats report for `HLS` input.",
@@ -1737,8 +1986,8 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/InputSyncTrackStatsReport",
-                "description": "Stats for the video track. `None` when the track is not active."
+                "$ref": "#/components/schemas/HlsInputVideoTrackStatsReport",
+                "description": "Stats for the video track. `None` before any video arrives."
               }
             ]
           },
@@ -1748,8 +1997,41 @@
                 "type": "null"
               },
               {
+                "$ref": "#/components/schemas/HlsInputAudioTrackStatsReport",
+                "description": "Stats for the audio track. `None` before any audio arrives."
+              }
+            ]
+          }
+        }
+      },
+      "HlsInputVideoTrackStatsReport": {
+        "type": "object",
+        "description": "Stats report for the video track in `HLS` input.",
+        "required": [
+          "bitrate_1_second",
+          "bitrate_1_minute"
+        ],
+        "properties": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-second window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-minute window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "sync": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
                 "$ref": "#/components/schemas/InputSyncTrackStatsReport",
-                "description": "Stats for the audio track. `None` when the track is not active."
+                "description": "Stats for the synchronization. `None` when the track is not active."
               }
             ]
           }
@@ -2436,6 +2718,69 @@
                 }
               }
             ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/V4l2InputStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "v4l2"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DeckLinkInputStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "decklink"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RawDataInputStatsReport"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "raw_data"
+                    ]
+                  }
+                }
+              }
+            ]
           }
         ],
         "description": "Stats report for inputs."
@@ -2817,13 +3162,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the 1-second window.",
+            "description": "Bitrate of the network traffic in the 1-second window, measured by arrival time. It is\nnot the bitrate of the media.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the 1-minute window.",
+            "description": "Bitrate of the network traffic in the 1-minute window, measured by arrival time. It is\nnot the bitrate of the media.",
             "minimum": 0
           },
           "state": {
@@ -3015,6 +3360,44 @@
         },
         "additionalProperties": false
       },
+      "MoqClientInputAudioTrackStatsReport": {
+        "type": "object",
+        "description": "Stats report for the audio track in `MoQ` client input.",
+        "required": [
+          "bitrate_1_second",
+          "bitrate_1_minute",
+          "mixer"
+        ],
+        "properties": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-second window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-minute window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "sync": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InputSyncTrackStatsReport",
+                "description": "Stats for the synchronization. `None` when the track is not active."
+              }
+            ]
+          },
+          "mixer": {
+            "$ref": "#/components/schemas/AudioMixerInputStatsReport",
+            "description": "Stats for the audio mixer."
+          }
+        }
+      },
       "MoqClientInputStatsReport": {
         "type": "object",
         "description": "Stats report for `MoQ` client input.",
@@ -3025,8 +3408,8 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/InputSyncTrackStatsReport",
-                "description": "Stats for the video track. `None` when the track is not active."
+                "$ref": "#/components/schemas/MoqClientInputVideoTrackStatsReport",
+                "description": "Stats for the video track. `None` before any video arrives."
               }
             ]
           },
@@ -3036,8 +3419,41 @@
                 "type": "null"
               },
               {
+                "$ref": "#/components/schemas/MoqClientInputAudioTrackStatsReport",
+                "description": "Stats for the audio track. `None` before any audio arrives."
+              }
+            ]
+          }
+        }
+      },
+      "MoqClientInputVideoTrackStatsReport": {
+        "type": "object",
+        "description": "Stats report for the video track in `MoQ` client input.",
+        "required": [
+          "bitrate_1_second",
+          "bitrate_1_minute"
+        ],
+        "properties": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-second window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-minute window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "sync": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
                 "$ref": "#/components/schemas/InputSyncTrackStatsReport",
-                "description": "Stats for the audio track. `None` when the track is not active."
+                "description": "Stats for the synchronization. `None` when the track is not active."
               }
             ]
           }
@@ -3411,6 +3827,44 @@
         },
         "additionalProperties": false
       },
+      "MoqServerInputAudioTrackStatsReport": {
+        "type": "object",
+        "description": "Stats report for the audio track in `MoQ` server input.",
+        "required": [
+          "bitrate_1_second",
+          "bitrate_1_minute",
+          "mixer"
+        ],
+        "properties": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-second window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-minute window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "sync": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InputSyncTrackStatsReport",
+                "description": "Stats for the synchronization. `None` when the track is not active."
+              }
+            ]
+          },
+          "mixer": {
+            "$ref": "#/components/schemas/AudioMixerInputStatsReport",
+            "description": "Stats for the audio mixer."
+          }
+        }
+      },
       "MoqServerInputStatsReport": {
         "type": "object",
         "description": "Stats report for `MoQ` server input.",
@@ -3421,8 +3875,8 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/InputSyncTrackStatsReport",
-                "description": "Stats for the video track. `None` when the track is not active."
+                "$ref": "#/components/schemas/MoqServerInputVideoTrackStatsReport",
+                "description": "Stats for the video track. `None` before any video arrives."
               }
             ]
           },
@@ -3432,8 +3886,41 @@
                 "type": "null"
               },
               {
+                "$ref": "#/components/schemas/MoqServerInputAudioTrackStatsReport",
+                "description": "Stats for the audio track. `None` before any audio arrives."
+              }
+            ]
+          }
+        }
+      },
+      "MoqServerInputVideoTrackStatsReport": {
+        "type": "object",
+        "description": "Stats report for the video track in `MoQ` server input.",
+        "required": [
+          "bitrate_1_second",
+          "bitrate_1_minute"
+        ],
+        "properties": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-second window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-minute window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "sync": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
                 "$ref": "#/components/schemas/InputSyncTrackStatsReport",
-                "description": "Stats for the audio track. `None` when the track is not active."
+                "description": "Stats for the synchronization. `None` when the track is not active."
               }
             ]
           }
@@ -3551,27 +4038,64 @@
         },
         "additionalProperties": false
       },
-      "Mp4InputStatsReport": {
+      "Mp4InputAudioTrackStatsReport": {
         "type": "object",
-        "description": "Stats report for `MP4` input.",
+        "description": "Stats report for the audio track in `MP4` input.",
         "required": [
-          "video",
-          "audio"
+          "bitrate_1_second",
+          "bitrate_1_minute",
+          "mixer"
         ],
         "properties": {
-          "video": {
-            "$ref": "#/components/schemas/Mp4InputTrackStatsReport",
-            "description": "Stats for the video track."
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-second window, calculated from timestamps.",
+            "minimum": 0
           },
-          "audio": {
-            "$ref": "#/components/schemas/Mp4InputTrackStatsReport",
-            "description": "Stats for the audio track."
+          "bitrate_1_minute": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-minute window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "mixer": {
+            "$ref": "#/components/schemas/AudioMixerInputStatsReport",
+            "description": "Stats for the audio mixer."
           }
         }
       },
-      "Mp4InputTrackStatsReport": {
+      "Mp4InputStatsReport": {
         "type": "object",
-        "description": "Stats report for a track in `MP4` input.",
+        "description": "Stats report for `MP4` input.",
+        "properties": {
+          "video": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Mp4InputVideoTrackStatsReport",
+                "description": "Stats for the video track. `None` before any video arrives."
+              }
+            ]
+          },
+          "audio": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Mp4InputAudioTrackStatsReport",
+                "description": "Stats for the audio track. `None` before any audio arrives."
+              }
+            ]
+          }
+        }
+      },
+      "Mp4InputVideoTrackStatsReport": {
+        "type": "object",
+        "description": "Stats report for the video track in `MP4` input.",
         "required": [
           "bitrate_1_second",
           "bitrate_1_minute"
@@ -3580,13 +4104,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the 1-second window.",
+            "description": "Bitrate of the media in the 1-second window, calculated from timestamps.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the 1-minute window.",
+            "description": "Bitrate of the media in the 1-minute window, calculated from timestamps.",
             "minimum": 0
           }
         }
@@ -4666,6 +5190,10 @@
       "RGBAColor": {
         "type": "string"
       },
+      "RawDataInputStatsReport": {
+        "type": "object",
+        "description": "Stats report for raw data input. No stats are collected yet."
+      },
       "RegisterFontRequest": {
         "type": "object",
         "required": [
@@ -5667,6 +6195,44 @@
         },
         "additionalProperties": false
       },
+      "RtmpInputAudioTrackStatsReport": {
+        "type": "object",
+        "description": "Stats report for the audio track in `RTMP` input.",
+        "required": [
+          "bitrate_1_second",
+          "bitrate_1_minute",
+          "mixer"
+        ],
+        "properties": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-second window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-minute window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "sync": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InputSyncTrackStatsReport",
+                "description": "Stats for the synchronization. `None` when the track is not active."
+              }
+            ]
+          },
+          "mixer": {
+            "$ref": "#/components/schemas/AudioMixerInputStatsReport",
+            "description": "Stats for the audio mixer."
+          }
+        }
+      },
       "RtmpInputStatsReport": {
         "type": "object",
         "description": "Stats report for `RTMP` input.",
@@ -5684,8 +6250,8 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/InputSyncTrackStatsReport",
-                "description": "Stats for the video track. `None` when the track is not active."
+                "$ref": "#/components/schemas/RtmpInputVideoTrackStatsReport",
+                "description": "Stats for the video track. `None` before any video arrives."
               }
             ]
           },
@@ -5695,8 +6261,41 @@
                 "type": "null"
               },
               {
+                "$ref": "#/components/schemas/RtmpInputAudioTrackStatsReport",
+                "description": "Stats for the audio track. `None` before any audio arrives."
+              }
+            ]
+          }
+        }
+      },
+      "RtmpInputVideoTrackStatsReport": {
+        "type": "object",
+        "description": "Stats report for the video track in `RTMP` input.",
+        "required": [
+          "bitrate_1_second",
+          "bitrate_1_minute"
+        ],
+        "properties": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-second window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-minute window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "sync": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
                 "$ref": "#/components/schemas/InputSyncTrackStatsReport",
-                "description": "Stats for the audio track. `None` when the track is not active."
+                "description": "Stats for the synchronization. `None` when the track is not active."
               }
             ]
           }
@@ -5919,21 +6518,90 @@
         },
         "additionalProperties": false
       },
+      "RtpInputAudioTrackStatsReport": {
+        "type": "object",
+        "description": "Stats report for the audio track in `RTP` input.",
+        "required": [
+          "bitrate_1_second",
+          "bitrate_1_minute",
+          "jitter_buffer",
+          "mixer"
+        ],
+        "properties": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-second window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-minute window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "jitter_buffer": {
+            "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
+            "description": "Stats for the jitter buffer."
+          },
+          "mixer": {
+            "$ref": "#/components/schemas/AudioMixerInputStatsReport",
+            "description": "Stats for the audio mixer."
+          }
+        }
+      },
       "RtpInputStatsReport": {
         "type": "object",
         "description": "Stats report for `RTP` input.",
+        "properties": {
+          "video": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RtpInputVideoTrackStatsReport",
+                "description": "Stats for the video track. `None` before any video arrives."
+              }
+            ]
+          },
+          "audio": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RtpInputAudioTrackStatsReport",
+                "description": "Stats for the audio track. `None` before any audio arrives."
+              }
+            ]
+          }
+        }
+      },
+      "RtpInputVideoTrackStatsReport": {
+        "type": "object",
+        "description": "Stats report for the video track in `RTP` input.",
         "required": [
-          "video_rtp",
-          "audio_rtp"
+          "bitrate_1_second",
+          "bitrate_1_minute",
+          "jitter_buffer"
         ],
         "properties": {
-          "video_rtp": {
-            "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
-            "description": "Stats for the video track."
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-second window, calculated from timestamps.",
+            "minimum": 0
           },
-          "audio_rtp": {
+          "bitrate_1_minute": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-minute window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "jitter_buffer": {
             "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
-            "description": "Stats for the audio track."
+            "description": "Stats for the jitter buffer."
           }
         }
       },
@@ -6593,13 +7261,13 @@
           "bitrate_1_second": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the 1-second window.",
+            "description": "Bitrate of the network traffic in the 1-second window, measured by arrival time. It is\nnot the bitrate of the media.",
             "minimum": 0
           },
           "bitrate_1_minute": {
             "type": "integer",
             "format": "int64",
-            "description": "Bitrate in the 1-minute window.",
+            "description": "Bitrate of the network traffic in the 1-minute window, measured by arrival time. It is\nnot the bitrate of the media.",
             "minimum": 0
           },
           "state": {
@@ -7096,6 +7764,10 @@
           "nv12"
         ]
       },
+      "V4l2InputStatsReport": {
+        "type": "object",
+        "description": "Stats report for `V4L2` input. No stats are collected yet."
+      },
       "VerticalAlign": {
         "type": "string",
         "enum": [
@@ -7558,21 +8230,90 @@
         },
         "additionalProperties": false
       },
+      "WhepInputAudioTrackStatsReport": {
+        "type": "object",
+        "description": "Stats report for the audio track in `WHEP` input.",
+        "required": [
+          "bitrate_1_second",
+          "bitrate_1_minute",
+          "jitter_buffer",
+          "mixer"
+        ],
+        "properties": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-second window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-minute window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "jitter_buffer": {
+            "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
+            "description": "Stats for the jitter buffer."
+          },
+          "mixer": {
+            "$ref": "#/components/schemas/AudioMixerInputStatsReport",
+            "description": "Stats for the audio mixer."
+          }
+        }
+      },
       "WhepInputStatsReport": {
         "type": "object",
         "description": "Stats report for `WHEP` input.",
+        "properties": {
+          "video": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WhepInputVideoTrackStatsReport",
+                "description": "Stats for the video track. `None` before any video arrives."
+              }
+            ]
+          },
+          "audio": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WhepInputAudioTrackStatsReport",
+                "description": "Stats for the audio track. `None` before any audio arrives."
+              }
+            ]
+          }
+        }
+      },
+      "WhepInputVideoTrackStatsReport": {
+        "type": "object",
+        "description": "Stats report for the video track in `WHEP` input.",
         "required": [
-          "video_rtp",
-          "audio_rtp"
+          "bitrate_1_second",
+          "bitrate_1_minute",
+          "jitter_buffer"
         ],
         "properties": {
-          "video_rtp": {
-            "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
-            "description": "Stats for the video track."
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-second window, calculated from timestamps.",
+            "minimum": 0
           },
-          "audio_rtp": {
+          "bitrate_1_minute": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-minute window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "jitter_buffer": {
             "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
-            "description": "Stats for the audio track."
+            "description": "Stats for the jitter buffer."
           }
         }
       },
@@ -7982,21 +8723,90 @@
         },
         "additionalProperties": false
       },
+      "WhipInputAudioTrackStatsReport": {
+        "type": "object",
+        "description": "Stats report for the audio track in `WHIP` input.",
+        "required": [
+          "bitrate_1_second",
+          "bitrate_1_minute",
+          "jitter_buffer",
+          "mixer"
+        ],
+        "properties": {
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-second window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "bitrate_1_minute": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-minute window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "jitter_buffer": {
+            "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
+            "description": "Stats for the jitter buffer."
+          },
+          "mixer": {
+            "$ref": "#/components/schemas/AudioMixerInputStatsReport",
+            "description": "Stats for the audio mixer."
+          }
+        }
+      },
       "WhipInputStatsReport": {
         "type": "object",
         "description": "Stats report for `WHIP` input.",
+        "properties": {
+          "video": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WhipInputVideoTrackStatsReport",
+                "description": "Stats for the video track. `None` before any video arrives."
+              }
+            ]
+          },
+          "audio": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WhipInputAudioTrackStatsReport",
+                "description": "Stats for the audio track. `None` before any audio arrives."
+              }
+            ]
+          }
+        }
+      },
+      "WhipInputVideoTrackStatsReport": {
+        "type": "object",
+        "description": "Stats report for the video track in `WHIP` input.",
         "required": [
-          "video_rtp",
-          "audio_rtp"
+          "bitrate_1_second",
+          "bitrate_1_minute",
+          "jitter_buffer"
         ],
         "properties": {
-          "video_rtp": {
-            "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
-            "description": "Stats for the video track."
+          "bitrate_1_second": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-second window, calculated from timestamps.",
+            "minimum": 0
           },
-          "audio_rtp": {
+          "bitrate_1_minute": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bitrate of the media in the 1-minute window, calculated from timestamps.",
+            "minimum": 0
+          },
+          "jitter_buffer": {
             "$ref": "#/components/schemas/RtpJitterBufferStatsReport",
-            "description": "Stats for the audio track."
+            "description": "Stats for the jitter buffer."
           }
         }
       },

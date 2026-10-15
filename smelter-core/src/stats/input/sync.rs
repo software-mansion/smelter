@@ -93,9 +93,14 @@ pub struct InputSyncState {
     pub audio: InputSyncTrackState,
 }
 
-/// Stats of a single synchronized track; `None` until the track is added.
+/// Stats of a single synchronized track.
 #[derive(Debug)]
-pub struct InputSyncTrackState(Option<InnerInputSyncTrackState>);
+pub struct InputSyncTrackState {
+    /// Stays set after the track is removed.
+    was_added: bool,
+    /// `None` while the track is not active.
+    state: Option<InnerInputSyncTrackState>,
+}
 
 #[derive(Debug)]
 struct InnerInputSyncTrackState {
@@ -123,8 +128,8 @@ struct InputSyncLiveTrackState {
 impl InputSyncState {
     pub fn new() -> Self {
         Self {
-            video: InputSyncTrackState(None),
-            audio: InputSyncTrackState(None),
+            video: InputSyncTrackState::new(),
+            audio: InputSyncTrackState::new(),
         }
     }
 
@@ -136,14 +141,25 @@ impl InputSyncState {
     }
 
     pub fn reset(&mut self) {
-        self.video.0 = None;
-        self.audio.0 = None;
+        self.video.state = None;
+        self.audio.state = None;
     }
 }
 
 impl InputSyncTrackState {
+    fn new() -> Self {
+        Self {
+            was_added: false,
+            state: None,
+        }
+    }
+
+    pub fn was_added(&self) -> bool {
+        self.was_added
+    }
+
     pub fn report(&mut self) -> Option<InputSyncTrackStatsReport> {
-        let state = self.0.as_mut()?;
+        let state = self.state.as_mut()?;
         let bitrate_1_second =
             state.bitrate_1_sec.sum() / state.bitrate_1_sec.window_size().as_secs();
         let bitrate_1_minute =
@@ -222,13 +238,14 @@ impl InputSyncTrackState {
     fn handle_event(&mut self, event: InputSyncTrackStatsEvent) {
         match event {
             InputSyncTrackStatsEvent::TrackAdded(mode) => {
-                self.0 = Some(InnerInputSyncTrackState::new(mode));
+                self.was_added = true;
+                self.state = Some(InnerInputSyncTrackState::new(mode));
             }
             InputSyncTrackStatsEvent::TrackRemoved => {
-                self.0 = None;
+                self.state = None;
             }
             InputSyncTrackStatsEvent::BytesReceived(chunk_size_bytes) => {
-                let Some(state) = self.0.as_mut() else {
+                let Some(state) = self.state.as_mut() else {
                     return;
                 };
                 let chunk_size_bits = 8 * chunk_size_bytes as u64;
@@ -236,7 +253,7 @@ impl InputSyncTrackState {
                 state.bitrate_1_min.push(chunk_size_bits);
             }
             InputSyncTrackStatsEvent::Simple(event) => {
-                let Some(state) = self.0.as_mut() else {
+                let Some(state) = self.state.as_mut() else {
                     return;
                 };
                 let InputSyncModeState::Simple { state } = &mut state.mode else {
@@ -248,7 +265,7 @@ impl InputSyncTrackState {
                 }
             }
             InputSyncTrackStatsEvent::Live(event) => {
-                let Some(state) = self.0.as_mut() else {
+                let Some(state) = self.state.as_mut() else {
                     return;
                 };
                 let InputSyncModeState::Live(live) = &mut state.mode else {

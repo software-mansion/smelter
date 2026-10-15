@@ -346,6 +346,7 @@ fn spawn_video_decoder(
 
     let options = VideoDecoderThreadOptions {
         ctx: ctx.clone(),
+        input_ref: input_ref.clone(),
         transformer,
         frame_sender,
         input_buffer_size: buffer_size,
@@ -396,6 +397,7 @@ fn spawn_audio_decoder(
         RtmpAudioCodec::Aac => {
             let options = AudioDecoderThreadOptions {
                 ctx: ctx.clone(),
+                input_ref: input_ref.clone(),
                 decoder_options: FdkAacDecoderOptions {
                     asc: Some(config.data.clone()),
                 },
@@ -408,6 +410,7 @@ fn spawn_audio_decoder(
         RtmpAudioCodec::Opus => {
             let options = AudioDecoderThreadOptions {
                 ctx: ctx.clone(),
+                input_ref: input_ref.clone(),
                 decoder_options: OpusDecoderOptions {
                     opus_head: Some(config.data),
                 },

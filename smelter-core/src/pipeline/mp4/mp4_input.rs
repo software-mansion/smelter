@@ -108,11 +108,6 @@ impl Mp4Input {
             }),
         };
 
-        ctx.stats_sender.send(StatsEvent::NewInput {
-            input_ref: input_ref.clone(),
-            kind: InputProtocolKind::Mp4,
-        });
-
         let video_track = Mp4FileReader::from_path(&source_file.path)?.try_new_h264_track();
         let video_duration = video_track.as_ref().and_then(|track| track.duration());
         let audio_track = Mp4FileReader::from_path(&source_file.path)?.try_new_aac_track();
@@ -226,10 +221,7 @@ enum StateEvent {
 
 #[derive(Clone)]
 struct TrackContext {
-    input_ref: Ref<InputId>,
-
     event_sender: crossbeam_channel::Sender<StateEvent>,
-    stats_sender: StatsSender,
 
     _source_file: Arc<SourceFile>,
 }
@@ -259,9 +251,7 @@ impl TrackManagerThread {
         let (events_sender, events_receiver) = unbounded();
 
         let track_ctx = TrackContext {
-            input_ref: input_ref.clone(),
             event_sender: events_sender.clone(),
-            stats_sender: ctx.stats_sender.clone(),
             _source_file: source_file.clone(),
         };
 
@@ -450,6 +440,7 @@ impl TrackManagerThread {
                     self.input_ref.clone(),
                     VideoDecoderThreadOptions {
                         ctx: self.ctx.clone(),
+                        input_ref: self.input_ref.clone(),
                         transformer: Some(H264AvccToAnnexB::new(h264_config.clone())),
                         frame_sender,
                         input_buffer_size: self.chunk_buffer_duration,
@@ -466,6 +457,7 @@ impl TrackManagerThread {
                     self.input_ref.clone(),
                     VideoDecoderThreadOptions {
                         ctx: self.ctx.clone(),
+                        input_ref: self.input_ref.clone(),
                         transformer: Some(H264AvccToAnnexB::new(h264_config.clone())),
                         frame_sender,
                         input_buffer_size: self.chunk_buffer_duration,
@@ -489,6 +481,7 @@ impl TrackManagerThread {
                 self.input_ref.clone(),
                 AudioDecoderThreadOptions {
                     ctx: self.ctx.clone(),
+                    input_ref: self.input_ref.clone(),
                     decoder_options: FdkAacDecoderOptions {
                         asc: Some(data.clone()),
                     },
@@ -514,11 +507,6 @@ struct TrackThread {
 impl TrackThread {
     fn run_video_thread(mut self, decoder_handle: DecoderThreadHandle) -> Track<File> {
         for (chunk, _duration) in self.track.chunks(self.seek) {
-            self.ctx.stats_sender.send(
-                Mp4InputTrackStatsEvent::BytesReceived(chunk.data.len())
-                    .into_event(&self.ctx.input_ref, StatsTrackKind::Video),
-            );
-
             trace!(pts=?chunk.pts, "MP4 reader produced a video chunk.");
             let chunk_sender = &decoder_handle.chunk_sender;
             if !Self::try_send(
@@ -539,11 +527,6 @@ impl TrackThread {
 
     fn run_audio_thread(mut self, decoder_handle: DecoderThreadHandle) -> Track<File> {
         for (chunk, _duration) in self.track.chunks(self.seek) {
-            self.ctx.stats_sender.send(
-                Mp4InputTrackStatsEvent::BytesReceived(chunk.data.len())
-                    .into_event(&self.ctx.input_ref, StatsTrackKind::Audio),
-            );
-
             trace!(pts=?chunk.pts, "MP4 reader produced an audio chunk.");
             let chunk_sender = &decoder_handle.chunk_sender;
             if !Self::try_send(

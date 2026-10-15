@@ -7,7 +7,11 @@ use rubato::{
 };
 use tracing::{debug, error, trace, warn};
 
-use crate::utils::AudioSamplesBuffer;
+use crate::{
+    audio_mixer::input::AudioMixerInputStatsSender,
+    stats::{AudioMixerInputResamplerState, AudioMixerInputStatsEvent},
+    utils::AudioSamplesBuffer,
+};
 
 use crate::prelude::*;
 
@@ -110,6 +114,8 @@ pub(super) struct InputResampler {
     /// Output written since the last resync that didn't come from real input (concealment and
     /// zero padding). `None` before the first resync.
     synthetic_output: Option<Duration>,
+
+    stats_sender: AudioMixerInputStatsSender,
 }
 
 /// Should be on par with FFT resampler, but more CPU intensive.
@@ -178,6 +184,7 @@ impl InputResampler {
         input_sample_rate: u32,
         output_sample_rate: u32,
         channels: AudioChannels,
+        stats_sender: AudioMixerInputStatsSender,
     ) -> Result<Self, rubato::ResamplerConstructionError> {
         debug!(
             ?input_sample_rate,
@@ -185,6 +192,10 @@ impl InputResampler {
             ?channels,
             "Create input resampler"
         );
+        stats_sender.send(AudioMixerInputStatsEvent::FormatChanged {
+            sample_rate: input_sample_rate,
+            channels,
+        });
         Ok(Self {
             channels,
 
@@ -198,6 +209,8 @@ impl InputResampler {
 
             needs_input_resync: true,
             synthetic_output: None,
+
+            stats_sender,
         })
     }
 
@@ -263,6 +276,8 @@ impl InputResampler {
                     // Negative on overlap.
                     let gap = start_pts - self.input_buffer_end_pts;
                     debug!(?gap, "Discontinuity between batches, flushing.");
+                    self.stats_sender
+                        .send(AudioMixerInputStatsEvent::TimestampDiscontinuity);
                     // The end of the buffered input is concealed, start of the new one will be
                     // faded in because flushing switches needs_input_resync to true
                     self.flush_with_concealment();
@@ -283,6 +298,12 @@ impl InputResampler {
                         ?gap,
                         "Discontinuity between batches while resyncing, discarding buffer."
                     );
+                    // Empty buffer has nothing to be discontinuous with, e.g. after the input ran
+                    // out.
+                    if !is_buffer_empty {
+                        self.stats_sender
+                            .send(AudioMixerInputStatsEvent::TimestampDiscontinuity);
+                    }
                     self.resampler_input_buffer.clear();
                     self.history.clear();
 
@@ -295,8 +316,12 @@ impl InputResampler {
                     let gap = start_pts - self.input_buffer_end_pts;
                     let gap_samples = (gap.as_secs_f64() * self.resampler.input_sample_rate as f64)
                         .round() as usize;
+                    self.stats_sender
+                        .send(AudioMixerInputStatsEvent::TimestampDiscontinuity);
                     match self.history.conceal() {
                         Some(concealment) => {
+                            self.stats_sender
+                                .send(AudioMixerInputStatsEvent::Concealment);
                             let padding_samples = gap_samples.saturating_sub(concealment.len());
                             let padding = AudioSamples::zeros(self.channels, padding_samples);
                             self.resampler_input_buffer.push_back(concealment);
@@ -315,6 +340,7 @@ impl InputResampler {
                     // This is not a start of the buffer, it won't get faded in when syncing
                     // so we need to fade it ourselves here
                     splice::fade_in(&mut batch.samples, self.resampler.input_sample_rate);
+                    self.stats_sender.send(AudioMixerInputStatsEvent::FadeIn);
                     self.resampler_input_buffer.push_back(batch.samples);
                 } else {
                     self.input_buffer_end_pts = end_pts;
@@ -327,6 +353,18 @@ impl InputResampler {
 
     /// Produce exactly the number of output frames that fit `pts_range` at `output_sample_rate`.
     pub fn get_samples(&mut self, pts_range: (Timestamp, Timestamp)) -> AudioSamples {
+        self.stats_sender
+            .send(AudioMixerInputStatsEvent::StateSnapshot {
+                state: match self.needs_input_resync {
+                    true => AudioMixerInputResamplerState::WaitingForInput,
+                    false => AudioMixerInputResamplerState::Playing,
+                },
+                input_buffer: Duration::from_secs_f64(
+                    self.resampler_input_buffer.frames() as f64
+                        / self.resampler.input_sample_rate as f64,
+                ),
+            });
+
         let batch_size = ((pts_range.1 - pts_range.0).as_secs_f64()
             * self.resampler.output_sample_rate as f64)
             .round() as usize;
@@ -384,6 +422,8 @@ impl InputResampler {
         // Positive if input starts after the requested point (stretch), negative if before
         // (squash).
         let drift = input_start_pts - output_start_pts;
+        self.stats_sender
+            .send(AudioMixerInputStatsEvent::Drift(drift));
 
         if drift > STRETCH_THRESHOLD {
             // === GAP-FILL ===
@@ -401,6 +441,9 @@ impl InputResampler {
             splice::fade_out(&mut fade_out, self.resampler.input_sample_rate);
             let samples = self.resampler.flush(&mut fade_out);
             self.output_buffer.push_back(samples);
+            self.stats_sender
+                .send(AudioMixerInputStatsEvent::GapInserted);
+            self.stats_sender.send(AudioMixerInputStatsEvent::FadeOut);
 
             // after resync input will be faded-in
             self.needs_input_resync = true;
@@ -439,6 +482,7 @@ impl InputResampler {
             // Skip input to catch up, joining both sides of the cut with a crossfade.
             let samples_to_drop =
                 (drift.as_secs_f64().abs() * self.resampler.input_sample_rate as f64) as usize;
+            self.stats_sender.send(AudioMixerInputStatsEvent::Drop);
             match splice::drop_frames(
                 &mut self.resampler_input_buffer,
                 samples_to_drop,
@@ -458,6 +502,7 @@ impl InputResampler {
                         self.resampler.input_sample_rate,
                     );
                     self.history.clear();
+                    self.stats_sender.send(AudioMixerInputStatsEvent::FadeOut);
                     debug!(samples_to_drop, "Input buffer ahead, dropping all samples");
                 }
             }
@@ -473,6 +518,7 @@ impl InputResampler {
                 frames = self.resampler_input_buffer.frames(),
                 "Input buffer too small, flushing"
             );
+            self.stats_sender.send(AudioMixerInputStatsEvent::Underrun);
             self.flush_with_concealment();
             return;
         }
@@ -555,6 +601,7 @@ impl InputResampler {
                 .read_samples(usize::min(crossfade, self.resampler_input_buffer.frames()));
             splice::fade_in(&mut front, self.resampler.input_sample_rate);
             self.resampler_input_buffer.push_front(front);
+            self.stats_sender.send(AudioMixerInputStatsEvent::FadeIn);
         }
 
         // If input buffer starts after `start_pts`
@@ -587,6 +634,8 @@ impl InputResampler {
                 );
             }
             trace!(len = samples.len(), "Concealing end of input");
+            self.stats_sender
+                .send(AudioMixerInputStatsEvent::Concealment);
             self.resampler_input_buffer.push_back(samples);
         }
         let samples = self.resampler.flush(&mut self.resampler_input_buffer);

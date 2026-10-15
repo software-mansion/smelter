@@ -78,11 +78,6 @@ impl MoqClientOutput {
         )
         .entered();
 
-        ctx.stats_sender.send(StatsEvent::NewOutput {
-            output_ref: output_ref.clone(),
-            kind: OutputProtocolKind::MoqClient,
-        });
-
         // A channel per media, so the writer thread can interleave chunks by PTS.
         let (video_encoder_handle, video_receiver) = match options.video.as_ref() {
             Some(video) => {

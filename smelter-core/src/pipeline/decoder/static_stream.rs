@@ -3,7 +3,12 @@ use tracing::warn;
 
 use smelter_render::error::ErrorStack;
 
-use crate::pipeline::decoder::{AudioDecoder, DecodeOnlyFilter, EncodedInputEvent, VideoDecoder};
+use crate::pipeline::{
+    decoder::{
+        AudioDecoder, DecodeOnlyFilter, DecoderStatsSender, EncodedInputEvent, VideoDecoder,
+    },
+    utils::input_sync::TrackKind,
+};
 
 use crate::prelude::*;
 
@@ -14,6 +19,7 @@ where
 {
     decoder: Decoder,
     decode_only_filter: DecodeOnlyFilter,
+    stats: DecoderStatsSender,
     source: Source,
 }
 
@@ -22,11 +28,16 @@ where
     Decoder: VideoDecoder,
     Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
 {
-    pub fn new(ctx: Arc<PipelineCtx>, source: Source) -> Result<Self, DecoderInitError> {
+    pub fn new(
+        ctx: Arc<PipelineCtx>,
+        input_ref: Ref<InputId>,
+        source: Source,
+    ) -> Result<Self, DecoderInitError> {
         let decoder = Decoder::new(&ctx, None)?;
         Ok(Self {
             decoder,
             decode_only_filter: DecodeOnlyFilter::default(),
+            stats: DecoderStatsSender::new(&ctx, input_ref, TrackKind::Video),
             source,
         })
     }
@@ -42,6 +53,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
             Some(PipelineEvent::Data(event)) => {
+                self.stats.on_event(&event);
                 self.decode_only_filter.on_event(&event);
                 let mut frames = self.decoder.decode(event);
                 frames.retain(|frame| !self.decode_only_filter.should_drop(frame.pts));
@@ -67,6 +79,7 @@ where
     decoder: Decoder,
     /// Audio decoders do not reorder, so output of a decode-only chunk is dropped directly.
     last_chunk_decode_only: bool,
+    stats: DecoderStatsSender,
     source: Source,
 }
 
@@ -77,6 +90,7 @@ where
 {
     pub fn new(
         ctx: Arc<PipelineCtx>,
+        input_ref: Ref<InputId>,
         options: Decoder::Options,
         source: Source,
     ) -> Result<Self, DecoderInitError> {
@@ -84,6 +98,7 @@ where
         Ok(Self {
             decoder,
             last_chunk_decode_only: false,
+            stats: DecoderStatsSender::new(&ctx, input_ref, TrackKind::Audio),
             source,
         })
     }
@@ -99,6 +114,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
             Some(PipelineEvent::Data(event)) => {
+                self.stats.on_event(&event);
                 if let EncodedInputEvent::Chunk(chunk) = &event {
                     self.last_chunk_decode_only = chunk.decode_only;
                 }

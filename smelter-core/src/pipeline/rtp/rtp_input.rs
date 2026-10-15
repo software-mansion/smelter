@@ -89,11 +89,6 @@ impl RtpInput {
     ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
         let should_close = Arc::new(AtomicBool::new(false));
 
-        ctx.stats_sender.send(StatsEvent::NewInput {
-            input_ref: input_ref.clone(),
-            kind: InputProtocolKind::Rtp,
-        });
-
         let (port, raw_packets_receiver) = match opts.transport_protocol {
             RtpInputTransportProtocol::Udp => {
                 start_udp_reader_thread(&input_ref, &opts, should_close.clone())?
@@ -161,24 +156,44 @@ impl RtpInput {
 
         let handle = match options {
             VideoDecoderOptions::FfmpegH264 => RtpVideoThread::<FfmpegH264Decoder>::spawn(
-                input_ref.clone(),
-                (ctx.clone(), DepayloaderOptions::H264, frame_sender),
+                input_ref,
+                (
+                    ctx.clone(),
+                    input_ref.clone(),
+                    DepayloaderOptions::H264,
+                    frame_sender,
+                ),
             )?,
             VideoDecoderOptions::FfmpegVp8 => RtpVideoThread::<FfmpegVp8Decoder>::spawn(
-                input_ref.clone(),
-                (ctx.clone(), DepayloaderOptions::Vp8, frame_sender),
+                input_ref,
+                (
+                    ctx.clone(),
+                    input_ref.clone(),
+                    DepayloaderOptions::Vp8,
+                    frame_sender,
+                ),
             )?,
             VideoDecoderOptions::FfmpegVp9 => RtpVideoThread::<FfmpegVp9Decoder>::spawn(
-                input_ref.clone(),
-                (ctx.clone(), DepayloaderOptions::Vp9, frame_sender),
+                input_ref,
+                (
+                    ctx.clone(),
+                    input_ref.clone(),
+                    DepayloaderOptions::Vp9,
+                    frame_sender,
+                ),
             )?,
             VideoDecoderOptions::VulkanH264 => {
                 if !ctx.graphics_context.has_vulkan_decoder_support() {
                     return Err(DecoderInitError::VulkanContextRequiredForVulkanDecoder);
                 }
                 RtpVideoThread::<VulkanH264Decoder>::spawn(
-                    input_ref.clone(),
-                    (ctx.clone(), DepayloaderOptions::H264, frame_sender),
+                    input_ref,
+                    (
+                        ctx.clone(),
+                        input_ref.clone(),
+                        DepayloaderOptions::H264,
+                        frame_sender,
+                    ),
                 )?
             }
         };
@@ -200,6 +215,7 @@ impl RtpInput {
                 input_ref,
                 RtpAudioThreadOptions {
                     ctx: ctx.clone(),
+                    input_ref: input_ref.clone(),
                     sample_rate: 48_000,
                     decoder_options: OpusDecoderOptions { opus_head: None },
                     depayloader_options: DepayloaderOptions::Opus,
@@ -214,6 +230,7 @@ impl RtpInput {
                 input_ref,
                 RtpAudioThreadOptions {
                     ctx: ctx.clone(),
+                    input_ref: input_ref.clone(),
                     sample_rate: asc.sample_rate,
                     decoder_options: FdkAacDecoderOptions { asc: Some(raw_asc) },
                     depayloader_options: DepayloaderOptions::Aac(depayloader_mode, asc),

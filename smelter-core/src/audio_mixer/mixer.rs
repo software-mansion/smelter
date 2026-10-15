@@ -9,6 +9,7 @@ use tracing::{debug, trace};
 use crate::{
     audio_mixer::{InputSamplesSet, OutputSamplesSet, input::AudioMixerInput, mix::SampleMixer},
     prelude::OutputAudioSamples,
+    stats::StatsSender,
 };
 
 use crate::prelude::*;
@@ -49,8 +50,11 @@ impl AudioMixer {
         self.0.lock().unwrap().process_batch_set(samples_set)
     }
 
-    pub fn register_input(&self, input_id: InputId) {
-        self.0.lock().unwrap().register_input(input_id);
+    pub fn register_input(&self, input_ref: Ref<InputId>, stats_sender: StatsSender) {
+        self.0
+            .lock()
+            .unwrap()
+            .register_input(input_ref, stats_sender);
     }
 
     pub fn register_output(
@@ -124,9 +128,11 @@ impl InternalAudioMixer {
         }
     }
 
-    pub fn register_input(&mut self, input_id: InputId) {
-        self.inputs
-            .insert(input_id, AudioMixerInput::new(self.mixing_sample_rate));
+    pub fn register_input(&mut self, input_ref: Ref<InputId>, stats_sender: StatsSender) {
+        self.inputs.insert(
+            input_ref.id().clone(),
+            AudioMixerInput::new(self.mixing_sample_rate, input_ref, stats_sender),
+        );
     }
 
     pub fn update_output(

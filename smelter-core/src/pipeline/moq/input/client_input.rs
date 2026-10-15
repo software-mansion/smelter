@@ -41,11 +41,6 @@ impl MoqClientInput {
         )
         .entered();
 
-        ctx.stats_sender.send(StatsEvent::NewInput {
-            input_ref: input_ref.clone(),
-            kind: InputProtocolKind::MoqClient,
-        });
-
         let MoqClientInputOptions {
             endpoint_url,
             broadcast_path,

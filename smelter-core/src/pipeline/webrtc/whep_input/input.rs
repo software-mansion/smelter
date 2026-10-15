@@ -69,11 +69,6 @@ impl WhepInput {
         input_ref: Ref<InputId>,
         options: WhepInputOptions,
     ) -> Result<(Input, InputInitInfo, QueueInput), InputInitError> {
-        ctx.stats_sender.send(StatsEvent::NewInput {
-            input_ref: input_ref.clone(),
-            kind: InputProtocolKind::Whep,
-        });
-
         let span = span!(
             Level::INFO,
             "WHEP client task",

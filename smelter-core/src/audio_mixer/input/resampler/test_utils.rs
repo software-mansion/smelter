@@ -12,7 +12,17 @@ use std::fmt::Write;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::stats::StatsSender;
+
 use super::*;
+
+/// Stats sender that discards events.
+pub(super) fn stats_sender() -> AudioMixerInputStatsSender {
+    AudioMixerInputStatsSender {
+        input_ref: Ref::new(&InputId("test".into())),
+        stats_sender: StatsSender::disconnected(),
+    }
+}
 
 // ============================ Logging ============================
 
