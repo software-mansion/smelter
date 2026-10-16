@@ -127,6 +127,14 @@ impl NV12Texture {
             .upload_data(&ctx.queue, &planes.uv_planes, 2);
     }
 
+    pub fn planes(&self) -> Vec<wgpu::Texture> {
+        [Some(&self.texture), self.secondary_texture.as_ref()]
+            .into_iter()
+            .flatten()
+            .cloned()
+            .collect()
+    }
+
     pub fn texture(&self) -> &wgpu::Texture {
         &self.texture
     }

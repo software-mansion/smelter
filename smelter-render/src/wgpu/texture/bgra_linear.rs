@@ -31,6 +31,10 @@ impl BgraLinearTexture {
         }
     }
 
+    pub fn texture(&self) -> &wgpu::Texture {
+        &self.texture
+    }
+
     pub fn resolution(&self) -> Resolution {
         self.resolution
     }

@@ -80,6 +80,11 @@ impl NV12Input {
         self.nv12_texture.upload(ctx, &planes);
     }
 
+    pub fn upload_textures(&mut self, ctx: &WgpuCtx, resolution: Resolution) -> Vec<wgpu::Texture> {
+        self.maybe_recreate_before_upload(ctx, resolution);
+        self.nv12_texture.planes()
+    }
+
     fn maybe_recreate_before_upload(&mut self, ctx: &WgpuCtx, resolution: Resolution) {
         if self.nv12_texture.uploadable() && self.resolution() == resolution {
             return;

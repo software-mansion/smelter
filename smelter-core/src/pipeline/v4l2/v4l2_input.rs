@@ -4,11 +4,14 @@ use std::{
 };
 
 use crossbeam_channel::TrySendError;
-use smelter_render::{FrameData, FramePreProcessor, Framerate, InputId, NvPlanes, Resolution};
+use smelter_render::{
+    BufferFormat, BufferLayout, FrameData, FramePreProcessor, Framerate, InputId, NvPlanes,
+    Resolution,
+};
 use tracing::{Level, debug, error, info, span, trace, warn};
 
 use crate::{
-    pipeline::input::Input,
+    pipeline::{host_imports::HostImports, input::Input},
     queue::{InputSideChannel, QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions},
 };
 
@@ -98,6 +101,7 @@ impl V4l2Input {
 
         let mut state = InputState {
             config: device_config,
+            imports: HostImports::new(ctx.wgpu_ctx.device.clone(), ctx.wgpu_ctx.queue.clone()),
             ctx,
             sender: video_sender,
             should_close: should_close.clone(),
@@ -282,6 +286,8 @@ struct InputState<'a> {
     ctx: Arc<PipelineCtx>,
     should_close: Arc<AtomicBool>,
     sender: QueueSender<Frame>,
+    /// Dropped before `stream` unmaps the buffers it imported.
+    imports: HostImports,
     stream: v4l::io::mmap::Stream<'a>,
     /// Only set when a side channel is enabled (avoids duplicated processing).
     frame_pre_processor: Option<FramePreProcessor>,
@@ -296,6 +302,7 @@ impl InputState<'_> {
                 return;
             }
 
+            self.imports.wait_for_copies();
             let frame = match self.stream.next() {
                 Ok((frame, _)) => frame,
                 Err(err) => {
@@ -312,58 +319,64 @@ impl InputState<'_> {
             let V4l2DeviceConfig {
                 resolution, format, ..
             } = &self.config;
+            let pixels = resolution.width * resolution.height;
+            let (buffer_format, bytes_per_row, expected_length) = match format {
+                V4l2Format::Yuyv => (
+                    BufferFormat::InterleavedYuyv422,
+                    resolution.width * 2,
+                    pixels * 2,
+                ),
+                V4l2Format::Nv12 => (BufferFormat::Nv12, resolution.width, pixels * 3 / 2),
+            };
 
             // Some devices, most notably the OBS virtual camera, stuck extra bytes at the
             // end of the data they send. Because of this, we allow up to a 1% mismatch
-            // between the expected and actual data lengths in both the YUYV and NV12 implementations.
-            let data = match format {
-                V4l2Format::Yuyv => {
-                    let expected_length = (resolution.width * resolution.height * 2) as f64;
-                    if (frame.len() as f64 - expected_length).abs() > expected_length * 0.01 {
-                        if let Err(err) = self.config.refresh_format() {
-                            error!(%err, "Error when trying to refresh parameters.");
-                            return;
-                        }
-
-                        continue;
-                    }
-
-                    FrameData::InterleavedYuyv422(bytes::Bytes::copy_from_slice(frame))
+            // between the expected and actual data lengths.
+            if frame.len().abs_diff(expected_length) * 100 > expected_length {
+                if let Err(err) = self.config.refresh_format() {
+                    error!(%err, "Error when trying to refresh parameters.");
+                    return;
                 }
-                V4l2Format::Nv12 => {
-                    let y_length = resolution.width * resolution.height;
-                    let expected_length = y_length as f64 * 1.5;
-                    if (frame.len() as f64 - expected_length).abs() > expected_length * 0.01 {
-                        if let Err(err) = self.config.refresh_format() {
-                            error!(%err, "Fatal error when trying to refresh parameters.");
-                            return;
-                        }
+                continue;
+            }
 
-                        continue;
-                    }
-
-                    FrameData::Nv12(NvPlanes {
-                        y_plane: bytes::Bytes::copy_from_slice(&frame[..y_length]),
-                        uv_planes: bytes::Bytes::copy_from_slice(&frame[y_length..]),
-                    })
-                }
+            let pts = self.ctx.queue_ctx.sync_point.timestamp_now();
+            let layout = BufferLayout {
+                format: buffer_format,
+                resolution: *resolution,
+                bytes_per_row: bytes_per_row as u32,
             };
-
+            let data = match &mut self.frame_pre_processor {
+                // SAFETY: the buffers stay mapped while `stream` lives, which
+                // outlives `imports`.
+                Some(pre_processor) => FrameData::Rgba8UnormWgpuTexture(
+                    match layout
+                        .rows_aligned()
+                        .then(|| unsafe { self.imports.get(frame) })
+                        .flatten()
+                    {
+                        Some(buffer) => {
+                            let texture = pre_processor.process_buffer(buffer, layout);
+                            self.imports.copy_submitted();
+                            texture
+                        }
+                        None => pre_processor.process_to_texture(
+                            Frame {
+                                data: frame_data(*format, pixels, frame),
+                                resolution: *resolution,
+                                pts,
+                            }
+                            .into(),
+                            None,
+                        ),
+                    },
+                ),
+                None => frame_data(*format, pixels, frame),
+            };
             let frame = Frame {
-                pts: self.ctx.queue_ctx.sync_point.timestamp_now(),
-                resolution: self.config.resolution,
+                pts,
+                resolution: *resolution,
                 data,
-            };
-
-            let frame = match &mut self.frame_pre_processor {
-                Some(pre_processor) => Frame {
-                    resolution: frame.resolution,
-                    pts: frame.pts,
-                    data: FrameData::Rgba8UnormWgpuTexture(
-                        pre_processor.process_to_texture(frame.into(), None),
-                    ),
-                },
-                None => frame,
             };
 
             match self.sender.try_send(frame) {
@@ -375,6 +388,16 @@ impl InputState<'_> {
                 }
             }
         }
+    }
+}
+
+fn frame_data(format: V4l2Format, pixels: usize, frame: &[u8]) -> FrameData {
+    match format {
+        V4l2Format::Yuyv => FrameData::InterleavedYuyv422(bytes::Bytes::copy_from_slice(frame)),
+        V4l2Format::Nv12 => FrameData::Nv12(NvPlanes {
+            y_plane: bytes::Bytes::copy_from_slice(&frame[..pixels]),
+            uv_planes: bytes::Bytes::copy_from_slice(&frame[pixels..]),
+        }),
     }
 }
 
