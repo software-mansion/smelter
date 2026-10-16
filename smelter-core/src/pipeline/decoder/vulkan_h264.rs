@@ -65,7 +65,7 @@ impl VideoDecoderInstance for VulkanH264Decoder {
             EncodedInputEvent::Chunk(chunk) => {
                 H264DecoderEvent::DecodeChunk(gpu_video::EncodedInputChunk {
                     data: chunk.data.as_ref(),
-                    pts: Some(chunk.pts.as_micros() as u64),
+                    pts: Some(chunk.pts.as_nanos() as u64),
                 })
             }
             EncodedInputEvent::LostData => H264DecoderEvent::SignalDataLoss,
@@ -114,7 +114,7 @@ fn from_vk_frame(frame: gpu_video::OutputFrame<VideoTexture>) -> Option<Frame> {
         width: data.width() as usize,
         height: data.height() as usize,
     };
-    let pts = Timestamp::from_micros(metadata.pts.unwrap() as i64);
+    let pts = Timestamp::from_nanos(metadata.pts.unwrap() as i64);
 
     let Some(texture) = data.nv12_texture() else {
         error!("H264 Vulkan decoder produced a frame with separated planes. Dropping frame.");

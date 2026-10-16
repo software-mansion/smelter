@@ -2,7 +2,7 @@ use std::{iter, sync::Arc};
 
 use crate::pipeline::decoder::{
     EncodedInputEvent, KeyframeRequestSender, VideoDecoder, VideoDecoderInstance,
-    ffmpeg_utils::{create_av_packet, from_av_frame},
+    ffmpeg_utils::{TIME_BASE, create_av_packet, from_av_frame},
 };
 use crate::prelude::*;
 
@@ -12,8 +12,6 @@ use ffmpeg_next::{
     media::Type,
 };
 use tracing::{error, info, trace, warn};
-
-const TIME_BASE: i32 = 1_000_000;
 
 pub struct FfmpegVp8Decoder {
     decoder: ffmpeg_next::decoder::Opened,
@@ -60,7 +58,7 @@ impl VideoDecoderInstance for FfmpegVp8Decoder {
             EncodedInputEvent::LostData | EncodedInputEvent::AuDelimiter => return vec![],
         };
 
-        let av_packet = match create_av_packet(chunk, VideoCodec::Vp8, TIME_BASE) {
+        let av_packet = match create_av_packet(chunk, VideoCodec::Vp8) {
             Ok(packet) => packet,
             Err(err) => {
                 warn!("Dropping frame: {}", err);
@@ -92,7 +90,7 @@ impl FfmpegVp8Decoder {
     fn read_all_frames(&mut self) -> Vec<Frame> {
         iter::from_fn(|| {
             match self.decoder.receive_frame(&mut self.av_frame) {
-                Ok(_) => match from_av_frame(&mut self.av_frame, TIME_BASE) {
+                Ok(_) => match from_av_frame(&mut self.av_frame) {
                     Ok(frame) => {
                         trace!(pts=?frame.pts, "VP8 decoder produced a frame.");
                         Some(frame)

@@ -4,6 +4,9 @@ use tracing::error;
 
 use crate::prelude::*;
 
+/// Packet and frame timestamps are in nanoseconds, so they map exactly to [`Timestamp`].
+pub(super) const TIME_BASE: i32 = 1_000_000_000;
+
 #[derive(Debug, thiserror::Error)]
 pub(super) enum DecoderFrameConversionError {
     #[error("Error converting frame: {0}")]
@@ -14,7 +17,6 @@ pub(super) enum DecoderFrameConversionError {
 
 pub(super) fn from_av_frame(
     decoded: &mut ffmpeg_next::frame::Video,
-    time_base: i32,
 ) -> Result<Frame, DecoderFrameConversionError> {
     let Some(pts) = decoded.pts() else {
         return Err(DecoderFrameConversionError::FrameConversionError(
@@ -27,7 +29,7 @@ pub(super) fn from_av_frame(
             "Received negative PTS. PTS values of the decoder output are not monotonically increasing."
         )
     }
-    let pts = Timestamp::from_secs_f64(pts as f64 / time_base as f64);
+    let pts = Timestamp::from_nanos(pts);
 
     let data = match decoded.format() {
         Pixel::YUV420P => FrameData::PlanarYuv420(YuvPlanes {
@@ -83,7 +85,6 @@ pub(super) struct DecoderChunkConversionError(MediaKind, VideoCodec);
 pub(super) fn create_av_packet(
     chunk: EncodedInputChunk,
     codec: VideoCodec,
-    time_base: i32,
 ) -> Result<ffmpeg_next::Packet, DecoderChunkConversionError> {
     if chunk.kind != MediaKind::Video(codec) {
         return Err(DecoderChunkConversionError(chunk.kind, codec));
@@ -91,12 +92,9 @@ pub(super) fn create_av_packet(
 
     let mut packet = ffmpeg_next::Packet::new(chunk.data.len());
 
-    let dts = chunk.dts;
-    let pts = chunk.pts;
-
     packet.data_mut().unwrap().copy_from_slice(&chunk.data);
-    packet.set_pts(Some((pts.as_secs_f64() * time_base as f64) as i64));
-    packet.set_dts(dts.map(|dts| (dts.as_secs_f64() * time_base as f64) as i64));
+    packet.set_pts(Some(chunk.pts.as_nanos()));
+    packet.set_dts(chunk.dts.map(Timestamp::as_nanos));
 
     Ok(packet)
 }

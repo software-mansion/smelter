@@ -5,10 +5,11 @@ use tracing::warn;
 use smelter_render::InputId;
 
 use crate::{
-    Frame, PipelineCtx, Ref,
+    Frame, PipelineCtx, PipelineEvent, Ref,
     error::DecoderInitError,
     pipeline::decoder::{
-        BytestreamTransformStream, BytestreamTransformer, DecoderThreadHandle, VideoDecoderStream,
+        BytestreamTransformStream, BytestreamTransformer, DecoderThreadHandle, EncodedInputEvent,
+        VideoDecoderStream,
     },
     queue::QueueSender,
     utils::{InitializableThread, ThreadMetadata, channel::duration_bounded},
@@ -54,8 +55,20 @@ where
         let transformed_bytestream =
             BytestreamTransformStream::new(transformer, chunk_receiver.into_iter());
 
-        let decoder_stream =
-            VideoDecoderStream::<Decoder, _>::new(ctx, input_ref, transformed_bytestream)?;
+        // Every source of this thread sends whole access units. Without the delimiter, the H264
+        // parser holds an access unit until the next chunk arrives.
+        let bytestream = transformed_bytestream.flat_map(|event| {
+            let events = match event {
+                PipelineEvent::Data(EncodedInputEvent::Chunk(chunk)) => [
+                    Some(PipelineEvent::Data(EncodedInputEvent::Chunk(chunk))),
+                    Some(PipelineEvent::Data(EncodedInputEvent::AuDelimiter)),
+                ],
+                event => [Some(event), None],
+            };
+            events.into_iter().flatten()
+        });
+
+        let decoder_stream = VideoDecoderStream::<Decoder, _>::new(ctx, input_ref, bytestream)?;
 
         let state = Self {
             stream: Box::new(decoder_stream.flatten()),

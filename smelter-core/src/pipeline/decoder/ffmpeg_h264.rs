@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::pipeline::{
     decoder::{
         EncodedInputEvent, KeyframeRequestSender, VideoDecoder, VideoDecoderInstance,
-        ffmpeg_utils::{create_av_packet, from_av_frame},
+        ffmpeg_utils::{TIME_BASE, create_av_packet, from_av_frame},
     },
     utils::H264AuSplitter,
 };
@@ -15,8 +15,6 @@ use ffmpeg_next::{
     media::Type,
 };
 use tracing::{debug, error, info, trace, warn};
-
-const TIME_BASE: i32 = 1_000_000;
 
 pub struct FfmpegH264Decoder {
     decoder: ffmpeg_next::decoder::Opened,
@@ -61,52 +59,50 @@ impl VideoDecoderInstance for FfmpegH264Decoder {
     fn decode(&mut self, event: EncodedInputEvent) -> Vec<Frame> {
         trace!(?event, "FFmpeg H264 decoder received an event.");
         let au_chunks = match event {
-            EncodedInputEvent::Chunk(chunk) => match self.au_splitter.put_chunk(chunk) {
-                Ok(chunks) => chunks,
-                Err(err) => {
-                    if let Some(s) = self.keyframe_request_sender.as_ref() {
-                        s.send()
-                    }
-                    debug!("H264 AU splitter could not process the chunks: {err}");
-                    return Vec::new();
-                }
-            },
+            EncodedInputEvent::Chunk(chunk) => self.au_splitter.put_chunk(chunk),
             EncodedInputEvent::LostData => {
                 self.au_splitter.mark_missing_data();
                 return vec![];
             }
             EncodedInputEvent::Discontinuity => return self.flush(),
-            EncodedInputEvent::AuDelimiter => match self.au_splitter.flush() {
-                Ok(chunks) => chunks,
-                Err(err) => {
-                    if let Some(s) = self.keyframe_request_sender.as_ref() {
-                        s.send()
-                    }
-                    debug!("H264 AU splitter could not process the chunks: {err}");
-                    return Vec::new();
-                }
-            },
+            EncodedInputEvent::AuDelimiter => self.au_splitter.flush(),
         };
 
-        self.send_chunks(au_chunks);
-        self.read_all_frames()
+        let mut frames = Vec::new();
+        for chunk in au_chunks {
+            match chunk {
+                Ok(chunk) => {
+                    self.send_chunk(chunk);
+                    // Decoder rejects the next packet with EAGAIN until its output is read.
+                    frames.extend(self.read_all_frames());
+                }
+                Err(err) => {
+                    if let Some(s) = &self.keyframe_request_sender {
+                        s.send()
+                    }
+                    debug!("H264 AU splitter could not process the chunk: {err}");
+                }
+            }
+        }
+        frames
     }
 
     fn flush(&mut self) -> Vec<Frame> {
-        // The H264 parser inside the AU splitter holds back the last access
-        // unit — an AU is only emitted once the first slice of the next AU
-        // arrives. Flush it so the final frame in decode order is actually
-        // sent to the decoder before we drain it. Skipping this drops the
-        // last AU in decode order (often a trailing B-frame), which on a
-        // reordered tail leaves a doubled gap between the last two frames.
-        match self.au_splitter.flush() {
-            Ok(au_chunks) => self.send_chunks(au_chunks),
-            Err(err) => debug!("H264 AU splitter could not be flushed: {err}"),
+        let mut frames = Vec::new();
+        for chunk in self.au_splitter.flush() {
+            match chunk {
+                Ok(chunk) => {
+                    self.send_chunk(chunk);
+                    frames.extend(self.read_all_frames());
+                }
+                Err(err) => debug!("H264 AU splitter could not be flushed: {err}"),
+            }
         }
+        self.au_splitter.reset();
 
         // Signal end of stream so the decoder drains the frames it holds back for reordering.
         let _ = self.decoder.send_eof();
-        let frames = self.read_all_frames();
+        frames.extend(self.read_all_frames());
         // Reset decoder state, so it can accept a new stream (e.g. after discontinuity).
         self.decoder.flush();
         frames
@@ -114,19 +110,24 @@ impl VideoDecoderInstance for FfmpegH264Decoder {
 }
 
 impl FfmpegH264Decoder {
-    fn send_chunks(&mut self, au_chunks: Vec<EncodedInputChunk>) {
-        for chunk in au_chunks {
-            trace!(?chunk, "FFmpeg H264 processing AU chunk");
-            let av_packet = match create_av_packet(chunk, VideoCodec::H264, TIME_BASE) {
-                Ok(packet) => packet,
-                Err(err) => {
-                    warn!("Dropping frame: {}", err);
-                    continue;
-                }
-            };
+    fn send_chunk(&mut self, chunk: EncodedInputChunk) {
+        trace!(?chunk, "FFmpeg H264 processing AU chunk");
+        let av_packet = match create_av_packet(chunk, VideoCodec::H264) {
+            Ok(packet) => packet,
+            Err(err) => {
+                warn!("Dropping frame: {}", err);
+                return;
+            }
+        };
 
-            if let Err(e) = self.decoder.send_packet(&av_packet) {
-                warn!("Failed to send a packet to decoder: {:?}", e);
+        if let Err(e) = self.decoder.send_packet(&av_packet) {
+            // Decoder rejected data the splitter accepted, e.g. a picture referencing parameter
+            // sets that were dropped with an incomplete access unit.
+            warn!("Failed to send a packet to decoder: {:?}", e);
+            // Sent in decode order, so there is no reorder delay to account for.
+            self.au_splitter.wait_for_recovery_point(None);
+            if let Some(s) = &self.keyframe_request_sender {
+                s.send()
             }
         }
     }
@@ -135,7 +136,17 @@ impl FfmpegH264Decoder {
         let mut frames = Vec::new();
         loop {
             match self.decoder.receive_frame(&mut self.av_frame) {
-                Ok(_) => match from_av_frame(&mut self.av_frame, TIME_BASE) {
+                Ok(_) if self.av_frame.has_decode_errors() => {
+                    // Catches damage that was not signaled with LostData. Frames referencing this
+                    // one are not flagged, so wait for the next recovery point.
+                    debug!("H264 decoder produced a corrupted frame. Dropping frame.");
+                    let pts = self.av_frame.pts().map(Timestamp::from_nanos);
+                    self.au_splitter.wait_for_recovery_point(pts);
+                    if let Some(s) = &self.keyframe_request_sender {
+                        s.send()
+                    }
+                }
+                Ok(_) => match from_av_frame(&mut self.av_frame) {
                     Ok(frame) => {
                         trace!(pts=?frame.pts, "H264 decoder produced a frame.");
                         frames.push(frame);
