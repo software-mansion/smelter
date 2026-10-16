@@ -10,8 +10,9 @@
 //! Profiles without a prefix approximate typical networks (periodic events are more frequent than
 //! in reality to make testing faster). `Stress:` profiles are harsher than typical networks.
 //!
-//! After a profile is applied, its delay, jitter and loss can be adjusted live. Ramp mode raises
-//! one value step by step until any key is pressed, to find a value at which things break.
+//! After a profile is applied, its delay, jitter, loss and rate can be adjusted live. Ramp mode
+//! degrades one value step by step until any key is pressed, to find a value at which things
+//! break.
 
 use std::{
     fmt::{self, Write as _},
@@ -37,9 +38,12 @@ use inquire::{InquireError, Select, Text};
 
 const REFRESH_INTERVAL: Duration = Duration::from_millis(250);
 const RAMP_INTERVAL: Duration = Duration::from_secs(5);
+const SUDO_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
 const DELAY_STEP_MS: i32 = 1;
 const JITTER_STEP_MS: i32 = 1;
 const LOSS_STEP_PERCENT: f64 = 0.01;
+const MIN_RATE_KBIT: u32 = 10;
+const MAX_RATE_KBIT: u32 = 1_000_000;
 /// Step multiplier when shift is held.
 const BIG_STEP: i32 = 10;
 
@@ -64,6 +68,8 @@ struct Netem {
     /// Jitter distribution, uniform if not set.
     distribution: Option<&'static str>,
     loss: Loss,
+    /// Unlimited if not set.
+    rate_kbit: Option<u32>,
     /// Remaining netem options, passed as is.
     rest: &'static str,
 }
@@ -81,6 +87,7 @@ const NO_IMPAIRMENT: Netem = Netem {
     jitter_ms: 0,
     distribution: None,
     loss: Loss::Random(0.0),
+    rate_kbit: None,
     rest: "",
 };
 
@@ -89,10 +96,11 @@ const MOBILE: Netem = Netem {
     jitter_ms: 10,
     distribution: Some("normal"),
     loss: Loss::Random(0.1),
-    rest: "rate 1gbit",
+    rate_kbit: Some(MAX_RATE_KBIT),
+    rest: "",
 };
 
-// `rate 1gbit` does not limit anything, it keeps netem from reordering jittered packets.
+// 1 Gbit/s rate does not limit anything, it keeps netem from reordering jittered packets.
 const PROFILES: &[Profile] = &[
     Profile {
         name: "No impairment",
@@ -106,7 +114,8 @@ const PROFILES: &[Profile] = &[
             jitter_ms: 1,
             distribution: Some("normal"),
             loss: Loss::Random(0.01),
-            rest: "rate 1gbit",
+            rate_kbit: Some(MAX_RATE_KBIT),
+            rest: "",
         },
         outage: None,
     },
@@ -117,7 +126,8 @@ const PROFILES: &[Profile] = &[
             jitter_ms: 3,
             distribution: Some("normal"),
             loss: Loss::Random(0.05),
-            rest: "rate 1gbit",
+            rate_kbit: Some(MAX_RATE_KBIT),
+            rest: "",
         },
         outage: None,
     },
@@ -128,7 +138,8 @@ const PROFILES: &[Profile] = &[
             jitter_ms: 5,
             distribution: Some("normal"),
             loss: Loss::Random(0.1),
-            rest: "rate 1gbit",
+            rate_kbit: Some(MAX_RATE_KBIT),
+            rest: "",
         },
         outage: None,
     },
@@ -139,7 +150,8 @@ const PROFILES: &[Profile] = &[
             jitter_ms: 8,
             distribution: Some("normal"),
             loss: Loss::Gemodel(0.1, 30.0),
-            rest: "rate 1gbit",
+            rate_kbit: Some(MAX_RATE_KBIT),
+            rest: "",
         },
         outage: None,
     },
@@ -150,7 +162,8 @@ const PROFILES: &[Profile] = &[
             jitter_ms: 20,
             distribution: Some("normal"),
             loss: Loss::Gemodel(0.5, 25.0),
-            rest: "rate 1gbit",
+            rate_kbit: Some(MAX_RATE_KBIT),
+            rest: "",
         },
         outage: None,
     },
@@ -166,7 +179,8 @@ const PROFILES: &[Profile] = &[
             jitter_ms: 0,
             distribution: None,
             loss: Loss::Random(0.0),
-            rest: "rate 3mbit limit 125",
+            rate_kbit: Some(3_000),
+            rest: "limit 125",
         },
         outage: None,
     },
@@ -177,7 +191,8 @@ const PROFILES: &[Profile] = &[
             jitter_ms: 0,
             distribution: None,
             loss: Loss::Random(0.0),
-            rest: "rate 1mbit limit 40",
+            rate_kbit: Some(1_000),
+            rest: "limit 40",
         },
         outage: None,
     },
@@ -215,7 +230,8 @@ const PROFILES: &[Profile] = &[
             jitter_ms: 0,
             distribution: None,
             loss: Loss::Random(1.0),
-            rest: "rate 1gbit",
+            rate_kbit: Some(MAX_RATE_KBIT),
+            rest: "",
         },
         outage: None,
     },
@@ -226,7 +242,8 @@ const PROFILES: &[Profile] = &[
             jitter_ms: 0,
             distribution: None,
             loss: Loss::Random(5.0),
-            rest: "rate 1gbit",
+            rate_kbit: Some(MAX_RATE_KBIT),
+            rest: "",
         },
         outage: None,
     },
@@ -237,6 +254,7 @@ const PROFILES: &[Profile] = &[
             jitter_ms: 20,
             distribution: Some("normal"),
             loss: Loss::Random(0.0),
+            rate_kbit: None,
             rest: "",
         },
         outage: None,
@@ -248,6 +266,7 @@ const PROFILES: &[Profile] = &[
             jitter_ms: 50,
             distribution: None,
             loss: Loss::Random(1.0),
+            rate_kbit: None,
             rest: "",
         },
         outage: None,
@@ -259,6 +278,7 @@ const PROFILES: &[Profile] = &[
             jitter_ms: 0,
             distribution: None,
             loss: Loss::Random(0.0),
+            rate_kbit: None,
             rest: "slot 20ms 40ms",
         },
         outage: None,
@@ -270,6 +290,7 @@ const PROFILES: &[Profile] = &[
             jitter_ms: 0,
             distribution: None,
             loss: Loss::Random(0.0),
+            rate_kbit: None,
             rest: "",
         },
         outage: Some(Outage {
@@ -285,6 +306,7 @@ const PROFILES: &[Profile] = &[
             jitter_ms: 0,
             distribution: None,
             loss: Loss::Random(0.0),
+            rate_kbit: None,
             rest: "",
         },
         outage: Some(Outage {
@@ -310,6 +332,22 @@ impl Netem {
                 let stepped = ((*loss + f64::from(steps) * LOSS_STEP_PERCENT) * 100.0).round();
                 *loss = f64::clamp(stepped / 100.0, 0.0, 100.0);
             }
+            Field::Rate => {
+                let Some(rate) = &mut self.rate_kbit else {
+                    if steps < 0 {
+                        self.rate_kbit = Some(MAX_RATE_KBIT);
+                    }
+                    return;
+                };
+                // keeps two significant digits, so a step is 1-10% of the value
+                for _ in 0..steps.unsigned_abs() {
+                    let stepped = match steps > 0 {
+                        true => *rate + 10u32.pow(rate.ilog10().saturating_sub(1)),
+                        false => *rate - 10u32.pow((*rate - 1).ilog10().saturating_sub(1)),
+                    };
+                    *rate = u32::clamp(stepped, MIN_RATE_KBIT, MAX_RATE_KBIT);
+                }
+            }
         }
     }
 
@@ -320,6 +358,10 @@ impl Netem {
             Field::Loss => match self.loss {
                 Loss::Random(loss) => format!("{loss}%"),
                 Loss::Gemodel(start, end) => format!("gemodel {start}% {end}%"),
+            },
+            Field::Rate => match self.rate_kbit {
+                Some(rate) => format!("{}mbit", f64::from(rate) / 1000.0),
+                None => "unlimited".to_string(),
             },
         }
     }
@@ -343,6 +385,9 @@ impl fmt::Display for Netem {
             Loss::Random(_) => {}
             Loss::Gemodel(start, end) => write!(f, " loss gemodel {start}% {end}%")?,
         }
+        if let Some(rate) = self.rate_kbit {
+            write!(f, " rate {}mbit", f64::from(rate) / 1000.0)?;
+        }
         if !self.rest.is_empty() {
             write!(f, " {}", self.rest)?;
         }
@@ -355,9 +400,20 @@ enum Field {
     Delay,
     Jitter,
     Loss,
+    Rate,
 }
 
-const FIELDS: [Field; 3] = [Field::Delay, Field::Jitter, Field::Loss];
+const FIELDS: [Field; 4] = [Field::Delay, Field::Jitter, Field::Loss, Field::Rate];
+
+impl Field {
+    /// Step direction that makes the network worse.
+    fn degrade_step(self) -> i32 {
+        match self {
+            Field::Delay | Field::Jitter | Field::Loss => 1,
+            Field::Rate => -1,
+        }
+    }
+}
 
 impl fmt::Display for Field {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -365,6 +421,7 @@ impl fmt::Display for Field {
             Field::Delay => "delay",
             Field::Jitter => "jitter",
             Field::Loss => "loss",
+            Field::Rate => "rate",
         })
     }
 }
@@ -420,6 +477,9 @@ fn main() -> Result<()> {
     let throttle = Throttle::new(device, port)?;
     let throttle = &throttle;
     thread::scope(|scope| -> Result<()> {
+        // dropping the sender stops the loop
+        let (_sudo_stop_sender, sudo_stop_receiver) = mpsc::channel::<()>();
+        scope.spawn(move || throttle.keep_sudo_alive(sudo_stop_receiver));
         let mut outage_loop: Option<(Sender<()>, ScopedJoinHandle<()>)> = None;
         loop {
             let choices = PROFILES
@@ -501,7 +561,7 @@ struct Ramp {
     next_step: Instant,
 }
 
-/// Live adjustment of delay, jitter and loss on top of the profile, applied on every change.
+/// Live adjustment of delay, jitter, loss and rate on top of the profile, applied on every change.
 fn tune(throttle: &Throttle, profile: &Profile) -> Result<TuneExit> {
     let _raw_mode = RawMode::enable()?;
     let mut screen = Screen::default();
@@ -547,7 +607,7 @@ fn tune(throttle: &Throttle, profile: &Profile) -> Result<TuneExit> {
         if let Some(ramp) = &mut ramp
             && ramp.next_step <= Instant::now()
         {
-            netem.step(ramp.field, 1);
+            netem.step(ramp.field, ramp.field.degrade_step());
             ramp.next_step += RAMP_INTERVAL;
         } else if event::poll(REFRESH_INTERVAL)?
             && let Event::Key(key) = event::read()?
@@ -762,6 +822,18 @@ impl Throttle {
             bail!("sudo authentication failed");
         }
         Ok(())
+    }
+
+    /// Refreshes the sudo credentials until `stop_receiver` disconnects, so they do not expire
+    /// while the tool runs.
+    fn keep_sudo_alive(&self, stop_receiver: Receiver<()>) {
+        if !self.use_sudo {
+            return;
+        }
+        while let Err(RecvTimeoutError::Timeout) = stop_receiver.recv_timeout(SUDO_REFRESH_INTERVAL)
+        {
+            _ = Command::new("sudo").args(["-n", "-v"]).output();
+        }
     }
 
     fn tc(&self, args: &[&str]) -> Result<()> {
