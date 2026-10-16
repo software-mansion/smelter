@@ -12,7 +12,7 @@ use tracing::{error, info, trace};
 
 use crate::prelude::*;
 
-use super::{AudioEncoder, AudioEncoderConfig};
+use super::{AudioEncoder, AudioEncoderConfig, MAX_PTS_DEVIATION};
 
 /// FDK-AAC encoder.
 /// Implementation is based on the fdk-aac encoder documentation:
@@ -22,12 +22,16 @@ pub struct FdkAacEncoder {
     input_buffer: Vec<i16>,
     output_buffer: Vec<u8>,
     sample_rate: u32,
+    channels: usize,
     samples_per_frame: u32,
     codec_delay: Duration,
 
-    // This logic relies on the fact that input samples will always be continuous.
+    /// This logic relies on the fact that input samples will always be continuous.
+    /// `maybe_reset_on_discontinuity` is just a sanity check to make sure we can recover.
     first_input_pts: Option<Timestamp>,
     encoded_samples: u64,
+    /// Samples (per channel) received since `first_input_pts`.
+    received_samples: u64,
 }
 
 impl AudioEncoder for FdkAacEncoder {
@@ -116,9 +120,11 @@ impl AudioEncoder for FdkAacEncoder {
                 input_buffer: Vec::new(),
                 output_buffer: vec![0; info.maxOutBufBytes as usize],
                 sample_rate: options.sample_rate,
+                channels: channels as usize,
                 codec_delay,
                 first_input_pts: None,
                 encoded_samples: 0,
+                received_samples: 0,
                 samples_per_frame: info.frameLength,
             },
             AudioEncoderConfig {
@@ -134,11 +140,13 @@ impl AudioEncoder for FdkAacEncoder {
 
     fn encode(&mut self, output_samples: OutputAudioSamples) -> Vec<EncodedOutputChunk> {
         trace!(?output_samples, "FDK AAC encoder received samples.");
+        let mut chunks = self.maybe_reset_on_discontinuity(output_samples.start_pts);
         self.enqueue_samples(output_samples);
-        self.call_fdk_encode(false).unwrap_or_else(|err| {
+        chunks.extend(self.call_fdk_encode(false).unwrap_or_else(|err| {
             error!("Encoding error: {:?}", err);
             vec![]
-        })
+        }));
+        chunks
     }
 
     fn flush(&mut self) -> Vec<EncodedOutputChunk> {
@@ -155,6 +163,39 @@ impl AudioEncoder for FdkAacEncoder {
 }
 
 impl FdkAacEncoder {
+    /// Audio mixer should always produce continuous stream, just a sanity check. Returns chunks
+    /// encoded from samples before the discontinuity.
+    fn maybe_reset_on_discontinuity(&mut self, start_pts: Timestamp) -> Vec<EncodedOutputChunk> {
+        let Some(first_input_pts) = self.first_input_pts else {
+            return vec![];
+        };
+        let expected_pts = first_input_pts
+            + Duration::from_secs_f64(self.received_samples as f64 / self.sample_rate as f64);
+        let diff_pts = start_pts - expected_pts;
+        if diff_pts.abs_duration() <= MAX_PTS_DEVIATION {
+            return vec![];
+        }
+        error!(?diff_pts, "Discontinuity in FDK AAC encoder input.");
+
+        // FDK keeps an incomplete frame internally. Pad it with silence, so new samples start
+        // on a frame boundary and pts derived from the encoded frames count stays correct.
+        let samples_per_frame = self.samples_per_frame as u64;
+        let padding =
+            (samples_per_frame - self.received_samples % samples_per_frame) % samples_per_frame;
+        let buffer_len = self.input_buffer.len() + padding as usize * self.channels;
+        self.input_buffer.resize(buffer_len, 0);
+        let chunks = self.call_fdk_encode(false).unwrap_or_else(|err| {
+            error!("Encoding error: {:?}", err);
+            vec![]
+        });
+
+        self.input_buffer.clear();
+        self.first_input_pts = None;
+        self.encoded_samples = 0;
+        self.received_samples = 0;
+        chunks
+    }
+
     fn call_fdk_encode(
         &mut self,
         flush: bool,
@@ -257,6 +298,7 @@ impl FdkAacEncoder {
         if self.first_input_pts.is_none() {
             self.first_input_pts = Some(samples.start_pts);
         };
+        self.received_samples += samples.samples.len() as u64;
 
         match samples.samples {
             AudioSamples::Mono(mono_samples) => {

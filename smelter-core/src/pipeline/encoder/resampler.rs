@@ -5,8 +5,8 @@ use rubato::{FixedSync, Resampler};
 use tracing::{error, info, trace};
 
 use crate::{
-    AudioChannels, AudioSamples, PipelineEvent, Timestamp, prelude::OutputAudioSamples,
-    utils::AudioSamplesBuffer,
+    AudioChannels, AudioSamples, PipelineEvent, Timestamp, pipeline::encoder::MAX_PTS_DEVIATION,
+    prelude::OutputAudioSamples, utils::AudioSamplesBuffer,
 };
 
 pub(crate) struct ResampledForEncoderStream<
@@ -68,9 +68,11 @@ impl<Source: Iterator<Item = PipelineEvent<OutputAudioSamples>>> Iterator
 }
 
 // This resampler assumes that:
-// - It will receive continuous streams of data, without any gaps.
+// - It will receive continuous streams of data, without any gaps. `maybe_reset_on_discontinuity`
+//   is just a sanity check to make sure we can recover.
 // - It can produce chunks of any size, no downstream components require specific sizes.
 struct OutputResampler {
+    input_sample_rate: u32,
     output_sample_rate: u32,
 
     resampler_input_buffer: AudioSamplesBuffer,
@@ -81,6 +83,8 @@ struct OutputResampler {
     /// of produces samples and first pts.
     first_sample_pts: Option<Timestamp>,
     samples_produced: u64,
+    /// Input samples (per channel) received since `first_sample_pts`.
+    samples_received: u64,
 }
 
 impl OutputResampler {
@@ -115,6 +119,7 @@ impl OutputResampler {
         resampler_output_buffer.samples_to_drop = output_delay;
 
         Ok(Self {
+            input_sample_rate,
             output_sample_rate,
 
             resampler,
@@ -123,13 +128,16 @@ impl OutputResampler {
 
             first_sample_pts: None,
             samples_produced: 0,
+            samples_received: 0,
         })
     }
 
     pub fn resample(&mut self, batch: OutputAudioSamples) -> Vec<OutputAudioSamples> {
         trace!(?batch, "Resampler received a new batch");
+        self.maybe_reset_on_discontinuity(batch.start_pts);
         let first_sample_pts = *self.first_sample_pts.get_or_insert(batch.start_pts);
 
+        self.samples_received += batch.samples.len() as u64;
         self.resampler_input_buffer.push_back(batch.samples);
 
         let mut result = vec![];
@@ -143,6 +151,26 @@ impl OutputResampler {
         }
         trace!(?result, "Resampler produced samples");
         result
+    }
+
+    // Audio mixer should always produce continuous stream, just a sanity check
+    fn maybe_reset_on_discontinuity(&mut self, start_pts: Timestamp) {
+        let Some(first_sample_pts) = self.first_sample_pts else {
+            return;
+        };
+        let expected_pts = first_sample_pts
+            + Duration::from_secs_f64(self.samples_received as f64 / self.input_sample_rate as f64);
+        let diff_pts = start_pts - expected_pts;
+        if diff_pts.abs_duration() <= MAX_PTS_DEVIATION {
+            return;
+        }
+        error!(?diff_pts, "Discontinuity in output resampler input.");
+        self.resampler.reset();
+        self.resampler_input_buffer.clear();
+        self.resampler_output_buffer.samples_to_drop = self.resampler.output_delay();
+        self.first_sample_pts = None;
+        self.samples_produced = 0;
+        self.samples_received = 0;
     }
 
     fn inner_resample(&mut self) -> Option<AudioSamples> {
