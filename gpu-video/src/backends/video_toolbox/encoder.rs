@@ -432,6 +432,7 @@ impl<C: EncodeCodec> EncoderFrame<C> {
         Ok(())
     }
 
+    #[cfg_attr(not(metal_interop), expect(dead_code))]
     fn fail(&self, error: VTEncoderError) {
         self.output.complete(Err(error));
     }
