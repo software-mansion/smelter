@@ -3,8 +3,8 @@ use std::sync::Arc;
 use crate::transformations::web_renderer::WebRenderer;
 
 use super::{
-    Component, ComponentId, IntermediateNode, SceneError, Size, StatefulComponent,
-    WebViewComponent, scene_state::BuildStateTreeCtx,
+    Component, ComponentId, SceneError, Size, StatefulComponent, WebViewComponent,
+    scene_state::BuildStateTreeCtx,
 };
 
 #[derive(Debug, Clone)]
@@ -22,19 +22,6 @@ impl StatefulWebViewComponent {
 
     pub(super) fn size(&self) -> Size {
         self.instance.resolution().into()
-    }
-
-    pub(super) fn intermediate_node(&self) -> IntermediateNode {
-        let children = self
-            .children
-            .iter()
-            .map(StatefulComponent::intermediate_node)
-            .collect();
-
-        IntermediateNode::WebView {
-            web: self.clone(),
-            children,
-        }
     }
 }
 

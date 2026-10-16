@@ -24,6 +24,7 @@ use crate::{
 };
 
 use self::{
+    output_texture::OutputTexture,
     render_graph::RenderGraph,
     render_loop::{populate_inputs, read_outputs, run_transforms},
     renderers::Renderers,
@@ -232,6 +233,11 @@ impl InnerRenderer {
             .register_render_event(inputs.pts, input_resolutions);
 
         let pts = inputs.pts;
+        trace!("Sync render graph with scene");
+        for (output_id, output) in &mut self.render_graph.outputs {
+            self.scene
+                .sync_render_tree(ctx, output_id, &mut output.root);
+        }
         trace!("Upload input textures");
         populate_inputs(ctx, &mut self.render_graph, inputs);
         trace!("Run render graph");
@@ -256,18 +262,13 @@ impl InnerRenderer {
             scene_root,
             resolution,
         };
-        let output_node =
-            self.scene
-                .update_scene(output, &self.renderers, &self.text_renderer_ctx)?;
-        self.render_graph.update(
-            &RenderCtx {
-                wgpu_ctx: &self.wgpu_ctx,
-                text_renderer_ctx: &self.text_renderer_ctx,
-                renderers: &self.renderers,
-            },
-            output_node,
-            output_format,
-        )?;
+        let scope = WgpuErrorScope::push(&self.wgpu_ctx.device);
+        let output_texture = OutputTexture::new(&self.wgpu_ctx, resolution, output_format);
+        scope.pop()?;
+
+        self.scene
+            .update_scene(output, &self.renderers, &self.text_renderer_ctx)?;
+        self.render_graph.update(output_id, output_texture);
         Ok(())
     }
 }

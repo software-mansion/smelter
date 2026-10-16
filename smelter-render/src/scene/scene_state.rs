@@ -3,19 +3,14 @@ use std::{collections::HashMap, time::Duration};
 use tracing::error;
 
 use crate::{
-    InputId, OutputId, Resolution, state::renderers::Renderers,
+    InputId, OutputId, Resolution,
+    state::{RenderCtx, node::RenderNode, renderers::Renderers},
     transformations::text_renderer::TextRendererCtx,
 };
 
 use super::{
-    ComponentId, Node, NodeParams, OutputScene, Position, SceneError, Size, StatefulComponent,
-    image_component::StatefulImageComponent,
-    input_stream_component::StatefulInputStreamComponent,
-    layout::{LayoutNode, SizedLayoutComponent, StatefulLayoutComponent},
-    shader_component::StatefulShaderComponent,
-    text_component::StatefulTextComponent,
+    ComponentId, OutputScene, SceneError, Size, StatefulComponent,
     validation::validate_scene_update,
-    web_view_component::StatefulWebViewComponent,
 };
 
 pub(super) struct BuildStateTreeCtx<'a> {
@@ -38,12 +33,6 @@ pub(crate) struct SceneState {
 struct OutputSceneState {
     root: StatefulComponent,
     resolution: Resolution,
-}
-
-pub(crate) struct OutputNode {
-    pub(crate) output_id: OutputId,
-    pub(crate) node: Node,
-    pub(crate) resolution: Resolution,
 }
 
 impl SceneState {
@@ -76,7 +65,7 @@ impl SceneState {
         output_scene: OutputScene,
         renderers: &Renderers,
         text_renderer_ctx: &TextRendererCtx,
-    ) -> Result<OutputNode, SceneError> {
+    ) -> Result<(), SceneError> {
         let output_id = output_scene.output_id.clone();
         validate_scene_update(&self.output_scenes, &output_scene)?;
 
@@ -109,125 +98,73 @@ impl SceneState {
             root: output_scene.scene_root.clone().stateful_component(&ctx)?,
             resolution: output_scene.resolution,
         };
-
-        let output_node_tree = OutputNode {
-            output_id: output_id.clone(),
-            node: output_state_tree
-                .root
-                .intermediate_node()
-                .build_tree(Some(output_scene.resolution), self.last_pts)?,
-            resolution: output_scene.resolution,
-        };
+        validate_node_sizes(&output_state_tree.root, self.last_pts)?;
 
         self.output_scenes.insert(output_id.clone(), output_scene);
         self.output_states.insert(output_id, output_state_tree);
 
-        Ok(output_node_tree)
+        Ok(())
     }
-}
 
-/// Intermediate representation of a node tree while it's being constructed.
-pub(super) enum IntermediateNode {
-    InputStream(StatefulInputStreamComponent),
-    Shader {
-        shader: StatefulShaderComponent,
-        children: Vec<IntermediateNode>,
-    },
-    WebView {
-        web: StatefulWebViewComponent,
-        children: Vec<IntermediateNode>,
-    },
-    Image(StatefulImageComponent),
-    Text(StatefulTextComponent),
-    Layout {
-        root: Box<StatefulLayoutComponent>,
-        children: Vec<IntermediateNode>,
-    },
-}
-
-impl IntermediateNode {
-    /// * `resolution` - Forces resolution of a node, primary use case for this
-    ///   param is to force resolution on a top level component to match resolution
-    ///   of an output stream. TODO: Currently only layouts respect that value
-    /// * `pts` - PTS from the last render (this function is not called on render
-    ///   so we can't have exact PTS here)
-    fn build_tree(self, resolution: Option<Resolution>, pts: Duration) -> Result<Node, SceneError> {
-        let size = match resolution {
-            Some(resolution) => resolution.into(),
-            None => self.node_size(pts)?,
+    /// Walks the scene state of an output together with its render tree and creates render
+    /// nodes that are missing.
+    pub(crate) fn sync_render_tree(
+        &self,
+        ctx: &RenderCtx,
+        output_id: &OutputId,
+        root: &mut Option<RenderNode>,
+    ) {
+        let Some(output) = self.output_states.get(output_id) else {
+            return;
         };
-        match self {
-            IntermediateNode::InputStream(input) => Ok(Node {
-                params: NodeParams::InputStream(input.component.input_id), // TODO: enforce resolution
-                children: vec![],
-            }),
-            IntermediateNode::Shader { shader, children } => Ok(Node {
-                params: NodeParams::Shader(shader.component, shader.shader), // TODO: enforce resolution
-                children: children
-                    .into_iter()
-                    .map(|node| node.build_tree(None, pts))
-                    .collect::<Result<_, _>>()?,
-            }),
-            IntermediateNode::WebView { web, children } => Ok(Node {
-                params: NodeParams::Web(web.children_ids, web.instance), // TODO: enforce resolution
-                children: children
-                    .into_iter()
-                    .map(|node| node.build_tree(None, pts))
-                    .collect::<Result<_, _>>()?,
-            }),
-            IntermediateNode::Layout { root, children } => Ok(Node {
-                params: NodeParams::Layout(LayoutNode {
-                    root: SizedLayoutComponent::new(root, size),
-                }),
-                children: children
-                    .into_iter()
-                    .map(|node| node.build_tree(None, pts))
-                    .collect::<Result<_, _>>()?,
-            }),
-            IntermediateNode::Image(image) => Ok(Node {
-                params: NodeParams::Image(image.image_render_params()),
-                children: vec![],
-            }),
-            IntermediateNode::Text(text) => Ok(Node {
-                params: NodeParams::Text(text.params),
-                children: vec![],
-            }),
-        }
-    }
-
-    fn node_size(&self, pts: Duration) -> Result<Size, SceneError> {
-        match self {
-            IntermediateNode::InputStream(input) => Ok(input.size),
-            IntermediateNode::Shader {
-                shader,
-                children: _,
-            } => Ok(shader.component.size),
-            IntermediateNode::WebView { web, children: _ } => Ok(web.size()),
-            IntermediateNode::Image(image) => Ok(image.size()),
-            IntermediateNode::Text(text) => Ok(text.size()),
-            IntermediateNode::Layout { root, children: _ } => {
-                let (width, height) = match root.position(pts) {
-                    Position::Static { width, height } => (width, height),
-                    // Technically absolute positioning is a bug here, but I think throwing error
-                    // in this case would be to invasive. It's better to just ignore those values.
-                    Position::Absolute(position) => (position.width, position.height),
-                };
-                if let (Some(width), Some(height)) = (width, height) {
-                    Ok(Size { width, height })
-                } else {
-                    Err(SceneError::UnknownDimensionsForLayoutNodeRoot {
-                        component: root.component_type(),
-                        msg: match root.component_id() {
-                            Some(id) => format!(
-                                "Please provide width and height values for component with id \"{id}\""
-                            ),
-                            None => "Please provide width and height values.".to_string(),
-                        },
-                    })
+        match root {
+            Some(node) => sync_render_node(node, &output.root),
+            None => {
+                match create_render_node(ctx, &output.root, Some(output.resolution), self.last_pts)
+                {
+                    Ok(node) => *root = Some(node),
+                    Err(err) => {
+                        error!("Failed to create render tree for output {output_id}: {err}")
+                    }
                 }
             }
         }
     }
+}
+
+fn create_render_node(
+    ctx: &RenderCtx,
+    component: &StatefulComponent,
+    resolution: Option<Resolution>,
+    pts: Duration,
+) -> Result<RenderNode, SceneError> {
+    let children = component
+        .node_children()
+        .into_iter()
+        .map(|child| create_render_node(ctx, child, None, pts))
+        .collect::<Result<_, _>>()?;
+    Ok(RenderNode::new(
+        ctx,
+        component.node_params(resolution, pts)?,
+        children,
+    ))
+}
+
+fn sync_render_node(node: &mut RenderNode, component: &StatefulComponent) {
+    for (child_node, child_component) in node.children.iter_mut().zip(component.node_children()) {
+        sync_render_node(child_node, child_component);
+    }
+}
+
+/// Layouts that are not a root of an output need to have known size.
+fn validate_node_sizes(component: &StatefulComponent, pts: Duration) -> Result<(), SceneError> {
+    for child in component.node_children() {
+        if let StatefulComponent::Layout(layout) = child {
+            layout.root_size(pts)?;
+        }
+        validate_node_sizes(child, pts)?;
+    }
+    Ok(())
 }
 
 fn recalculate_layout(

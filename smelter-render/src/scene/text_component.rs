@@ -1,8 +1,7 @@
 use crate::transformations::text_renderer::TextRenderParams;
 
 use super::{
-    ComponentId, IntermediateNode, SceneError, Size, StatefulComponent, TextComponent,
-    scene_state::BuildStateTreeCtx,
+    ComponentId, SceneError, Size, StatefulComponent, TextComponent, scene_state::BuildStateTreeCtx,
 };
 
 #[derive(Debug, Clone)]
@@ -26,10 +25,6 @@ impl StatefulTextComponent {
 
     pub(super) fn size(&self) -> Size {
         self.params.resolution.into()
-    }
-
-    pub(super) fn intermediate_node(&self) -> IntermediateNode {
-        IntermediateNode::Text(self.clone())
     }
 }
 

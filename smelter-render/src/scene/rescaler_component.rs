@@ -3,8 +3,8 @@ use std::{ops::Deref, time::Duration};
 use crate::transformations::layout::NestedLayout;
 
 use super::{
-    BorderRadius, BoxShadow, Component, ComponentId, HorizontalAlign, IntermediateNode, Position,
-    RGBAColor, RescaleMode, SceneError, Size, StatefulComponent, VerticalAlign,
+    BorderRadius, BoxShadow, Component, ComponentId, HorizontalAlign, Position, RGBAColor,
+    RescaleMode, SceneError, Size, StatefulComponent, VerticalAlign,
     components::RescalerComponent,
     layout::StatefulLayoutComponent,
     scene_state::BuildStateTreeCtx,
@@ -64,21 +64,6 @@ impl StatefulRescalerComponent {
 
     pub(super) fn component_id(&self) -> Option<&ComponentId> {
         self.end.id.as_ref()
-    }
-
-    pub(super) fn intermediate_node(&self) -> IntermediateNode {
-        let children = {
-            let node = self.child.intermediate_node();
-            match node {
-                IntermediateNode::Layout { root: _, children } => children,
-                _ => vec![node],
-            }
-        };
-
-        IntermediateNode::Layout {
-            root: StatefulLayoutComponent::Rescaler(self.clone()).into(),
-            children,
-        }
     }
 
     pub(super) fn layout(&mut self, size: Size, pts: Duration) -> NestedLayout {
