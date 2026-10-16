@@ -4,7 +4,7 @@ use bytes::Bytes;
 use tracing::{info, trace};
 use webrtc::rtp::{
     self,
-    codecs::{h264::H264Packet, opus::OpusPacket, vp8::Vp8Packet, vp9::Vp9Packet},
+    codecs::{opus::OpusPacket, vp8::Vp8Packet, vp9::Vp9Packet},
     packetizer::Depacketizer,
 };
 
@@ -21,9 +21,11 @@ pub(crate) use crate::pipeline::rtp::depayloader::dynamic_stream::{
 pub(crate) use crate::pipeline::rtp::depayloader::static_stream::DepayloaderStream;
 
 pub use aac_depayloader::AacDepayloader;
+use h264_depayloader::H264Depayloader;
 
 mod aac_depayloader;
 mod dynamic_stream;
+mod h264_depayloader;
 mod static_stream;
 
 #[derive(Debug)]
@@ -38,9 +40,7 @@ pub enum DepayloaderOptions {
 pub fn new_depayloader(options: DepayloaderOptions) -> Box<dyn Depayloader> {
     info!(?options, "Initialize RTP depayloader");
     match options {
-        DepayloaderOptions::H264 => {
-            SimpleDepayloader::<H264Packet>::new_boxed(MediaKind::Video(VideoCodec::H264))
-        }
+        DepayloaderOptions::H264 => Box::new(H264Depayloader::default()),
         DepayloaderOptions::Vp8 => {
             BufferedDepayloader::<Vp8Packet>::new_boxed(MediaKind::Video(VideoCodec::Vp8))
         }
@@ -57,6 +57,9 @@ pub fn new_depayloader(options: DepayloaderOptions) -> Box<dyn Depayloader> {
 pub(crate) trait Depayloader {
     fn depayload(&mut self, packet: RtpPacket)
     -> Result<Vec<EncodedInputEvent>, DepayloadingError>;
+
+    /// Called when a packet was lost, before the packets that follow it.
+    fn on_lost_packet(&mut self) {}
 }
 
 #[derive(Debug, thiserror::Error)]
