@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use crossbeam_channel::{Receiver, bounded};
+use crossbeam_channel::{Receiver, TrySendError, bounded};
 use glyphon::fontdb;
 use rtmp::RtmpServer;
 use tokio::runtime::{Builder, Runtime};
@@ -394,12 +394,17 @@ impl Pipeline {
         let (video_sender, video_receiver) = bounded(2);
         let (audio_sender, audio_receiver) = bounded(100);
         guard.queue.start(video_sender, audio_sender);
+        let never_drop_output_frames = guard.queue.never_drop_output_frames();
 
         let weak_pipeline = Arc::downgrade(pipeline);
-        thread::spawn(move || run_renderer_thread(weak_pipeline, video_receiver));
+        thread::spawn(move || {
+            run_renderer_thread(weak_pipeline, video_receiver, never_drop_output_frames)
+        });
 
         let weak_pipeline = Arc::downgrade(pipeline);
-        thread::spawn(move || run_audio_mixer_thread(weak_pipeline, audio_receiver));
+        thread::spawn(move || {
+            run_audio_mixer_thread(weak_pipeline, audio_receiver, never_drop_output_frames)
+        });
     }
 
     pub fn inputs(&self) -> impl Iterator<Item = (&InputId, InputInfo)> {
@@ -455,6 +460,7 @@ impl Drop for Pipeline {
 fn run_renderer_thread(
     pipeline: Weak<Mutex<Pipeline>>,
     frames_receiver: Receiver<QueueVideoOutput>,
+    never_drop_output_frames: bool,
 ) {
     let renderer = match pipeline.upgrade() {
         Some(pipeline) => pipeline.lock().unwrap().renderer.clone(),
@@ -511,12 +517,27 @@ fn run_renderer_thread(
                 continue;
             };
 
-            if frame_sender
-                .send(PipelineEvent::Data(frame.into()))
-                .is_err()
-            {
-                warn!(?output_id, "Failed to send output frames. Channel closed.");
-                renderer.unregister_output(&output_id);
+            // Non-blocking send, so an output that is not consuming frames does not stall
+            // rendering for all the other outputs.
+            let event = PipelineEvent::Data(frame.into());
+            let send_result = match never_drop_output_frames {
+                true => frame_sender
+                    .send(event)
+                    .map_err(|err| TrySendError::Disconnected(err.0)),
+                false => frame_sender.try_send(event),
+            };
+            match send_result {
+                Ok(()) => (),
+                Err(TrySendError::Full(_)) => {
+                    debug!(
+                        ?output_id,
+                        "Output is not consuming frames. Dropping frame."
+                    );
+                }
+                Err(TrySendError::Disconnected(_)) => {
+                    warn!(?output_id, "Failed to send output frames. Channel closed.");
+                    renderer.unregister_output(&output_id);
+                }
             }
         }
     }
@@ -526,6 +547,7 @@ fn run_renderer_thread(
 fn run_audio_mixer_thread(
     pipeline: Weak<Mutex<Pipeline>>,
     audio_receiver: Receiver<QueueAudioOutput>,
+    never_drop_output_frames: bool,
 ) {
     let audio_mixer = match pipeline.upgrade() {
         Some(pipeline) => pipeline.lock().unwrap().audio_mixer.clone(),
@@ -580,9 +602,24 @@ fn run_audio_mixer_thread(
                 continue;
             };
 
-            if samples_sender.send(PipelineEvent::Data(batch)).is_err() {
-                warn!(?output_id, "Failed to send mixed audio. Channel closed.");
-                audio_mixer.unregister_output(&output_id);
+            // Non-blocking send, so an output that is not consuming samples does not stall
+            // mixing for all the other outputs.
+            let event = PipelineEvent::Data(batch);
+            let send_result = match never_drop_output_frames {
+                true => samples_sender
+                    .send(event)
+                    .map_err(|err| TrySendError::Disconnected(err.0)),
+                false => samples_sender.try_send(event),
+            };
+            match send_result {
+                Ok(()) => (),
+                Err(TrySendError::Full(_)) => {
+                    debug!(?output_id, "Output is not consuming audio. Dropping batch.");
+                }
+                Err(TrySendError::Disconnected(_)) => {
+                    warn!(?output_id, "Failed to send mixed audio. Channel closed.");
+                    audio_mixer.unregister_output(&output_id);
+                }
             }
         }
     }
