@@ -149,7 +149,7 @@ impl BroadcastHandler {
             ctx.queue_ctx.sync_point,
             sync_stats,
         ));
-        let decoder_buffer_size = Duration::max(Duration::from_secs(20), max * 2);
+        let decoder_buffer_size = Duration::max(Duration::from_secs(60), max * 2);
 
         let track_ctx = TrackCtx {
             ctx,

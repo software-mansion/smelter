@@ -297,7 +297,13 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         // a chunk about to miss the queue is released even if it is behind a gap that might
         // still be filled
         let now_pts = self.sync_point.timestamp_at(now);
-        let is_about_to_miss = anchor.to_output_pts(next_pts) <= now_pts + MIN_QUEUE_HEADROOM;
+        let next_output_pts = anchor.to_output_pts(next_pts);
+        // Releasing far ahead only moves the buffer downstream, where it waits for the queue
+        // anyway but is out of reach of anchor corrections; held here it is still remapped.
+        if next_output_pts > now_pts + Duration::from_secs(5) {
+            return false;
+        }
+        let is_about_to_miss = next_output_pts <= now_pts + MIN_QUEUE_HEADROOM;
         let chunk = match is_about_to_miss {
             true => track.buffer.read(),
             false => track.buffer.try_read(),
