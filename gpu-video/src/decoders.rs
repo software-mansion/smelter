@@ -33,6 +33,7 @@ pub(crate) trait VideoDecoderBackend: Send {
 pub(crate) struct H264EventProcessor {
     parser: H264Parser,
     reference_ctx: ReferenceContext,
+    corrupted_state_handling: CorruptedStateHandling,
     decode_failed: Arc<AtomicBool>,
 }
 
@@ -44,6 +45,7 @@ impl H264EventProcessor {
         Self {
             parser,
             reference_ctx: ReferenceContext::new(corrupted_state_handling),
+            corrupted_state_handling,
             decode_failed: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -66,6 +68,11 @@ impl H264EventProcessor {
             DecoderEvent::SignalFrameEnd | DecoderEvent::Flush => self.parser.flush()?,
             DecoderEvent::SignalDataLoss => {
                 self.reference_ctx.mark_corrupted_state();
+                if self.corrupted_state_handling == CorruptedStateHandling::Strict {
+                    // Access unit in progress is missing data. If the end of the previous access
+                    // unit was lost, this also drops that access unit.
+                    let _ = self.parser.flush();
+                }
                 return Ok(Vec::new());
             }
         };

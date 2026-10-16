@@ -210,6 +210,15 @@ impl ReferenceContext {
             self.verify_frame_num(&sps, &header)?;
         }
 
+        // Rest of an IDR whose beginning was lost.
+        if is_idr
+            && self.detected_corrupted_state
+            && self.corrupted_state_handling == CorruptedStateHandling::Strict
+            && slices[0].0.header.first_mb_in_slice != 0
+        {
+            return Err(ReferenceManagementError::CorruptedState);
+        }
+
         let has_gap = header.frame_num != self.PrevRefFrameNum
             && header.frame_num
                 != ((self.PrevRefFrameNum as u32 + 1) % sps.max_frame_num() as u32) as u16;
