@@ -33,7 +33,6 @@ pub(crate) struct VTDecoder {
     needs_session_update: bool,
     session_color_range: Option<ColorRange>,
     usage: DecoderUsage,
-    #[cfg_attr(not(feature = "wgpu"), expect(dead_code))]
     metal_compatible_output: bool,
 }
 
@@ -188,7 +187,6 @@ impl VTDecoder {
             ColorRange::Limited => cv::kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
         };
 
-        #[cfg(feature = "wgpu")]
         let destination_image_buffer_attributes = if self.metal_compatible_output {
             unsafe {
                 cf::CFDictionary::<cf::CFString, cf::CFType>::from_slices(
@@ -211,14 +209,6 @@ impl VTDecoder {
                     &[cf::CFNumber::new_i32(pixel_format as i32).as_ref()],
                 )
             }
-        };
-
-        #[cfg(not(feature = "wgpu"))]
-        let destination_image_buffer_attributes = unsafe {
-            cf::CFDictionary::<cf::CFString, cf::CFType>::from_slices(
-                &[cv::kCVPixelBufferPixelFormatTypeKey],
-                &[cf::CFNumber::new_i32(pixel_format as i32).as_ref()],
-            )
         };
 
         let session = unsafe {
@@ -279,6 +269,18 @@ pub(super) fn download_to_bytes(
         width: width as u32,
         height: height as u32,
     })
+}
+
+type DecodeOutputBlock = block2::RcBlock<
+    dyn Fn(i32, vt::VTDecodeInfoFlags, *mut cv::CVImageBuffer, cm::CMTime, cm::CMTime),
+>;
+
+fn decode_output_block(
+    on_output: impl Fn(i32, vt::VTDecodeInfoFlags, *mut cv::CVImageBuffer, cm::CMTime, cm::CMTime)
+    + Send
+    + 'static,
+) -> DecodeOutputBlock {
+    block2::RcBlock::new(on_output)
 }
 
 struct Session {
@@ -355,7 +357,7 @@ impl Session {
             })?
         };
 
-        let block = block2::RcBlock::new(
+        let block = decode_output_block(
             move |status: i32,
                   info_flags: vt::VTDecodeInfoFlags,
                   image: *mut cv::CVImageBuffer,

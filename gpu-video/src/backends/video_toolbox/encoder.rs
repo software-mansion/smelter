@@ -12,9 +12,13 @@ use std::{
     time::Duration,
 };
 
+#[cfg(metal_interop)]
+use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_core_foundation as cf;
 use objc2_core_media as cm;
 use objc2_core_video as cv;
+#[cfg(metal_interop)]
+use objc2_metal as mtl;
 use objc2_video_toolbox as vt;
 
 use crate::{
@@ -30,6 +34,11 @@ use crate::{
     in_flight_tracker::{InFlightTracker, SubmissionToken},
     parameters::{EncoderPreset, EncoderUsage, H264Profile, H265Profile, RateControl},
 };
+
+#[cfg(feature = "transcoder")]
+use super::metal_interop::{PlaneTextures, plane_textures_from_pixel_buffer};
+#[cfg(metal_interop)]
+use super::metal_interop::{SyncCache, TimelinePoint};
 
 #[cfg(feature = "wgpu")]
 pub(crate) mod wgpu_api;
@@ -375,8 +384,74 @@ pub(crate) struct VTEncoder<C: EncodeCodec> {
     output_state: Arc<Mutex<OutputState<C>>>,
     encode_failed: Arc<AtomicBool>,
     flush_in_progress: Arc<AtomicBool>,
+    metal_compatible_input: bool,
     #[cfg(feature = "wgpu")]
     wgpu: Option<wgpu_api::VTWgpuEncodeState>,
+    #[cfg(metal_interop)]
+    texture_cache: Option<SyncCache>,
+    #[cfg(metal_interop)]
+    listener: Option<Retained<mtl::MTLSharedEventListener>>,
+}
+
+struct EncoderFrame<C: EncodeCodec> {
+    session: cf::CFRetained<vt::VTCompressionSession>,
+    buffer: cf::CFRetained<cv::CVBuffer>,
+    presentation_time_stamp: cm::CMTime,
+    duration: cm::CMTime,
+    frame_properties: Option<cf::CFRetained<cf::CFDictionary<cf::CFString, cf::CFType>>>,
+    completion_deadline: Option<cm::CMTime>,
+    output: Arc<FrameOutput<C>>,
+}
+
+// Safety: VT sessions are not documented as thread-affine (see `Session`), CF retain counts are
+// thread-safe, and nothing mutates the buffer or the dictionary after construction.
+unsafe impl<C: EncodeCodec> Send for EncoderFrame<C> where Arc<FrameOutput<C>>: Send {}
+
+impl<C: EncodeCodec> EncoderFrame<C> {
+    fn encode_and_complete_up_to(&self) -> Result<(), VTEncoderError> {
+        let output_block = self.output.output_block();
+        unsafe {
+            self.session
+                .encode_frame_with_output_handler(
+                    &self.buffer,
+                    self.presentation_time_stamp,
+                    self.duration,
+                    self.frame_properties
+                        .as_ref()
+                        .map(|properties| properties.as_ref()),
+                    null_mut(),
+                    block2::RcBlock::as_ptr(&output_block),
+                )
+                .osstatus()?;
+        }
+
+        if let Some(completion_deadline) = self.completion_deadline {
+            self.complete_up_to(completion_deadline);
+        }
+
+        Ok(())
+    }
+
+    fn fail(&self, error: VTEncoderError) {
+        self.output.complete(Err(error));
+    }
+
+    #[cfg(metal_interop)]
+    fn complete_all_frames(&self) {
+        self.complete_up_to(unsafe { cm::kCMTimeInvalid });
+    }
+
+    fn complete_up_to(&self, up_to: cm::CMTime) {
+        if let Err(error) = unsafe { self.session.complete_frames(up_to) }.osstatus() {
+            tracing::error!("Completing encoded frames failed: {error}");
+        }
+    }
+}
+
+#[cfg(feature = "transcoder")]
+pub(crate) struct MetalInputFrame {
+    pub(crate) buffer: cf::CFRetained<cv::CVBuffer>,
+    pub(crate) planes: PlaneTextures,
 }
 
 struct OutputState<C: EncodeCodec> {
@@ -407,7 +482,34 @@ impl<C: EncodeCodec> VTEncoder<C> {
         )?)
     }
 
-    pub(crate) fn create(
+    #[cfg(metal_interop)]
+    pub(crate) fn new_metal(
+        input_parameters: VideoParameters,
+        output_parameters: EncoderOutputParameters<C::Profile>,
+        max_in_flight_submissions: u32,
+        device: &ProtocolObject<dyn mtl::MTLDevice>,
+        on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
+    ) -> Result<Self, VTEncoderError> {
+        let mut encoder = Self::create(
+            input_parameters,
+            output_parameters,
+            max_in_flight_submissions,
+            true,
+            on_chunk_callback,
+        )?;
+
+        encoder.texture_cache = Some(SyncCache::new_from_mtl(
+            device,
+            mtl::MTLTextureUsage(
+                mtl::MTLTextureUsage::ShaderWrite.0 | mtl::MTLTextureUsage::RenderTarget.0,
+            ),
+        )?);
+        encoder.listener = Some(mtl::MTLSharedEventListener::new());
+
+        Ok(encoder)
+    }
+
+    fn create(
         input_parameters: VideoParameters,
         output_parameters: EncoderOutputParameters<C::Profile>,
         max_in_flight_submissions: u32,
@@ -456,8 +558,13 @@ impl<C: EncodeCodec> VTEncoder<C> {
             })),
             encode_failed: Arc::new(AtomicBool::new(false)),
             flush_in_progress: Arc::new(AtomicBool::new(false)),
+            metal_compatible_input,
             #[cfg(feature = "wgpu")]
             wgpu: None,
+            #[cfg(metal_interop)]
+            texture_cache: None,
+            #[cfg(metal_interop)]
+            listener: None,
         })
     }
 
@@ -606,6 +713,100 @@ impl<C: EncodeCodec> VTEncoder<C> {
         })
     }
 
+    #[cfg(feature = "transcoder")]
+    pub(crate) fn acquire_input_frame(&self) -> Result<MetalInputFrame, VTEncoderError> {
+        let texture_cache = self
+            .texture_cache
+            .as_ref()
+            .ok_or(VTEncoderError::NotConfiguredForMetalInput)?;
+
+        let buffer = self.session.acquire_input_buffer()?;
+        let planes = plane_textures_from_pixel_buffer(texture_cache, &buffer)?;
+
+        Ok(MetalInputFrame { buffer, planes })
+    }
+
+    #[cfg(metal_interop)]
+    pub(crate) fn submit_when_event_reaches(
+        &mut self,
+        buffer: cf::CFRetained<cv::CVBuffer>,
+        pts: Option<u64>,
+        force_idr: bool,
+        at: TimelinePoint,
+        check_input_ready: impl FnOnce() -> Result<(), VTEncoderError> + Send + 'static,
+    ) -> Result<(), VTEncoderError> {
+        let listener = self
+            .listener
+            .clone()
+            .ok_or(VTEncoderError::NotConfiguredForMetalInput)?;
+        let flush_in_progress = self.flush_in_progress.clone();
+
+        self.submit_frame(buffer, pts, force_idr, |frame| {
+            at.notify_listener(&listener, move || {
+                if let Err(error) = check_input_ready() {
+                    frame.fail(error);
+                    return;
+                }
+
+                if let Err(error) = frame.encode_and_complete_up_to() {
+                    frame.fail(error);
+                    return;
+                }
+
+                if flush_in_progress.load(Ordering::Relaxed) {
+                    frame.complete_all_frames();
+                }
+            });
+
+            Ok(())
+        })
+    }
+
+    fn submit_frame(
+        &mut self,
+        buffer: cf::CFRetained<cv::CVBuffer>,
+        pts: Option<u64>,
+        force_idr: bool,
+        dispatch: impl FnOnce(EncoderFrame<C>) -> Result<(), VTEncoderError>,
+    ) -> Result<(), VTEncoderError> {
+        let force_idr = self.prepare_submission(force_idr)?;
+
+        let (presentation_time_stamp, duration) = self.next_frame_timing();
+        let frame_properties = Self::frame_properties(force_idr);
+        let completion_deadline = self.frame_completion_deadline(self.frame_index - 1);
+
+        let submitted = self.in_flight.submit(Duration::MAX, |submission_token| {
+            dispatch(EncoderFrame {
+                session: self.session.session.0.clone(),
+                buffer,
+                presentation_time_stamp,
+                duration,
+                frame_properties,
+                completion_deadline,
+                output: FrameOutput::new(
+                    &self.output_state,
+                    &self.encode_failed,
+                    self.session_generation,
+                    pts,
+                    submission_token,
+                ),
+            })
+        });
+
+        self.check_for_panic();
+
+        submitted.map_err(|error| {
+            let error = VTEncoderError::from(error);
+            if matches!(
+                error,
+                VTEncoderError::OSStatus(OSStatusError::VTInvalidSession)
+            ) {
+                self.output_state.lock().unwrap().session_invalidated = true;
+            }
+            error
+        })
+    }
+
     fn frame_completion_deadline(&self, encoded_frame_index: i64) -> Option<cm::CMTime> {
         let frame_index =
             encoded_frame_index - i64::from(self.max_in_flight_submissions.saturating_sub(1));
@@ -632,7 +833,7 @@ impl<C: EncodeCodec> VTEncoder<C> {
         self.session = Self::build_session(
             self.input_parameters,
             &self.output_parameters,
-            self.metal_compatible_input(),
+            self.metal_compatible_input,
         )
         .map_err(|source| VTEncoderError::SessionInvalidated(Box::new(source)))?;
         self.session_generation += 1;
@@ -673,21 +874,11 @@ impl<C: EncodeCodec> VTEncoder<C> {
         }
     }
 
-    fn flush(&mut self) -> Result<(), VTEncoderError> {
+    pub(crate) fn flush(&mut self) -> Result<(), VTEncoderError> {
         let flushed = self.flush_submitted_frames();
         self.check_for_panic();
         flushed?;
         self.check_fatal_error()
-    }
-
-    #[cfg(feature = "wgpu")]
-    fn metal_compatible_input(&self) -> bool {
-        self.wgpu.is_some()
-    }
-
-    #[cfg(not(feature = "wgpu"))]
-    fn metal_compatible_input(&self) -> bool {
-        false
     }
 
     fn prefetch_stream_format(&self) -> Result<StreamFormat<C>, VTEncoderError> {
@@ -698,10 +889,10 @@ impl<C: EncodeCodec> VTEncoder<C> {
         let session = Self::build_session(
             self.input_parameters,
             &self.output_parameters,
-            self.metal_compatible_input(),
+            self.metal_compatible_input,
         )?;
 
-        let buffer = self.session.acquire_input_buffer()?;
+        let buffer = session.acquire_input_buffer()?;
 
         session.encode_for_stream_format(
             &buffer,
@@ -816,53 +1007,10 @@ impl<C: EncodeCodec> VideoEncoderBackend for VTEncoder<C> {
             });
         }
 
-        let force_idr = self.prepare_submission(force_idr)?;
-
         let buffer = self.session.input_buffer_from_nv12(frame.data.frame)?;
-        let (presentation_time_stamp, duration) = self.next_frame_timing();
-        let frame_properties = Self::frame_properties(force_idr);
-        let frame_properties = frame_properties
-            .as_ref()
-            .map(|properties| properties.as_ref());
-
-        let completion_deadline = self.frame_completion_deadline(self.frame_index - 1);
-
-        let session = &self.session;
-        let submitted = self.in_flight.submit(Duration::MAX, |submission_token| {
-            let frame_output = FrameOutput::new(
-                &self.output_state,
-                &self.encode_failed,
-                self.session_generation,
-                frame.pts,
-                submission_token,
-            );
-            session.encode(
-                &buffer,
-                presentation_time_stamp,
-                duration,
-                frame_properties,
-                &frame_output.output_block(),
-            )?;
-
-            if let Some(completion_deadline) = completion_deadline {
-                unsafe { session.session.complete_frames(completion_deadline) }.osstatus()?;
-            }
-
-            Ok(())
-        });
-
-        self.check_for_panic();
-
-        submitted.map_err(|error| {
-            let error = VTEncoderError::from(error);
-            if matches!(
-                error,
-                VTEncoderError::OSStatus(OSStatusError::VTInvalidSession)
-            ) {
-                self.output_state.lock().unwrap().session_invalidated = true;
-            }
-            error.into()
-        })
+        Ok(self.submit_frame(buffer, frame.pts, force_idr, |frame| {
+            frame.encode_and_complete_up_to()
+        })?)
     }
 
     fn flush(&mut self) -> Result<(), VideoEncoderError> {
@@ -917,6 +1065,13 @@ impl VideoEncoderParametersInfoH265 for VTEncoder<H265Codec> {
 type EncodeOutputBlock =
     block2::RcBlock<dyn Fn(i32, vt::VTEncodeInfoFlags, *mut cm::CMSampleBuffer)>;
 
+/// this is just for forcing Send + Sync + 'static on a closure
+fn encode_output_block(
+    on_output: impl Fn(i32, vt::VTEncodeInfoFlags, *mut cm::CMSampleBuffer) + Send + Sync + 'static,
+) -> EncodeOutputBlock {
+    block2::RcBlock::new(on_output)
+}
+
 struct FrameOutput<C: EncodeCodec> {
     output_state: Arc<Mutex<OutputState<C>>>,
     encode_failed: Arc<AtomicBool>,
@@ -944,7 +1099,7 @@ impl<C: EncodeCodec> FrameOutput<C> {
 
     fn output_block(self: &Arc<Self>) -> EncodeOutputBlock {
         let frame_output = self.clone();
-        block2::RcBlock::new(
+        encode_output_block(
             move |status: i32, flags: vt::VTEncodeInfoFlags, sample: *mut cm::CMSampleBuffer| {
                 frame_output.complete(encoded_sample(status, flags, sample));
             },
@@ -1081,30 +1236,6 @@ impl Session {
         Ok(buffer)
     }
 
-    fn encode(
-        &self,
-        buffer: &cv::CVBuffer,
-        presentation_time_stamp: cm::CMTime,
-        duration: cm::CMTime,
-        frame_properties: Option<&cf::CFDictionary>,
-        output_block: &EncodeOutputBlock,
-    ) -> Result<(), VTEncoderError> {
-        unsafe {
-            self.session
-                .encode_frame_with_output_handler(
-                    buffer,
-                    presentation_time_stamp,
-                    duration,
-                    frame_properties,
-                    null_mut(),
-                    block2::RcBlock::as_ptr(output_block),
-                )
-                .osstatus()?;
-        }
-
-        Ok(())
-    }
-
     fn encode_for_stream_format<C: EncodeCodec>(
         &self,
         buffer: &cv::CVBuffer,
@@ -1112,7 +1243,7 @@ impl Session {
         duration: cm::CMTime,
     ) -> Result<StreamFormat<C>, VTEncoderError> {
         let (sender, receiver) = mpsc::channel();
-        let output_block: EncodeOutputBlock = block2::RcBlock::new(
+        let output_block = encode_output_block(
             move |status: i32, flags: vt::VTEncodeInfoFlags, sample: *mut cm::CMSampleBuffer| {
                 let stream_format = encoded_sample(status, flags, sample).and_then(|sample| {
                     let description = unsafe { sample.format_description() }
@@ -1123,14 +1254,17 @@ impl Session {
             },
         );
 
-        self.encode(
-            buffer,
-            presentation_time_stamp,
-            duration,
-            None,
-            &output_block,
-        )?;
         unsafe {
+            self.session
+                .encode_frame_with_output_handler(
+                    buffer,
+                    presentation_time_stamp,
+                    duration,
+                    None,
+                    null_mut(),
+                    block2::RcBlock::as_ptr(&output_block),
+                )
+                .osstatus()?;
             self.session
                 .complete_frames(cm::kCMTimeInvalid)
                 .osstatus()?;
