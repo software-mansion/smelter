@@ -11,6 +11,7 @@ pub struct H264AuSplitter {
     parser: H264Parser,
     prev_ref_frame_num: u16,
     detected_missed_frames: bool,
+    last_idr_pts: Option<Timestamp>,
 }
 
 impl H264AuSplitter {
@@ -24,7 +25,7 @@ impl H264AuSplitter {
 
         let access_units = self
             .parser
-            .parse(&chunk.data, Some(chunk.pts.as_micros() as u64))?;
+            .parse(&chunk.data, Some(chunk.pts.as_nanos() as u64))?;
 
         self.process_au(access_units, chunk.decode_only)
     }
@@ -58,7 +59,7 @@ impl H264AuSplitter {
 
             chunks.push(EncodedInputChunk {
                 data: data.freeze(),
-                pts: Timestamp::from_micros(pts as i64),
+                pts: Timestamp::from_nanos(pts as i64),
                 dts: None,
                 kind: MediaKind::Video(VideoCodec::H264),
                 decode_only,
@@ -69,6 +70,21 @@ impl H264AuSplitter {
     }
 
     pub fn mark_missing_data(&mut self) {
+        // Access unit in progress is missing data. If the marker packet was lost, this also drops
+        // the previous, complete access unit.
+        let _ = self.parser.flush();
+        self.detected_missed_frames = true;
+    }
+
+    /// Drops access units until the next IDR, keeping the one in progress.
+    pub fn wait_for_idr(&mut self, frame_pts: Option<Timestamp>) {
+        // Frame decoded before the last IDR, but output with a reorder delay. Frames after that
+        // IDR can't reference it.
+        if let (Some(frame_pts), Some(idr_pts)) = (frame_pts, self.last_idr_pts)
+            && frame_pts < idr_pts
+        {
+            return;
+        }
         self.detected_missed_frames = true;
     }
 
@@ -83,8 +99,17 @@ impl H264AuSplitter {
 
         match &slice.header.dec_ref_pic_marking {
             Some(DecRefPicMarking::Idr { .. }) => {
+                // Rest of an IDR whose beginning was lost.
+                if self.detected_missed_frames && slice.header.first_mb_in_slice != 0 {
+                    return Err(AuSplitterError::MissingReferenceFrame);
+                }
                 self.prev_ref_frame_num = 0;
                 self.detected_missed_frames = false;
+                self.last_idr_pts = au
+                    .0
+                    .first()
+                    .and_then(|nalu| nalu.pts)
+                    .map(|pts| Timestamp::from_nanos(pts as i64));
             }
             Some(_) => {
                 if self.detected_missed_frames {

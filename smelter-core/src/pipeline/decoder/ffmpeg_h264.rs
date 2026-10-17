@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::pipeline::{
     decoder::{
         EncodedInputEvent, KeyframeRequestSender, VideoDecoder, VideoDecoderInstance,
-        ffmpeg_utils::{create_av_packet, from_av_frame},
+        ffmpeg_utils::{TIME_BASE, create_av_packet, from_av_frame},
     },
     utils::H264AuSplitter,
 };
@@ -15,8 +15,6 @@ use ffmpeg_next::{
     media::Type,
 };
 use tracing::{debug, error, info, trace, warn};
-
-const TIME_BASE: i32 = 1_000_000;
 
 pub struct FfmpegH264Decoder {
     decoder: ffmpeg_next::decoder::Opened,
@@ -117,7 +115,7 @@ impl FfmpegH264Decoder {
     fn send_chunks(&mut self, au_chunks: Vec<EncodedInputChunk>) {
         for chunk in au_chunks {
             trace!(?chunk, "FFmpeg H264 processing AU chunk");
-            let av_packet = match create_av_packet(chunk, VideoCodec::H264, TIME_BASE) {
+            let av_packet = match create_av_packet(chunk, VideoCodec::H264) {
                 Ok(packet) => packet,
                 Err(err) => {
                     warn!("Dropping frame: {}", err);
@@ -135,7 +133,17 @@ impl FfmpegH264Decoder {
         let mut frames = Vec::new();
         loop {
             match self.decoder.receive_frame(&mut self.av_frame) {
-                Ok(_) => match from_av_frame(&mut self.av_frame, TIME_BASE) {
+                Ok(_) if self.av_frame.is_corrupt() || self.av_frame.has_decode_errors() => {
+                    // Catches damage that was not signaled with LostData. Frames referencing this
+                    // one are not flagged, so wait for the next IDR.
+                    debug!("H264 decoder produced a corrupted frame. Dropping frame.");
+                    let pts = self.av_frame.pts().map(Timestamp::from_nanos);
+                    self.au_splitter.wait_for_idr(pts);
+                    if let Some(s) = self.keyframe_request_sender.as_ref() {
+                        s.send()
+                    }
+                }
+                Ok(_) => match from_av_frame(&mut self.av_frame) {
                     Ok(frame) => {
                         trace!(pts=?frame.pts, "H264 decoder produced a frame.");
                         frames.push(frame);
