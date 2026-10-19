@@ -74,6 +74,9 @@ where
                 }
             }
             Some(PipelineEvent::Data(RtpInputEvent::LostPacket)) => {
+                if let Some(depayloader) = self.depayloader.as_mut() {
+                    depayloader.on_lost_packet();
+                }
                 Some(vec![PipelineEvent::Data(EncodedInputEvent::LostData)])
             }
             Some(PipelineEvent::EOS) | None => match self.eos_sent {
