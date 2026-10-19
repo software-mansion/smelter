@@ -1,3 +1,5 @@
+use std::io::Cursor;
+
 use image::ImageFormat;
 
 use crate::{
@@ -8,6 +10,8 @@ use crate::{
         texture::{RgbaLinearTexture, RgbaSrgbTexture},
     },
 };
+
+use super::{ImageError, decoder_limits, validate_resolution};
 
 pub struct BitmapNodeState {
     was_rendered: bool,
@@ -31,12 +35,15 @@ impl BitmapAsset {
         ctx: &WgpuCtx,
         data: bytes::Bytes,
         format: ImageFormat,
-    ) -> Result<Self, image::ImageError> {
-        let img = image::load_from_memory_with_format(&data, format)?;
+    ) -> Result<Self, ImageError> {
+        let mut reader = image::io::Reader::with_format(Cursor::new(&data), format);
+        reader.limits(decoder_limits(ctx));
+        let img = reader.decode()?;
         let resolution = Resolution {
             width: img.width() as usize,
             height: img.height() as usize,
         };
+        validate_resolution(ctx, resolution)?;
 
         match ctx.mode {
             RenderingMode::GpuOptimized | RenderingMode::WebGl => {

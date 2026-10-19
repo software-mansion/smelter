@@ -1,6 +1,7 @@
 use std::time::Duration;
 
-use image::{AnimationDecoder, ImageFormat, codecs::gif::GifDecoder};
+use image::{AnimationDecoder, ImageDecoder, ImageFormat, codecs::gif::GifDecoder};
+use tracing::warn;
 
 use crate::{
     RenderingMode, Resolution,
@@ -11,7 +12,12 @@ use crate::{
     },
 };
 
-use super::AnimatedError;
+use super::{AnimatedError, decoder_limits, validate_resolution};
+
+/// Limit for the sum of decoded RGBA frame sizes in bytes (1 GiB), e.g. ~130 frames of 1920x1080.
+const MAX_ANIMATION_SIZE: usize = 1 << 30;
+
+const MAX_ANIMATION_FRAMES: usize = 1000;
 
 pub struct AnimatedNodeState {
     start_pts: Duration,
@@ -45,13 +51,25 @@ impl AnimatedAsset {
         format: ImageFormat,
     ) -> Result<Self, AnimatedError> {
         let decoded_frames = match format {
-            ImageFormat::Gif => GifDecoder::new(&data[..])?.into_frames(),
+            ImageFormat::Gif => {
+                let mut decoder = GifDecoder::new(&data[..])?;
+                decoder.set_limits(decoder_limits(ctx))?;
+                decoder.into_frames()
+            }
             other => return Err(AnimatedError::UnsupportedImageFormat(other)),
         };
 
         let mut animation_duration: Duration = Duration::ZERO;
+        let mut animation_size: usize = 0;
         let mut frames = vec![];
         for frame in decoded_frames {
+            if frames.len() >= MAX_ANIMATION_FRAMES {
+                warn!(
+                    "Animated image has over {MAX_ANIMATION_FRAMES} frames, only the first {MAX_ANIMATION_FRAMES} frames will be used."
+                );
+                break;
+            }
+
             let frame = &frame?;
             let buffer = frame.buffer();
 
@@ -59,6 +77,17 @@ impl AnimatedAsset {
                 width: buffer.width() as usize,
                 height: buffer.height() as usize,
             };
+            validate_resolution(ctx, resolution)?;
+
+            animation_size += resolution.width * resolution.height * 4;
+            if animation_size > MAX_ANIMATION_SIZE {
+                warn!(
+                    "Animated image exceeds the {} MiB size limit, only the first {} frames will be used.",
+                    MAX_ANIMATION_SIZE >> 20,
+                    frames.len()
+                );
+                break;
+            }
 
             match ctx.mode {
                 RenderingMode::GpuOptimized | RenderingMode::WebGl => {
@@ -84,10 +113,6 @@ impl AnimatedAsset {
 
             let delay: Duration = frame.delay().into();
             animation_duration += delay;
-
-            if frames.len() > 1000 {
-                return Err(AnimatedError::TooManyFrames);
-            }
         }
 
         let Some(first_frame) = frames.first() else {

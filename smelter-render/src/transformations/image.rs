@@ -10,7 +10,7 @@ use tracing::debug;
 
 use crate::{
     Resolution,
-    scene::image_component::ImageRenderParams,
+    scene::{Size, image_component::ImageRenderParams},
     state::{RegisterCtx, RenderCtx, node_texture::NodeTexture},
     wgpu::WgpuCtx,
 };
@@ -113,11 +113,12 @@ impl Image {
         Ok(renderer)
     }
 
-    pub fn resolution(&self) -> Resolution {
+    /// Original image size, for SVG it can be fractional.
+    pub fn size(&self) -> Size {
         match self {
-            Image::Bitmap(asset) => asset.resolution(),
-            Image::Animated(asset) => asset.resolution(),
-            Image::Svg(asset) => asset.resolution(),
+            Image::Bitmap(asset) => asset.resolution().into(),
+            Image::Animated(asset) => asset.resolution().into(),
+            Image::Svg(asset) => asset.size(),
         }
     }
 
@@ -176,7 +177,15 @@ impl ImageNode {
     }
 
     pub fn render(&mut self, ctx: &mut RenderCtx, target: &mut NodeTexture, pts: Duration) {
-        let target = target.ensure_size(ctx.wgpu_ctx, self.resolution());
+        let resolution = self.resolution();
+        if validate_resolution(ctx.wgpu_ctx, resolution).is_err() {
+            // Component size does not fit in a texture, render transparent pixel instead.
+            let target = target.ensure_size(ctx.wgpu_ctx, Resolution::ONE_PIXEL);
+            target.upload(ctx.wgpu_ctx, &[0; 4]);
+            return;
+        }
+
+        let target = target.ensure_size(ctx.wgpu_ctx, resolution);
         match self {
             ImageNode::Bitmap { asset, state, .. } => asset.render(ctx.wgpu_ctx, target, state),
             ImageNode::Animated { asset, state, .. } => {
@@ -195,6 +204,42 @@ impl ImageNode {
     }
 }
 
+/// Decoder limits that reject images not fitting in a texture before decoding them.
+fn decoder_limits(ctx: &WgpuCtx) -> image::io::Limits {
+    let max = ctx.device.limits().max_texture_dimension_2d;
+    let mut limits = image::io::Limits::default();
+    limits.max_image_width = Some(max);
+    limits.max_image_height = Some(max);
+    limits
+}
+
+fn validate_resolution(
+    ctx: &WgpuCtx,
+    resolution: Resolution,
+) -> Result<(), UnsupportedResolutionError> {
+    let max = ctx.device.limits().max_texture_dimension_2d as usize;
+    let range = 1..=max;
+    if range.contains(&resolution.width) && range.contains(&resolution.height) {
+        Ok(())
+    } else {
+        Err(UnsupportedResolutionError {
+            width: resolution.width,
+            height: resolution.height,
+            max,
+        })
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error(
+    "Unsupported image resolution {width}x{height}, dimensions have to be between 1 and {max}."
+)]
+pub struct UnsupportedResolutionError {
+    width: usize,
+    height: usize,
+    max: usize,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ImageError {
     #[error("Failed to download asset: {0}")]
@@ -205,6 +250,9 @@ pub enum ImageError {
 
     #[error("Failed to parse an image: {0}")]
     FailedToReadAsBitmap(#[from] image::ImageError),
+
+    #[error(transparent)]
+    UnsupportedResolution(#[from] UnsupportedResolutionError),
 
     #[error(transparent)]
     ParsingSvgFailed(#[from] SvgError),
@@ -230,10 +278,8 @@ pub enum SvgError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum AnimatedError {
-    #[error(
-        "Detected over 1000 frames inside the animated image. This case is not currently supported."
-    )]
-    TooManyFrames,
+    #[error(transparent)]
+    UnsupportedResolution(#[from] UnsupportedResolutionError),
 
     /// If there is only one frame we return error so the code can fallback to the more efficient
     /// implementation.
