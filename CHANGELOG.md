@@ -18,6 +18,7 @@
 ### 🐛 Bug fixes
 
 - Fix `VIDEO_INPUT_DELIVERED`/`AUDIO_INPUT_DELIVERED` events not being sent before queue start ([#2068](https://github.com/software-mansion/smelter/pull/2068) by [@wkozyra95](https://github.com/wkozyra95))
+- Fix `Image` component ignoring the image aspect ratio when only `width` or `height` is provided by [@RaphaelFakhri](https://github.com/RaphaelFakhri)
 
 ### 🔧 Others
 

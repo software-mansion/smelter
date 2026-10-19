@@ -64,29 +64,7 @@ impl ImageComponent {
             .get(&self.image_id)
             .ok_or_else(|| SceneError::ImageNotFound(self.image_id.clone()))?;
 
-        let original_aspect_ratio = image.resolution().width / image.resolution().height;
-
-        let resolution = match (self.width, self.height) {
-            (Some(width), Some(height)) => Resolution {
-                width: width.round() as usize,
-                height: height.round() as usize,
-            },
-            (Some(width), None) => {
-                let height = width / original_aspect_ratio as f32;
-                Resolution {
-                    width: width.round() as usize,
-                    height: height.round() as usize,
-                }
-            }
-            (None, Some(height)) => {
-                let width = height * original_aspect_ratio as f32;
-                Resolution {
-                    width: width.round() as usize,
-                    height: height.round() as usize,
-                }
-            }
-            (None, None) => image.resolution(),
-        };
+        let resolution = image_resolution(self.width, self.height, image.resolution());
 
         let prev_state = self
             .id
@@ -120,5 +98,62 @@ impl ImageComponent {
         };
 
         Ok(StatefulComponent::Image(component))
+    }
+}
+
+/// Resolves the image size, filling in a missing `width` or `height` from the original aspect
+/// ratio.
+fn image_resolution(width: Option<f32>, height: Option<f32>, original: Resolution) -> Resolution {
+    let original_aspect_ratio = original.width as f32 / original.height as f32;
+
+    let (width, height) = match (width, height) {
+        (Some(width), Some(height)) => (width, height),
+        (Some(width), None) => (width, width / original_aspect_ratio),
+        (None, Some(height)) => (height * original_aspect_ratio, height),
+        (None, None) => return original,
+    };
+    Resolution {
+        width: width.round() as usize,
+        height: height.round() as usize,
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_image_resolution() {
+        let landscape = Resolution {
+            width: 1920,
+            height: 1080,
+        };
+        let portrait = Resolution {
+            width: 1080,
+            height: 1920,
+        };
+        let resolution = |width, height| Resolution { width, height };
+
+        assert_eq!(image_resolution(None, None, landscape), landscape);
+        assert_eq!(
+            image_resolution(Some(100.0), Some(50.0), landscape),
+            resolution(100, 50)
+        );
+        assert_eq!(
+            image_resolution(Some(960.0), None, landscape),
+            resolution(960, 540)
+        );
+        assert_eq!(
+            image_resolution(None, Some(540.0), landscape),
+            resolution(960, 540)
+        );
+        assert_eq!(
+            image_resolution(Some(540.0), None, portrait),
+            resolution(540, 960)
+        );
+        assert_eq!(
+            image_resolution(None, Some(960.0), portrait),
+            resolution(540, 960)
+        );
     }
 }
