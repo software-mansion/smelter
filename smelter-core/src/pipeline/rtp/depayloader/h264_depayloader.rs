@@ -1,5 +1,6 @@
 use bytes::Bytes;
-use tracing::trace;
+use smelter_render::error::ErrorStack;
+use tracing::{debug, trace, warn};
 use webrtc::rtp::{
     self,
     codecs::h264::{
@@ -62,6 +63,7 @@ impl H264Depayloader {
         }
 
         if is_malformed_stap_a(payload) {
+            warn!("Dropping malformed STAP-A packet");
             return Err(rtp::Error::ErrShortPacket.into());
         }
 
@@ -110,7 +112,13 @@ impl Depayloader for H264Depayloader {
         packet: RtpPacket,
     ) -> Result<Vec<EncodedInputEvent>, DepayloadingError> {
         trace!(?packet, "RTP H264 depayloader received new packet");
-        let data = self.depacketize(&packet.packet.payload)?;
+        // Errors are logged instead of returned, so a marker packet still closes the access unit.
+        let data = self
+            .depacketize(&packet.packet.payload)
+            .unwrap_or_else(|err| {
+                debug!("Depayloader error: {}", ErrorStack::new(&err).into_string());
+                Bytes::new()
+            });
 
         let mut events = Vec::new();
         if !data.is_empty() {
