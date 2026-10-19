@@ -1,6 +1,7 @@
 use bytes::Bytes;
 use tracing::trace;
 use webrtc::rtp::{
+    self,
     codecs::h264::{
         FU_END_BITMASK, FU_START_BITMASK, FUA_NALU_TYPE, H264Packet, NALU_TYPE_BITMASK,
     },
@@ -66,6 +67,17 @@ impl H264Depayloader {
                 return Err(err.into());
             }
         };
+
+        // A STAP-A entry of size 0, or a start code inside a malformed NAL unit, leaves a start code
+        // with no NAL unit after it (webrtc-rs does not reject either), and the H264 parser panics
+        // on such an empty NAL unit.
+        let has_empty_nalu = memchr::memmem::find_iter(&data, &[0, 0, 1]).any(|i| {
+            let rest = &data[i + 3..];
+            rest.is_empty() || rest.starts_with(&[0, 0, 1]) || rest.starts_with(&[0, 0, 0, 1])
+        });
+        if has_empty_nalu {
+            return Err(rtp::Error::ErrShortPacket.into());
+        }
         self.in_fragmented_nalu = fu_header.is_some_and(|h| h & FU_END_BITMASK == 0);
         Ok(data)
     }
