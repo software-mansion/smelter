@@ -1,6 +1,6 @@
 # gpu-video
 
-A library for hardware video decoding and encoding using Vulkan Video, with [wgpu] integration.
+A library for hardware video decoding and encoding, with [wgpu] integration.
 
 [![Crates.io][crates-badge]][crates-url]
 [![docs.rs][docs-badge]][docs-url]
