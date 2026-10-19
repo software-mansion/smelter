@@ -4,6 +4,7 @@ use webrtc::rtp::{
     self,
     codecs::h264::{
         FU_END_BITMASK, FU_START_BITMASK, FUA_NALU_TYPE, H264Packet, NALU_TYPE_BITMASK,
+        STAPA_HEADER_SIZE, STAPA_NALU_TYPE,
     },
     packetizer::Depacketizer,
 };
@@ -60,6 +61,10 @@ impl H264Depayloader {
             Some(_) => (),
         }
 
+        if is_malformed_stap_a(payload) {
+            return Err(rtp::Error::ErrShortPacket.into());
+        }
+
         let data = match self.depacketizer.depacketize(payload) {
             Ok(data) => data,
             Err(err) => {
@@ -81,6 +86,22 @@ impl H264Depayloader {
         self.in_fragmented_nalu = fu_header.is_some_and(|h| h & FU_END_BITMASK == 0);
         Ok(data)
     }
+}
+
+/// STAP-A entries don't fill the payload exactly. webrtc-rs panics on a single trailing byte.
+fn is_malformed_stap_a(payload: &[u8]) -> bool {
+    if payload[0] & NALU_TYPE_BITMASK != STAPA_NALU_TYPE {
+        return false;
+    }
+    let mut rest = &payload[STAPA_HEADER_SIZE..];
+    while let [hi, lo, tail @ ..] = rest {
+        let size = usize::from(u16::from_be_bytes([*hi, *lo]));
+        match tail.get(size..) {
+            Some(next) => rest = next,
+            None => return true,
+        }
+    }
+    !rest.is_empty()
 }
 
 impl Depayloader for H264Depayloader {
