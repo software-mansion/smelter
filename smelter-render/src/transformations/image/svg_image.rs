@@ -10,6 +10,7 @@ use tracing::error;
 
 use crate::{
     RenderingMode, Resolution,
+    scene::Size,
     state::node_texture::NodeTextureState,
     wgpu::{
         WgpuCtx,
@@ -86,10 +87,10 @@ impl SvgAsset {
         state.was_rendered = true;
     }
 
-    pub fn resolution(&self) -> Resolution {
-        Resolution {
-            width: self.tree.0.size.width() as usize,
-            height: self.tree.0.size.height() as usize,
+    pub fn size(&self) -> Size {
+        Size {
+            width: self.tree.0.size.width(),
+            height: self.tree.0.size.height(),
         }
     }
 }

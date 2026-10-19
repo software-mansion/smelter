@@ -64,28 +64,31 @@ impl ImageComponent {
             .get(&self.image_id)
             .ok_or_else(|| SceneError::ImageNotFound(self.image_id.clone()))?;
 
-        let original_aspect_ratio = image.resolution().width / image.resolution().height;
+        let original_size = image.size();
 
-        let resolution = match (self.width, self.height) {
-            (Some(width), Some(height)) => Resolution {
-                width: width.round() as usize,
-                height: height.round() as usize,
-            },
+        let size = match (self.width, self.height) {
+            (Some(width), Some(height)) => Size { width, height },
             (Some(width), None) => {
-                let height = width / original_aspect_ratio as f32;
-                Resolution {
-                    width: width.round() as usize,
-                    height: height.round() as usize,
-                }
+                let height = if original_size.width > 0.0 {
+                    width * original_size.height / original_size.width
+                } else {
+                    0.0
+                };
+                Size { width, height }
             }
             (None, Some(height)) => {
-                let width = height * original_aspect_ratio as f32;
-                Resolution {
-                    width: width.round() as usize,
-                    height: height.round() as usize,
-                }
+                let width = if original_size.height > 0.0 {
+                    height * original_size.width / original_size.height
+                } else {
+                    0.0
+                };
+                Size { width, height }
             }
-            (None, None) => image.resolution(),
+            (None, None) => original_size,
+        };
+        let resolution = Resolution {
+            width: size.width.round() as usize,
+            height: size.height.round() as usize,
         };
 
         let prev_state = self
