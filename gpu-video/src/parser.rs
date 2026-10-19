@@ -130,3 +130,50 @@ pub mod h264 {
         }
     }
 }
+
+/// Malformed input has to be skipped or returned as an error, never panic. The result is not
+/// checked, a panic fails the test.
+#[cfg(test)]
+mod tests {
+    use super::h264::H264Parser;
+
+    const AUD: &[u8] = &[0x00, 0x00, 0x00, 0x01, 0x09, 0xF0];
+
+    #[test]
+    fn empty_nalu_with_4_byte_start_code() {
+        let data = [&[0x00, 0x00, 0x00, 0x01], AUD, AUD].concat();
+        let _ = H264Parser::default().parse(&data, Some(0));
+    }
+
+    #[test]
+    fn empty_nalu_with_3_byte_start_code() {
+        let data = [&[0x00, 0x00, 0x01], AUD, AUD].concat();
+        let _ = H264Parser::default().parse(&data, Some(0));
+    }
+
+    #[test]
+    fn short_data_without_start_code() {
+        let data = [&[0x09, 0xF0], AUD, AUD].concat();
+        let _ = H264Parser::default().parse(&data, Some(0));
+    }
+
+    #[test]
+    fn data_without_start_code() {
+        let data = [&[0x09, 0xF0, 0xAA, 0xBB], AUD, AUD].concat();
+        let _ = H264Parser::default().parse(&data, Some(0));
+    }
+
+    #[test]
+    fn flush_with_only_start_code() {
+        let mut parser = H264Parser::default();
+        let _ = parser.parse(&[0x00, 0x00, 0x00, 0x01], Some(0));
+        let _ = parser.flush();
+    }
+
+    #[test]
+    fn flush_with_short_buffer() {
+        let mut parser = H264Parser::default();
+        let _ = parser.parse(&[0x00, 0x00, 0x01], Some(0));
+        let _ = parser.flush();
+    }
+}
