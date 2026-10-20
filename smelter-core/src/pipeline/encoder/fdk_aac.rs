@@ -12,7 +12,7 @@ use tracing::{error, info, trace};
 
 use crate::prelude::*;
 
-use super::{AudioEncoder, AudioEncoderConfig};
+use super::{AudioEncoder, AudioEncoderConfig, MAX_PTS_DEVIATION};
 
 /// FDK-AAC encoder.
 /// Implementation is based on the fdk-aac encoder documentation:
@@ -25,9 +25,12 @@ pub struct FdkAacEncoder {
     samples_per_frame: u32,
     codec_delay: Duration,
 
-    // This logic relies on the fact that input samples will always be continuous.
+    /// This logic relies on the fact that input samples will always be continuous.
+    /// `maybe_reset_on_discontinuity` is just a sanity check to make sure we can recover.
     first_input_pts: Option<Timestamp>,
     encoded_samples: u64,
+    /// Samples (per channel) received since `first_input_pts`.
+    received_samples: u64,
 }
 
 impl AudioEncoder for FdkAacEncoder {
@@ -119,6 +122,7 @@ impl AudioEncoder for FdkAacEncoder {
                 codec_delay,
                 first_input_pts: None,
                 encoded_samples: 0,
+                received_samples: 0,
                 samples_per_frame: info.frameLength,
             },
             AudioEncoderConfig {
@@ -134,6 +138,7 @@ impl AudioEncoder for FdkAacEncoder {
 
     fn encode(&mut self, output_samples: OutputAudioSamples) -> Vec<EncodedOutputChunk> {
         trace!(?output_samples, "FDK AAC encoder received samples.");
+        self.maybe_reset_on_discontinuity(output_samples.start_pts);
         self.enqueue_samples(output_samples);
         self.call_fdk_encode(false).unwrap_or_else(|err| {
             error!("Encoding error: {:?}", err);
@@ -155,6 +160,23 @@ impl AudioEncoder for FdkAacEncoder {
 }
 
 impl FdkAacEncoder {
+    // Audio mixer should always produce continuous stream, just a sanity check
+    fn maybe_reset_on_discontinuity(&mut self, start_pts: Timestamp) {
+        let Some(first_input_pts) = self.first_input_pts else {
+            return;
+        };
+        let expected_pts = first_input_pts
+            + Duration::from_secs_f64(self.received_samples as f64 / self.sample_rate as f64);
+        let diff_pts = start_pts - expected_pts;
+        if diff_pts.abs_duration() <= MAX_PTS_DEVIATION {
+            return;
+        }
+        error!(?diff_pts, "Discontinuity in FDK AAC encoder input.");
+
+        // Samples still buffered inside FDK are shifted too, new samples get the correct pts.
+        self.first_input_pts = Some(first_input_pts + diff_pts);
+    }
+
     fn call_fdk_encode(
         &mut self,
         flush: bool,
@@ -257,6 +279,7 @@ impl FdkAacEncoder {
         if self.first_input_pts.is_none() {
             self.first_input_pts = Some(samples.start_pts);
         };
+        self.received_samples += samples.samples.len() as u64;
 
         match samples.samples {
             AudioSamples::Mono(mono_samples) => {

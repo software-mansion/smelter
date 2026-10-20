@@ -5,14 +5,11 @@ use bytes::Bytes;
 use tracing::{error, info, trace};
 
 use crate::{
-    pipeline::encoder::{AudioEncoder, AudioEncoderConfig},
+    pipeline::encoder::{AudioEncoder, AudioEncoderConfig, MAX_PTS_DEVIATION},
     utils::AudioSamplesBuffer,
 };
 
 use crate::prelude::*;
-
-/// Input pts further than that from the pts derived from sample count is a discontinuity.
-const MAX_PTS_DEVIATION: Duration = Duration::from_millis(10);
 
 #[derive(Debug)]
 pub struct OpusEncoder {

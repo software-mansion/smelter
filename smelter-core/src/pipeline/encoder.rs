@@ -25,6 +25,9 @@ mod ffmpeg_utils;
 pub(crate) mod resampler;
 mod utils;
 
+/// Input pts further than that from the pts derived from sample count is a discontinuity.
+const MAX_PTS_DEVIATION: Duration = Duration::from_millis(10);
+
 #[derive(Debug, Clone)]
 pub(crate) struct VideoEncoderConfig {
     pub resolution: Resolution,
