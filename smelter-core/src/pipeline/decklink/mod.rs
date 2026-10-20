@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use tracing::{Level, error, span};
 
-use crate::pipeline::input::Input;
+use crate::pipeline::{host_imports::HostImports, input::Input};
 use crate::queue::{InputSideChannel, QueueTrackOffset, QueueTrackOptions};
 use crate::{pipeline::decklink::format::Format, queue::QueueInput};
 
@@ -44,6 +44,7 @@ const AUDIO_SAMPLE_RATE: u32 = 48_000;
 ///   queue too late and dropped
 pub struct DeckLink {
     input: Arc<decklink::Input>,
+    imports: Arc<Mutex<HostImports>>,
 }
 
 impl DeckLink {
@@ -103,6 +104,7 @@ impl DeckLink {
             Arc::<decklink::Input>::downgrade(&input),
             Format::new(initial_mode, initial_pixel_format),
         );
+        let imports = callback.imports.clone();
         input
             .set_callback(Box::new(callback))
             .map_err(DeckLinkInputError::DecklinkError)?;
@@ -111,7 +113,7 @@ impl DeckLink {
             .map_err(DeckLinkInputError::DecklinkError)?;
 
         Ok((
-            Input::DeckLink(Self { input }),
+            Input::DeckLink(Self { input, imports }),
             InputInitInfo::Other,
             queue_input,
         ))
@@ -123,5 +125,7 @@ impl Drop for DeckLink {
         if let Err(err) = self.input.stop_streams() {
             error!("Failed to stop streams: {:?}", err);
         }
+        // Releasing the input frees the buffers the imports read.
+        self.imports.lock().unwrap().clear();
     }
 }

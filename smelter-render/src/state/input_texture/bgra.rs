@@ -35,6 +35,11 @@ impl BgraInput {
         self.upload_textures.upload(ctx, data);
     }
 
+    pub fn upload_textures(&mut self, ctx: &WgpuCtx, resolution: Resolution) -> Vec<wgpu::Texture> {
+        self.maybe_recreate(ctx, resolution);
+        vec![self.upload_textures.texture().clone()]
+    }
+
     pub fn convert(&mut self, ctx: &WgpuCtx, dest: &NodeTextureState) {
         match dest {
             NodeTextureState::GpuOptimized { texture, .. } => {

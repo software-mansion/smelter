@@ -15,6 +15,32 @@ use crate::{
 
 use super::{input_texture::InputTexture, node_texture::NodeTexture};
 
+/// Pixels in a GPU buffer: the planes of `format` one after another, every
+/// row `bytes_per_row` apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BufferLayout {
+    pub format: BufferFormat,
+    pub resolution: Resolution,
+    pub bytes_per_row: u32,
+}
+
+impl BufferLayout {
+    /// Whether `process_buffer` takes it: the GPU copies rows only from
+    /// offsets 256 bytes apart.
+    pub fn rows_aligned(&self) -> bool {
+        self.bytes_per_row
+            .is_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BufferFormat {
+    InterleavedUyvy422,
+    InterleavedYuyv422,
+    Nv12,
+    Bgra,
+}
+
 /// Stand-alone single-frame processor. Takes one `Frame` and runs it through
 /// a fixed pipeline:
 ///
@@ -62,7 +88,41 @@ impl FramePreProcessor {
         frame: Frame,
         resolution: Option<Resolution>,
     ) -> wgpu::Texture {
-        self.upload_and_convert_to_node_texture(frame);
+        self.input_texture.upload(&self.wgpu_ctx, frame);
+        self.convert_to_texture(resolution)
+    }
+
+    /// `process_to_texture` for a frame the GPU copies from `buffer`, a
+    /// `COPY_SRC` buffer with `layout.rows_aligned()`. The GPU reads `buffer`
+    /// until the work submitted so far completes.
+    pub fn process_buffer(&mut self, buffer: &wgpu::Buffer, layout: BufferLayout) -> wgpu::Texture {
+        let ctx = &self.wgpu_ctx;
+        let mut encoder = ctx.device.create_command_encoder(&Default::default());
+        let mut offset = 0;
+        for texture in self
+            .input_texture
+            .upload_textures(ctx, layout.format, layout.resolution)
+        {
+            encoder.copy_buffer_to_texture(
+                wgpu::TexelCopyBufferInfo {
+                    buffer,
+                    layout: wgpu::TexelCopyBufferLayout {
+                        offset,
+                        bytes_per_row: Some(layout.bytes_per_row),
+                        rows_per_image: None,
+                    },
+                },
+                texture.as_image_copy(),
+                texture.size(),
+            );
+            offset += (layout.bytes_per_row * texture.height()) as u64;
+        }
+        ctx.queue.submit(Some(encoder.finish()));
+        self.convert_to_texture(None)
+    }
+
+    fn convert_to_texture(&mut self, resolution: Option<Resolution>) -> wgpu::Texture {
+        self.convert_to_node_texture();
 
         let output_texture_views: &'static [wgpu::TextureFormat] = match self.wgpu_ctx.mode {
             RenderingMode::GpuOptimized => &[
@@ -89,7 +149,8 @@ impl FramePreProcessor {
         frame: Frame,
         resolution: Option<Resolution>,
     ) -> bytes::Bytes {
-        self.upload_and_convert_to_node_texture(frame);
+        self.input_texture.upload(&self.wgpu_ctx, frame);
+        self.convert_to_node_texture();
 
         if let Some(resolution) = resolution {
             self.rescale_node_texture(resolution);
@@ -106,8 +167,7 @@ impl FramePreProcessor {
         }
     }
 
-    fn upload_and_convert_to_node_texture(&mut self, frame: Frame) {
-        self.input_texture.upload(&self.wgpu_ctx, frame);
+    fn convert_to_node_texture(&mut self) {
         // Flush uploads before the conversion pass reads them.
         self.wgpu_ctx.queue.submit([]);
         self.input_texture

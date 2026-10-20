@@ -15,7 +15,7 @@ pub use registry::RegistryType;
 pub use state::Renderer;
 pub use state::RendererOptions;
 pub use state::RendererSpec;
-pub use state::frame_pre_processor::FramePreProcessor;
+pub use state::frame_pre_processor::{BufferFormat, BufferLayout, FramePreProcessor};
 pub use transformations::layout::DEFAULT_MAX_LAYOUTS_COUNT;
 
 pub use wgpu::{WgpuCtx, WgpuFeatures, required_wgpu_features, set_required_wgpu_limits};

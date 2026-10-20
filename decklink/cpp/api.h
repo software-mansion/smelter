@@ -78,10 +78,13 @@ void configuration_release(IDeckLinkConfiguration *conf);
 long video_input_frame_width(IDeckLinkVideoInputFrame *frame);
 long video_input_frame_height(IDeckLinkVideoInputFrame *frame);
 long video_input_frame_row_bytes(IDeckLinkVideoInputFrame *frame);
-uint8_t *video_input_frame_bytes(IDeckLinkVideoInputFrame *frame);
+VideoBufferAccess video_input_frame_start_access(IDeckLinkVideoInputFrame *frame);
 PixelFormat video_input_frame_pixel_format(IDeckLinkVideoInputFrame *frame);
 BMDTimeValue video_input_frame_stream_time(IDeckLinkVideoInputFrame *frame,
                                            BMDTimeScale time_scale);
+
+// IDeckLinkVideoBuffer
+void video_buffer_end_access(IDeckLinkVideoBuffer *buffer);
 
 // IDeckLinkAudioInputPacket
 uint8_t *audio_input_packet_bytes(IDeckLinkAudioInputPacket *input);
