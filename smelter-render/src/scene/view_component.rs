@@ -3,8 +3,8 @@ use std::{ops::Deref, time::Duration};
 use crate::{scene::ViewChildrenDirection, transformations::layout::NestedLayout};
 
 use super::{
-    BorderRadius, BoxShadow, Component, ComponentId, IntermediateNode, Overflow, Padding, Position,
-    RGBAColor, SceneError, Size, StatefulComponent,
+    BorderRadius, BoxShadow, Component, ComponentId, Overflow, Padding, Position, RGBAColor,
+    SceneError, Size, StatefulComponent,
     components::ViewComponent,
     layout::StatefulLayoutComponent,
     scene_state::BuildStateTreeCtx,
@@ -68,25 +68,6 @@ impl StatefulViewComponent {
 
     pub(super) fn component_id(&self) -> Option<&ComponentId> {
         self.end.id.as_ref()
-    }
-
-    pub(super) fn intermediate_node(&self) -> IntermediateNode {
-        let children = self
-            .children
-            .iter()
-            .flat_map(|component| {
-                let node = component.intermediate_node();
-                match node {
-                    IntermediateNode::Layout { root: _, children } => children,
-                    _ => vec![node],
-                }
-            })
-            .collect();
-
-        IntermediateNode::Layout {
-            root: StatefulLayoutComponent::View(self.clone()).into(),
-            children,
-        }
     }
 
     pub(super) fn layout(&mut self, size: Size, pts: Duration) -> NestedLayout {

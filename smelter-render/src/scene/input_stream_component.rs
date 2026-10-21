@@ -1,7 +1,7 @@
 use crate::Resolution;
 
 use super::{
-    ComponentId, InputStreamComponent, IntermediateNode, SceneError, Size, StatefulComponent,
+    ComponentId, InputStreamComponent, SceneError, Size, StatefulComponent,
     scene_state::BuildStateTreeCtx,
 };
 
@@ -14,10 +14,6 @@ pub(super) struct StatefulInputStreamComponent {
 impl StatefulInputStreamComponent {
     pub(super) fn component_id(&self) -> Option<&ComponentId> {
         self.component.id.as_ref()
-    }
-
-    pub(super) fn intermediate_node(&self) -> IntermediateNode {
-        IntermediateNode::InputStream(self.clone())
     }
 }
 

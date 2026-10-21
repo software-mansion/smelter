@@ -3,8 +3,7 @@ use std::{sync::Arc, time::Duration};
 use crate::{Resolution, scene::Size, transformations::image::Image};
 
 use super::{
-    ComponentId, ImageComponent, IntermediateNode, SceneError, StatefulComponent,
-    scene_state::BuildStateTreeCtx,
+    ComponentId, ImageComponent, SceneError, StatefulComponent, scene_state::BuildStateTreeCtx,
 };
 
 #[derive(Debug)]
@@ -40,13 +39,9 @@ impl StatefulImageComponent {
         }
     }
 
-    pub(super) fn intermediate_node(&self) -> IntermediateNode {
-        IntermediateNode::Image(self.clone())
-    }
-
-    pub(super) fn image_render_params(self) -> ImageRenderParams {
+    pub(super) fn image_render_params(&self) -> ImageRenderParams {
         ImageRenderParams {
-            image: self.image,
+            image: self.image.clone(),
             start_pts: self.start_pts,
             resolution: self.resolution,
         }

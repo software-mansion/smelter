@@ -3,8 +3,8 @@ use std::sync::Arc;
 use crate::transformations::shader::Shader;
 
 use super::{
-    Component, ComponentId, IntermediateNode, SceneError, ShaderComponent, ShaderParam, Size,
-    StatefulComponent, scene_state::BuildStateTreeCtx,
+    Component, ComponentId, SceneError, ShaderComponent, ShaderParam, Size, StatefulComponent,
+    scene_state::BuildStateTreeCtx,
 };
 
 #[derive(Debug, Clone)]
@@ -24,19 +24,6 @@ pub(crate) struct ShaderComponentParams {
 impl StatefulShaderComponent {
     pub(super) fn component_id(&self) -> Option<&ComponentId> {
         self.component.id.as_ref()
-    }
-
-    pub(super) fn intermediate_node(&self) -> IntermediateNode {
-        let children = self
-            .children
-            .iter()
-            .map(StatefulComponent::intermediate_node)
-            .collect();
-
-        IntermediateNode::Shader {
-            shader: self.clone(),
-            children,
-        }
     }
 }
 

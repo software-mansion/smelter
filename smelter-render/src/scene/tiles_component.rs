@@ -8,8 +8,8 @@ use self::{
 };
 
 use super::{
-    Component, ComponentId, HorizontalAlign, IntermediateNode, Position, RGBAColor, SceneError,
-    Size, StatefulComponent, TilesComponent, VerticalAlign,
+    Component, ComponentId, HorizontalAlign, Position, RGBAColor, SceneError, Size,
+    StatefulComponent, TilesComponent, VerticalAlign,
     layout::StatefulLayoutComponent,
     scene_state::BuildStateTreeCtx,
     transition::{TransitionOptions, TransitionState},
@@ -79,25 +79,6 @@ impl StatefulTilesComponent {
 
     pub(super) fn children_mut(&mut self) -> Vec<&mut StatefulComponent> {
         self.children.iter_mut().collect()
-    }
-
-    pub(super) fn intermediate_node(&self) -> IntermediateNode {
-        let children = self
-            .children
-            .iter()
-            .flat_map(|component| {
-                let node = component.intermediate_node();
-                match node {
-                    IntermediateNode::Layout { root: _, children } => children,
-                    _ => vec![node],
-                }
-            })
-            .collect();
-
-        IntermediateNode::Layout {
-            root: StatefulLayoutComponent::Tiles(self.clone()).into(),
-            children,
-        }
     }
 
     pub(super) fn layout(&mut self, size: Size, pts: Duration) -> NestedLayout {
