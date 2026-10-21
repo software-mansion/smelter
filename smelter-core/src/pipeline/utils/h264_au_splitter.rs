@@ -222,7 +222,7 @@ impl H264AuSplitter {
             return true;
         }
 
-        // TODO: Recovery point SEI. Pseudocode:
+        // TODO: Recovery point SEI.
         //
         //   // gpu-video parser (`NalReceiver::handle_nal`), SEI is `ParsedNalu::Other` now.
         //   // `h264_reader::nal::sei::SeiReader` splits SEI into messages, but does not parse
