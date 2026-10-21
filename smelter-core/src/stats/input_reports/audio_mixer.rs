@@ -32,6 +32,10 @@ pub struct AudioMixerInputStatsReport {
     /// received audio by more than 500ms.
     pub drops: u32,
 
+    /// Total count of cases when part of a silent passage was cut out because input timestamps
+    /// fell behind the received audio.
+    pub silence_cuts: u32,
+
     /// Total count of cases when the end of input audio was extended with generated audio to
     /// cover a gap.
     pub concealments: u32,
@@ -93,6 +97,10 @@ pub struct AudioMixerInputSlidingWindowStatsReport {
     /// Count of cases when audio was dropped because input timestamps fell behind the received
     /// audio by more than 500ms during the given time window.
     pub drops: u32,
+
+    /// Count of cases when part of a silent passage was cut out because input timestamps fell
+    /// behind the received audio during the given time window.
+    pub silence_cuts: u32,
 
     /// Count of cases when the end of input audio was extended with generated audio during the
     /// given time window.

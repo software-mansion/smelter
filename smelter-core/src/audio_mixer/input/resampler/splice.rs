@@ -118,7 +118,7 @@ pub(super) fn fade_in(samples: &mut AudioSamples, sample_rate: u32) {
 
 /// Crossfade from `from` to `to` (both of the same length) with complementary raised cosine
 /// gains.
-fn crossfade_samples(from: AudioSamples, to: AudioSamples) -> AudioSamples {
+pub(super) fn crossfade_samples(from: AudioSamples, to: AudioSamples) -> AudioSamples {
     let len = from.len();
     match (from, to) {
         (AudioSamples::Mono(from), AudioSamples::Mono(to)) => AudioSamples::Mono(

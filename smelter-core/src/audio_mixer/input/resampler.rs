@@ -72,7 +72,8 @@ const MAX_STRETCH_RATIO: f64 = 0.04 + 0.001;
 /// - **gap-fill** — input is far behind: fade out the front of the input, flush and resync.
 /// - **stretch** — input is slightly behind: increase the resample ratio.
 /// - **on-time** — drift within dead-band: ratio stays at 1.0.
-/// - **squash** — input is slightly ahead: decrease the resample ratio.
+/// - **squash** — input is slightly ahead: cut silence if there is any, decrease the resample
+///   ratio for the rest.
 /// - **drop** — input is far ahead: discard excess input samples.
 ///
 /// Note: because we make the decision per-resample-iteration (not per-batch), we can decide
@@ -84,8 +85,8 @@ pub(super) struct InputResampler {
     /// Pending input PCM that hasn't been fed to rubato yet. Frames are consumed (drained) from
     /// the front each time `resampler` runs. May also have zeros pushed to the front (resync
     /// after discontinuity), concealment pushed to the back (before flush on discontinuity),
-    /// concealment and zeros pushed to the back (padding a gap while resyncing) or samples
-    /// dropped from the front (drop branch).
+    /// concealment and zeros pushed to the back (padding a gap while resyncing), samples
+    /// dropped from the front (drop branch) or silence cut out near the front (squash branch).
     resampler_input_buffer: AudioSamplesBuffer,
 
     /// Holds resampled output frames between rubato runs. We drain from this to satisfy each
@@ -467,7 +468,39 @@ impl InputResampler {
             self.resampler.set_resample_ratio_relative(1.0);
             trace!("Input buffer on time");
         } else if drift > -SQUASH_THRESHOLD {
-            // === SQUASH ===
+            // === SQUASH or TRIM SILENCE ===
+            // Cut silence first, the ratio squashes only what is left. Silence detection gets
+            // less strict as drift grows, reaching full strength together with the ratio.
+            let strength = f64::min(
+                2.0 * drift.as_secs_f64().abs() / SQUASH_THRESHOLD.as_secs_f64(),
+                1.0,
+            );
+            // Leaves input for the next resample with margin for the ratio change.
+            let max_cut = usize::min(
+                (drift.as_secs_f64().abs() * self.resampler.input_sample_rate as f64) as usize,
+                self.resampler_input_buffer
+                    .frames()
+                    .saturating_sub(2 * self.resampler.input_frames_next()),
+            );
+            let cut_silent_samples = silence::cut_silence(
+                &mut self.resampler_input_buffer,
+                max_cut,
+                strength,
+                self.resampler.input_sample_rate,
+            );
+            let drift = match cut_silent_samples {
+                Some(cut) => {
+                    self.stats_sender
+                        .send(AudioMixerInputStatsEvent::SilenceCut);
+                    let cut = Duration::from_secs_f64(
+                        cut as f64 / self.resampler.input_sample_rate as f64,
+                    );
+                    debug!(?cut, ?drift, "Input buffer ahead, cutting silence");
+                    drift + cut // adding since drift is negative
+                }
+                None => drift,
+            };
+
             // `drift` is negative, so is the ratio.
             let drift_ratio = drift.as_secs_f64() / SQUASH_THRESHOLD.as_secs_f64();
             // multiply by 2.0 so max resampling is reached at the half point
@@ -915,6 +948,7 @@ impl Adapter<'_, f64> for ResamplerOutputBuffer {
 }
 
 mod concealment;
+mod silence;
 mod splice;
 
 #[cfg(test)]

@@ -1287,6 +1287,7 @@
           "underruns",
           "gaps_inserted",
           "drops",
+          "silence_cuts",
           "concealments",
           "fade_ins",
           "fade_outs",
@@ -1320,6 +1321,12 @@
             "type": "integer",
             "format": "int32",
             "description": "Count of cases when audio was dropped because input timestamps fell behind the received\naudio by more than 500ms during the given time window.",
+            "minimum": 0
+          },
+          "silence_cuts": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Count of cases when part of a silent passage was cut out because input timestamps fell\nbehind the received audio during the given time window.",
             "minimum": 0
           },
           "concealments": {
@@ -1381,6 +1388,7 @@
           "underruns",
           "gaps_inserted",
           "drops",
+          "silence_cuts",
           "concealments",
           "fade_ins",
           "fade_outs",
@@ -1424,6 +1432,12 @@
             "type": "integer",
             "format": "int32",
             "description": "Total count of cases when audio was dropped because input timestamps fell behind the\nreceived audio by more than 500ms.",
+            "minimum": 0
+          },
+          "silence_cuts": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total count of cases when part of a silent passage was cut out because input timestamps\nfell behind the received audio.",
             "minimum": 0
           },
           "concealments": {
