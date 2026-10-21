@@ -70,7 +70,13 @@ impl SideChannelServer<Frame> {
                 while let Ok(frame) = receiver.recv() {
                     let resolution = frame.resolution;
                     let pts = frame.pts;
-                    let rgba_bytes = pre_processor.process_to_bytes(frame.into(), None);
+                    let rgba_bytes = match pre_processor.process_to_bytes(frame.into(), None) {
+                        Ok(bytes) => bytes,
+                        Err(err) => {
+                            error!("Failed to download frame for side channel: {err}");
+                            continue;
+                        }
+                    };
                     let data = serialize_rgba_frame(resolution, pts, rgba_bytes);
                     broadcast_to_client_threads(&clients, data);
                 }

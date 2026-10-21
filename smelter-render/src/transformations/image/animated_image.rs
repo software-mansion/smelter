@@ -150,7 +150,7 @@ impl AnimatedAsset {
         pts: Duration,
     ) {
         let animation_pts = Duration::from_nanos(
-            ((pts.as_nanos() - state.start_pts.as_nanos()) % self.animation_duration.as_nanos())
+            (pts.saturating_sub(state.start_pts).as_nanos() % self.animation_duration.as_nanos())
                 as u64,
         );
 

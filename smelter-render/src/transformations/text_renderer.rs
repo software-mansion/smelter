@@ -107,30 +107,32 @@ impl TextRendererNode {
             None,
         );
 
-        text_renderer
-            .prepare(
-                &renderer_ctx.wgpu_ctx.device,
-                &renderer_ctx.wgpu_ctx.queue,
-                font_system,
-                &mut atlas,
-                &viewport,
-                [TextArea {
-                    buffer: &self.buffer.0,
-                    left: 0 as f32,
-                    top: 0 as f32,
-                    scale: 1.0,
-                    bounds: TextBounds {
-                        left: 0,
-                        top: 0,
-                        right: self.resolution.width as i32,
-                        bottom: self.resolution.height as i32,
-                    },
-                    default_color: Color::rgb(255, 255, 255),
-                    custom_glyphs: &[],
-                }],
-                swash_cache,
-            )
-            .unwrap();
+        let prepare_result = text_renderer.prepare(
+            &renderer_ctx.wgpu_ctx.device,
+            &renderer_ctx.wgpu_ctx.queue,
+            font_system,
+            &mut atlas,
+            &viewport,
+            [TextArea {
+                buffer: &self.buffer.0,
+                left: 0 as f32,
+                top: 0 as f32,
+                scale: 1.0,
+                bounds: TextBounds {
+                    left: 0,
+                    top: 0,
+                    right: self.resolution.width as i32,
+                    bottom: self.resolution.height as i32,
+                },
+                default_color: Color::rgb(255, 255, 255),
+                custom_glyphs: &[],
+            }],
+            swash_cache,
+        );
+        if let Err(err) = &prepare_result {
+            // e.g. glyphs too large to fit in the atlas texture
+            warn!("Failed to prepare text: {err}");
+        }
 
         let mut encoder =
             renderer_ctx
@@ -160,7 +162,9 @@ impl TextRendererNode {
                 multiview_mask: None,
             });
 
-            text_renderer.render(&atlas, &viewport, &mut pass).unwrap();
+            if prepare_result.is_ok() {
+                text_renderer.render(&atlas, &viewport, &mut pass).unwrap();
+            }
         }
 
         renderer_ctx.wgpu_ctx.queue.submit(Some(encoder.finish()));

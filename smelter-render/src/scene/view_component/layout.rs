@@ -246,8 +246,7 @@ impl ViewComponentParam {
                 ViewChildrenDirection::Row => child.height(pts).unwrap_or(0.0),
                 ViewChildrenDirection::Column => child.width(pts).unwrap_or(0.0),
             })
-            .max_by(|a, b| f32::partial_cmp(a, b).unwrap()) // will panic if comparing NaN
-            .unwrap_or(0.0)
+            .fold(0.0, f32::max) // f32::max ignores NaN
             .max(0.000000001); // avoid division by 0
 
         f32::min(

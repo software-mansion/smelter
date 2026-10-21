@@ -86,6 +86,11 @@ impl TransitionState {
     }
 
     pub fn state(&self, pts: Duration) -> InterpolationState {
+        // Zero duration or the previous transition already reached its final state (e.g. clamped
+        // easing that overshoots 1), there is no range left to interpolate over.
+        if self.duration.is_zero() || self.initial_offset.1.0 >= 1.0 {
+            return InterpolationState(1.0);
+        }
         // Value in range [0, 1], where 1 means end of transition.
         let progress =
             (pts.as_secs_f64() - self.start_pts.as_secs_f64()) / self.duration.as_secs_f64();

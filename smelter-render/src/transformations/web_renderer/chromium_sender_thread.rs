@@ -183,7 +183,7 @@ impl ChromiumSenderThread {
         let shared_memory = state.shared_memory(info.source_idx)?;
 
         // Writes buffer data to shared memory
-        {
+        if info.size.width > 0 {
             let range = info.buffer.slice(..).get_mapped_range().unwrap();
             let chunks = range.chunks((pad_to_256(4 * info.size.width)) as usize);
             for (i, chunk) in chunks.enumerate() {

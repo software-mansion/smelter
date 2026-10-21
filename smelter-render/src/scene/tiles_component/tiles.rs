@@ -66,6 +66,10 @@ impl TilesComponentParams {
 
         for rows in 1..=inputs_count {
             let rows_cols = from_rows_count(inputs_count, rows);
+            // skip layouts where the last row would be empty
+            if (rows - 1) * rows_cols.columns >= inputs_count {
+                continue;
+            }
             // larger width <=> larger tile size, because of const tile aspect ratio
             let tile_size = self.tile_size(rows_cols, layout_size).width;
             if tile_size > best_tile_width {

@@ -88,7 +88,7 @@ impl FramePreProcessor {
         &mut self,
         frame: Frame,
         resolution: Option<Resolution>,
-    ) -> bytes::Bytes {
+    ) -> Result<bytes::Bytes, wgpu::BufferAsyncError> {
         self.upload_and_convert_to_node_texture(frame);
 
         if let Some(resolution) = resolution {
@@ -154,7 +154,14 @@ impl FramePreProcessor {
         }
     }
 
-    fn download(&self, texture: &wgpu::Texture, resolution: Resolution) -> bytes::Bytes {
+    fn download(
+        &self,
+        texture: &wgpu::Texture,
+        resolution: Resolution,
+    ) -> Result<bytes::Bytes, wgpu::BufferAsyncError> {
+        if resolution.width == 0 || resolution.height == 0 {
+            return Ok(bytes::Bytes::new());
+        }
         let (buffer, _) = self.download_buffer.as_ref().unwrap();
 
         let mut encoder =
@@ -181,7 +188,8 @@ impl FramePreProcessor {
             .poll(wgpu::PollType::wait_indefinitely())
         {}
 
-        r.recv().unwrap().unwrap();
+        // e.g. download buffer exceeded max_buffer_size and is invalid
+        r.recv().unwrap()?;
 
         // Strip the 256-byte row padding so the output is tightly packed.
         let width = resolution.width as u32;
@@ -199,7 +207,7 @@ impl FramePreProcessor {
         }
         buffer.unmap();
 
-        writer.into_inner().into()
+        Ok(writer.into_inner().into())
     }
 }
 

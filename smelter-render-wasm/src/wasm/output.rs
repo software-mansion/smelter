@@ -83,8 +83,10 @@ impl RendererOutputs {
             height: frame.resolution.height,
         };
         let mut data: Vec<u8> = Vec::with_capacity(4 * resolution.width * resolution.height);
-        for chunk in buffer_view.chunks(pad_to_256(4 * resolution.width as u32) as usize) {
-            data.extend(&chunk[..(4 * frame.resolution.width)]);
+        if resolution.width > 0 {
+            for chunk in buffer_view.chunks(pad_to_256(4 * resolution.width as u32) as usize) {
+                data.extend(&chunk[..(4 * frame.resolution.width)]);
+            }
         }
 
         return Ok(OutputFrame {
