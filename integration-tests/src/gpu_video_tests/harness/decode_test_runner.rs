@@ -1,22 +1,29 @@
 use std::{collections::VecDeque, fs::File, io::Read};
 
-use gpu_video::parameters::DecoderParameters;
+use ffmpeg_next::codec::Id;
+use gpu_video::{VideoAdapterExt, parameters::DecoderParameters};
 
 use crate::{
     gpu_video_tests::{
-        Nv12Frame, TestCase, create_video_device,
-        harness::decoders::{FfmpegDecoderH264, GvBytesDecoderH264, GvWgpuTexturesDecoderH264},
+        Nv12Frame, TestCase, create_video_device, frame_data_diff,
+        harness::decoders::{
+            Decoder, FfmpegDecoder, GvBytesDecoderH264, GvWgpuTexturesDecoderH264,
+        },
     },
     paths::gpu_video_dumps_dir_path,
 };
 
 impl TestCase<DecoderOptions> {
     pub fn run(&self) {
-        let (device, queue) = create_video_device();
+        let (device, queue) = create_video_device(|adapter| {
+            adapter
+                .video_adapter_info()
+                .is_some_and(|info| info.supports_decoding)
+        });
 
         let (reference_decoder, gv_decoders) = match self.options {
             DecoderOptions::H264(params) => (
-                BufferedDecoder::from_decoder(FfmpegDecoderH264::new()),
+                BufferedDecoder::from_decoder(FfmpegDecoder::new(Id::H264)),
                 vec![
                     BufferedDecoder::from_decoder(GvBytesDecoderH264::new(&device, params)),
                     BufferedDecoder::from_decoder(GvWgpuTexturesDecoderH264::new(
@@ -110,18 +117,6 @@ impl TestCase<DecoderOptions> {
     }
 }
 
-fn frame_data_diff(actual: &[u8], expected: &[u8]) -> f32 {
-    if actual.len() != expected.len() {
-        return f32::MAX;
-    }
-
-    let diff = actual.iter().zip(expected).fold(0.0, |total_err, (a, b)| {
-        total_err + (*a as f32 - *b as f32).powf(2.0)
-    });
-
-    diff / actual.len() as f32
-}
-
 pub enum DecoderOptions {
     H264(DecoderParameters),
 }
@@ -170,11 +165,4 @@ impl BufferedDecoder {
     fn has_next_frame(&self) -> bool {
         !self.frames.is_empty()
     }
-}
-
-pub(super) trait Decoder {
-    fn decoder_name(&self) -> &'static str;
-
-    fn decode_bytes(&mut self, data: &[u8]) -> Vec<Nv12Frame>;
-    fn flush_frames(&mut self) -> Vec<Nv12Frame>;
 }
