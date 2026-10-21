@@ -3,6 +3,8 @@ use std::sync::LazyLock;
 use bytes::{BufMut, BytesMut};
 use memchr::memmem::Finder;
 
+use super::h264::H264ParserError;
+
 #[derive(Debug, Default)]
 pub(crate) struct NALUSplitter {
     buffer: BytesMut,
@@ -40,7 +42,7 @@ impl NALUSplitter {
         &mut self,
         bytestream: &[u8],
         pts: Option<u64>,
-    ) -> Vec<(Vec<u8>, Option<u64>)> {
+    ) -> Vec<(BytesMut, Option<u64>)> {
         let mut output_pts = if self.buffer.is_empty() {
             pts
         } else {
@@ -53,7 +55,7 @@ impl NALUSplitter {
         while let Some(i) = find_start_of_next_nalu(&self.buffer[self.previous_search_end..]) {
             let nalu = self.buffer.split_to(self.previous_search_end + i);
             self.previous_search_end = 0;
-            result.push((make_prefix_code_4_bytes(nalu), output_pts));
+            result.push((nalu, output_pts));
             output_pts = pts;
         }
 
@@ -66,7 +68,7 @@ impl NALUSplitter {
         result
     }
 
-    pub(crate) fn flush(&mut self) -> Vec<(Vec<u8>, Option<u64>)> {
+    pub(crate) fn flush(&mut self) -> Vec<(BytesMut, Option<u64>)> {
         if self.buffer.is_empty() {
             return vec![];
         }
@@ -75,11 +77,11 @@ impl NALUSplitter {
         while let Some(i) = find_start_of_next_nalu(&self.buffer[self.previous_search_end..]) {
             let nalu = self.buffer.split_to(self.previous_search_end + i);
             self.previous_search_end = 0;
-            result.push((make_prefix_code_4_bytes(nalu), self.pts));
+            result.push((nalu, self.pts));
         }
 
         let last_nalu = std::mem::take(&mut self.buffer);
-        result.push((make_prefix_code_4_bytes(last_nalu), self.pts));
+        result.push((last_nalu, self.pts));
         self.buffer = BytesMut::new();
         self.previous_search_end = 0;
 
@@ -87,16 +89,17 @@ impl NALUSplitter {
     }
 }
 
-fn make_prefix_code_4_bytes(nalu: BytesMut) -> Vec<u8> {
-    if nalu[..4] == [0, 0, 0, 1] {
-        return nalu.to_vec();
+pub(crate) fn make_prefix_code_4_bytes(nalu: BytesMut) -> Result<Vec<u8>, H264ParserError> {
+    if nalu.starts_with(&[0, 0, 0, 1]) {
+        return Ok(nalu.to_vec());
     }
 
-    if nalu[..3] == [0, 0, 1] {
+    if nalu.starts_with(&[0, 0, 1]) {
         let mut result = vec![0];
         result.extend_from_slice(&nalu);
-        return result;
+        return Ok(result);
     }
 
-    unreachable!()
+    // Data before the first start code
+    Err(H264ParserError::MissingStartCode)
 }

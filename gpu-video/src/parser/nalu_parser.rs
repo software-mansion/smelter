@@ -2,8 +2,15 @@ use std::{io::Read, sync::Arc};
 
 use h264_reader::{
     annexb::AnnexBReader,
-    nal::{Nal, RefNal, pps::PicParameterSet, slice::SliceHeader, sps::SeqParameterSet},
+    nal::{
+        Nal, RefNal, UnitType,
+        pps::PicParameterSet,
+        sei::{HeaderType, SeiReader},
+        slice::SliceHeader,
+        sps::SeqParameterSet,
+    },
     push::{AccumulatedNalHandler, NalAccumulator, NalInterest},
+    rbsp::{BitRead, BitReader, BitReaderError},
 };
 
 use super::h264::H264ParserError;
@@ -24,7 +31,12 @@ impl NalParser {
     pub fn parse_nalu(&mut self, nalu: &[u8]) -> Result<ParsedNalu, H264ParserError> {
         self.reader.push(nalu);
         self.reader.reset();
-        self.reader.nal_handler_mut().parsed_nalu.take().unwrap()
+        // Not set for an empty NAL unit.
+        self.reader
+            .nal_handler_mut()
+            .parsed_nalu
+            .take()
+            .unwrap_or(Err(H264ParserError::EmptyNalu))
     }
 }
 
@@ -99,11 +111,26 @@ impl NalReceiver {
                 Ok(ParsedNalu::Slice(slice))
             }
 
+            h264_reader::nal::UnitType::SEI => {
+                let mut scratch = Vec::new();
+                let mut reader = SeiReader::from_rbsp_bytes(nal.rbsp_bytes(), &mut scratch);
+                let mut messages = Vec::new();
+                while let Some(message) = reader.next().map_err(H264ParserError::SeiParseError)? {
+                    let sei = match message.payload_type {
+                        HeaderType::RecoveryPoint => parse_recovery_point(message.payload)
+                            .map_err(H264ParserError::SeiParseError)?,
+                        payload_type => Sei::Other(payload_type),
+                    };
+                    messages.push(sei);
+                }
+
+                Ok(ParsedNalu::Sei(messages))
+            }
+
             h264_reader::nal::UnitType::Unspecified(_)
             | h264_reader::nal::UnitType::SliceDataPartitionALayer
             | h264_reader::nal::UnitType::SliceDataPartitionBLayer
             | h264_reader::nal::UnitType::SliceDataPartitionCLayer
-            | h264_reader::nal::UnitType::SEI
             | h264_reader::nal::UnitType::AccessUnitDelimiter
             | h264_reader::nal::UnitType::EndOfSeq
             | h264_reader::nal::UnitType::EndOfStream
@@ -115,12 +142,19 @@ impl NalReceiver {
             | h264_reader::nal::UnitType::SliceLayerWithoutPartitioningAux
             | h264_reader::nal::UnitType::SliceExtension
             | h264_reader::nal::UnitType::SliceExtensionViewComponent
-            | h264_reader::nal::UnitType::Reserved(_) => Ok(ParsedNalu::Other(format!(
-                "{:?}",
-                nal.header().unwrap().nal_unit_type()
-            ))),
+            | h264_reader::nal::UnitType::Reserved(_) => Ok(ParsedNalu::Other(nal_unit_type)),
         }
     }
+}
+
+fn parse_recovery_point(payload: &[u8]) -> Result<Sei, BitReaderError> {
+    let mut reader = BitReader::new(payload);
+    Ok(Sei::RecoveryPoint {
+        recovery_frame_cnt: reader.read_ue("recovery_frame_cnt")?,
+        exact_match_flag: reader.read_bool("exact_match_flag")?,
+        broken_link_flag: reader.read_bool("broken_link_flag")?,
+        changing_slice_group_idc: reader.read(2, "changing_slice_group_idc")?,
+    })
 }
 
 // It's not used if compiled on macOS, so it's reported as a dead code
@@ -143,7 +177,20 @@ pub enum ParsedNalu {
     Sps(SeqParameterSet),
     Pps(PicParameterSet),
     Slice(Slice),
-    Other(String),
+    Sei(Vec<Sei>),
+    Other(UnitType),
+}
+
+/// SEI message
+#[derive(Debug)]
+pub enum Sei {
+    RecoveryPoint {
+        recovery_frame_cnt: u32,
+        exact_match_flag: bool,
+        broken_link_flag: bool,
+        changing_slice_group_idc: u8,
+    },
+    Other(HeaderType),
 }
 
 /// H264 Network Abstraction Layer Unit

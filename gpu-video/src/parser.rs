@@ -10,9 +10,11 @@ pub(crate) mod reference_manager;
 pub mod h264 {
     use super::au_splitter::AUSplitter;
     use super::nalu_parser::NalParser;
-    use super::nalu_splitter::NALUSplitter;
+    use super::nalu_splitter::{NALUSplitter, make_prefix_code_4_bytes};
 
     pub use super::au_splitter::AccessUnit;
+    #[cfg(feature = "expose-parsers")]
+    pub use super::nalu_parser::Sei;
     pub use super::nalu_parser::{Nalu, ParsedNalu};
     #[cfg(feature = "expose-parsers")]
     pub use h264_reader::nal as nal_types;
@@ -30,6 +32,15 @@ pub mod h264 {
 
         #[error("Error while parsing a slice: {0:?}")]
         SliceParseError(h264_reader::nal::slice::SliceHeaderError),
+
+        #[error("Error while parsing SEI: {0:?}")]
+        SeiParseError(h264_reader::rbsp::BitReaderError),
+
+        #[error("NAL unit does not start with a start code")]
+        MissingStartCode,
+
+        #[error("Empty NAL unit")]
+        EmptyNalu,
     }
 
     /// H264 parser for Annex B format
@@ -59,6 +70,7 @@ pub mod h264 {
         ) -> Result<Vec<AccessUnit>, H264ParserError> {
             let nalus = self.nalu_splitter.push(bytes, pts);
             let nalus = nalus.into_iter().map(|(nalu_bytes, pts)| {
+                let nalu_bytes = make_prefix_code_4_bytes(nalu_bytes)?;
                 self.nal_parser.parse_nalu(&nalu_bytes).map(|parsed_nalu| {
                     parsed_nalu_to_struct(parsed_nalu, nalu_bytes, self.convert_to_avcc, pts)
                 })
@@ -81,6 +93,7 @@ pub mod h264 {
         pub fn flush(&mut self) -> Result<Vec<AccessUnit>, H264ParserError> {
             let nalus = self.nalu_splitter.flush();
             let nalus = nalus.into_iter().map(|(nalu_bytes, pts)| {
+                let nalu_bytes = make_prefix_code_4_bytes(nalu_bytes)?;
                 self.nal_parser.parse_nalu(&nalu_bytes).map(|parsed_nalu| {
                     parsed_nalu_to_struct(parsed_nalu, nalu_bytes, self.convert_to_avcc, pts)
                 })

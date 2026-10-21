@@ -60,13 +60,7 @@ impl H264AuSplitter {
     ) -> Vec<Result<EncodedInputChunk, AuSplitterError>> {
         let mut chunks = Vec::new();
         for au in access_units {
-            // The parser leaves NALUs that follow the last slice (e.g. filler data) at the front
-            // of the next access unit, with the previous pts. Once the parser keeps them in their
-            // own access unit, the first NALU can be used again.
-            let first_slice =
-                au.0.iter()
-                    .find(|nalu| matches!(nalu.parsed, ParsedNalu::Slice(_)));
-            let pts = match first_slice.and_then(|nalu| nalu.pts) {
+            let pts = match au.0.first().and_then(|nalu| nalu.pts) {
                 Some(pts) => Timestamp::from_nanos(pts as i64),
                 None => {
                     debug!("Expected access unit with pts. Skipping the access unit");
@@ -222,16 +216,9 @@ impl H264AuSplitter {
             return true;
         }
 
-        // TODO: Recovery point SEI. Pseudocode:
+        // TODO: Recovery point SEI. Pseudocode, with this method returning
+        // `Option<RecoveryPoint>` instead of `bool`:
         //
-        //   // gpu-video parser (`NalReceiver::handle_nal`), SEI is `ParsedNalu::Other` now.
-        //   // `h264_reader::nal::sei::SeiReader` splits SEI into messages, but does not parse
-        //   // the `HeaderType::RecoveryPoint` payload:
-        //   //   recovery_frame_cnt: ue(v), exact_match_flag: u(1), broken_link_flag: u(1),
-        //   //   changing_slice_group_idc: u(2)
-        //   UnitType::SEI => Ok(ParsedNalu::Sei(messages)), // e.g. Vec<Sei::RecoveryPoint { .. }>
-        //
-        //   // Here, with this method returning `Option<RecoveryPoint>` instead of `bool`:
         //   let recovery_frame_cnt = au.0.iter().find_map(|nalu| match &nalu.parsed {
         //       ParsedNalu::Sei(messages) => messages.iter().find_map(|message| match message {
         //           Sei::RecoveryPoint { recovery_frame_cnt, .. } => Some(*recovery_frame_cnt),

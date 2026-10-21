@@ -1,4 +1,4 @@
-use h264_reader::nal::slice::PicOrderCountLsb;
+use h264_reader::nal::{UnitType, slice::PicOrderCountLsb};
 
 use crate::parser::nalu_parser::{Nalu, ParsedNalu};
 
@@ -12,7 +12,7 @@ pub(crate) struct AUSplitter {
 impl AUSplitter {
     pub(crate) fn put_nalu(&mut self, nalu: Nalu) -> Option<AccessUnit> {
         let result = match self.is_new_au(&nalu) {
-            true => self.take_until_last_slice(),
+            true => self.take_current_au(),
             false => None,
         };
 
@@ -20,30 +20,25 @@ impl AUSplitter {
         result
     }
 
+    /// Returns the access unit in progress. NAL units that start the next one stay buffered.
     pub(crate) fn flush(&mut self) -> Option<AccessUnit> {
-        // TODO: this is not the correct way to do this, since it assumes the user calls this method
-        // in the wrong way. Only a temporary fix.
-        self.take_until_last_slice()
+        self.take_current_au()
     }
 
-    fn take_until_last_slice(&mut self) -> Option<AccessUnit> {
-        // if there are any slice NALUs, the last one is the end of the AU
-        let i = self
+    /// Takes NAL units up to the last slice, and the ones after it that still belong to the same
+    /// access unit (e.g. filler data, end of sequence).
+    fn take_current_au(&mut self) -> Option<AccessUnit> {
+        let last_slice = self
             .buffered_nals
             .iter()
-            .enumerate()
-            .rev()
-            .find(|(_, nalu)| matches!(nalu.parsed, ParsedNalu::Slice(_)))
-            .map(|(i, _)| i);
-        let au = match i {
-            Some(i) => self.buffered_nals.drain(..=i).collect::<Vec<_>>(),
-            None => Vec::new(),
-        };
-        if !au.is_empty() {
-            Some(AccessUnit(au.into_boxed_slice()))
-        } else {
-            None
-        }
+            .rposition(|nalu| matches!(nalu.parsed, ParsedNalu::Slice(_)))?;
+        let end = self.buffered_nals[last_slice + 1..]
+            .iter()
+            .position(|nalu| starts_new_au(&nalu.parsed))
+            .map_or(self.buffered_nals.len(), |i| last_slice + 1 + i);
+
+        let au = self.buffered_nals.drain(..end).collect();
+        Some(AccessUnit(au))
     }
 
     /// returns `true` if `slice` is a first slice in an Access Unit
@@ -68,6 +63,7 @@ impl AUSplitter {
             || field_pic_flag_differs(last, slice)
             || nal_ref_idc_differs_one_zero(last, slice)
             || pic_order_cnt_zero_check(last, slice)
+            || pic_order_cnt_one_check(last, slice)
             || idr_and_non_idr(last, slice)
             || idrs_where_idr_pic_id_differs(last, slice)
     }
@@ -138,15 +134,25 @@ fn pic_order_cnt_zero_check(last: &Slice, curr: &Slice) -> bool {
         || last_delta_pic_order_cnt_bottom != curr_delta_pic_order_cnt_bottom
 }
 
-// TODO
 // defguardp pic_order_cnt_one_check_zero(a, b)
 //           when a.pic_order_cnt_type == 1 and b.pic_order_cnt_type == 1 and
 //                  hd(a.delta_pic_order_cnt) != hd(b.delta_pic_order_cnt)
-
-// TODO
+//
 // defguardp pic_order_cnt_one_check_one(a, b)
 //           when a.pic_order_cnt_type == 1 and b.pic_order_cnt_type == 1 and
 //                  hd(hd(a.delta_pic_order_cnt)) != hd(hd(b.delta_pic_order_cnt))
+fn pic_order_cnt_one_check(last: &Slice, curr: &Slice) -> bool {
+    match (
+        &last.header.pic_order_cnt_lsb,
+        &curr.header.pic_order_cnt_lsb,
+    ) {
+        (
+            Some(PicOrderCountLsb::FieldsDelta(last_delta_pic_order_cnt)),
+            Some(PicOrderCountLsb::FieldsDelta(curr_delta_pic_order_cnt)),
+        ) => last_delta_pic_order_cnt != curr_delta_pic_order_cnt,
+        _ => false,
+    }
+}
 
 // defguardp idr_and_non_idr(a, b)
 //           when (a.nal_unit_type == 5 or b.nal_unit_type == 5) and
@@ -162,6 +168,24 @@ fn idrs_where_idr_pic_id_differs(last: &Slice, curr: &Slice) -> bool {
         (Some(last), Some(curr)) => last != curr,
         _ => false,
     }
+}
+
+/// NAL units that start a new access unit when they follow the last slice of a picture (spec
+/// 7.4.1.2.3). Others, e.g. filler data or end of sequence/stream, belong to the current one.
+fn starts_new_au(nalu: &ParsedNalu) -> bool {
+    matches!(
+        nalu,
+        ParsedNalu::Sps(_)
+            | ParsedNalu::Pps(_)
+            | ParsedNalu::Sei(_)
+            | ParsedNalu::Other(
+                UnitType::AccessUnitDelimiter
+                    | UnitType::PrefixNALUnit
+                    | UnitType::SubsetSeqParameterSet
+                    | UnitType::DepthParameterSet
+                    | UnitType::Reserved(17 | 18)
+            )
+    )
 }
 
 /// Group of [`Nalu`]s representing one frame

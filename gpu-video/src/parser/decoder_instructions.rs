@@ -61,7 +61,7 @@ pub(crate) fn compile_to_decoder_instructions(
                     slices.push((slice, nalu.pts));
                 }
 
-                ParsedNalu::Other(_) => {}
+                ParsedNalu::Sei(_) | ParsedNalu::Other(_) => {}
             }
         }
 
