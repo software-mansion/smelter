@@ -303,6 +303,10 @@ impl Queue {
         self.queue_ctx.clone()
     }
 
+    pub(crate) fn never_drop_output_frames(&self) -> bool {
+        self.never_drop_output_frames
+    }
+
     pub(crate) fn add_input(&self, input_id: &InputId, queue_input: QueueInput) {
         let weak = queue_input.downgrade();
 

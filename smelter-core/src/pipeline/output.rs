@@ -3,9 +3,9 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crossbeam_channel::Sender;
+use crossbeam_channel::{Sender, TrySendError};
 use smelter_render::{OutputFrameFormat, error::ErrorStack};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     pipeline::{
@@ -325,34 +325,42 @@ impl Pipeline {
     pub(super) fn all_output_video_senders_iter(
         pipeline: &Arc<Mutex<Pipeline>>,
     ) -> impl Iterator<Item = (OutputId, OutputSender<Sender<PipelineEvent<Frame>>>)> {
-        let outputs: HashMap<_, _> = pipeline
-            .lock()
-            .unwrap()
+        let mut guard = pipeline.lock().unwrap();
+        let senders: Vec<_> = guard
             .outputs
             .iter_mut()
             .filter_map(|(output_id, output)| {
-                let eos_status = output.video_end_condition_mut()?.eos_status();
                 let sender = output.output.video()?.frame_sender.clone();
-                Some((output_id.clone(), (sender, eos_status)))
+                let end_condition = output.video_end_condition_mut()?;
+                match end_condition.eos_status() {
+                    EosStatus::None => {
+                        Some((output_id.clone(), OutputSender::ActiveSender(sender)))
+                    }
+                    EosStatus::SendEos => {
+                        // Non-blocking send, if output is not consuming, retry on the next frame.
+                        match sender.try_send(PipelineEvent::EOS) {
+                            Ok(()) => {
+                                info!(?output_id, "Sent video EOS on output.");
+                                end_condition.on_eos_sent();
+                            }
+                            Err(TrySendError::Full(_)) => {
+                                debug!(?output_id, "Output is not consuming frames. Delaying EOS.");
+                            }
+                            Err(TrySendError::Disconnected(_)) => {
+                                warn!(
+                                    ?output_id,
+                                    "Failed to send EOS from renderer. Channel closed."
+                                );
+                                end_condition.on_eos_sent();
+                            }
+                        }
+                        Some((output_id.clone(), OutputSender::FinishedSender))
+                    }
+                    EosStatus::AlreadySent => None,
+                }
             })
             .collect();
-
-        outputs
-            .into_iter()
-            .filter_map(|(output_id, (sender, eos_status))| match eos_status {
-                EosStatus::None => Some((output_id, OutputSender::ActiveSender(sender))),
-                EosStatus::SendEos => {
-                    info!(?output_id, "Sending video EOS on output.");
-                    if sender.send(PipelineEvent::EOS).is_err() {
-                        warn!(
-                            ?output_id,
-                            "Failed to send EOS from renderer. Channel closed."
-                        );
-                    };
-                    Some((output_id, OutputSender::FinishedSender))
-                }
-                EosStatus::AlreadySent => None,
-            })
+        senders.into_iter()
     }
 
     pub(super) fn all_output_audio_senders_iter(
@@ -363,31 +371,39 @@ impl Pipeline {
             OutputSender<Sender<PipelineEvent<OutputAudioSamples>>>,
         ),
     > {
-        let outputs: HashMap<_, _> = pipeline
-            .lock()
-            .unwrap()
+        let mut guard = pipeline.lock().unwrap();
+        let senders: Vec<_> = guard
             .outputs
             .iter_mut()
             .filter_map(|(output_id, output)| {
-                let eos_status = output.audio_end_condition_mut()?.eos_status();
                 let sender = output.output.audio()?.samples_batch_sender.clone();
-                Some((output_id.clone(), (sender, eos_status)))
+                let end_condition = output.audio_end_condition_mut()?;
+                match end_condition.eos_status() {
+                    EosStatus::None => {
+                        Some((output_id.clone(), OutputSender::ActiveSender(sender)))
+                    }
+                    EosStatus::SendEos => {
+                        // Non-blocking send, if output is not consuming, retry on the next batch.
+                        match sender.try_send(PipelineEvent::EOS) {
+                            Ok(()) => {
+                                info!(?output_id, "Sent audio EOS on output.");
+                                end_condition.on_eos_sent();
+                            }
+                            Err(TrySendError::Full(_)) => {
+                                debug!(?output_id, "Output is not consuming audio. Delaying EOS.");
+                            }
+                            Err(TrySendError::Disconnected(_)) => {
+                                warn!(?output_id, "Failed to send EOS from mixer. Channel closed.");
+                                end_condition.on_eos_sent();
+                            }
+                        }
+                        Some((output_id.clone(), OutputSender::FinishedSender))
+                    }
+                    EosStatus::AlreadySent => None,
+                }
             })
             .collect();
-
-        outputs
-            .into_iter()
-            .filter_map(|(output_id, (sender, eos_status))| match eos_status {
-                EosStatus::None => Some((output_id, OutputSender::ActiveSender(sender))),
-                EosStatus::SendEos => {
-                    info!(?output_id, "Sending audio EOS on output.");
-                    if sender.send(PipelineEvent::EOS).is_err() {
-                        warn!(?output_id, "Failed to send EOS from mixer. Channel closed.");
-                    };
-                    Some((output_id, OutputSender::FinishedSender))
-                }
-                EosStatus::AlreadySent => None,
-            })
+        senders.into_iter()
     }
 }
 
@@ -452,12 +468,15 @@ impl PipelineOutputEndConditionState {
         self.on_event(StateChange::NoChanges);
         if self.did_end {
             if !self.did_send_eos {
-                self.did_send_eos = true;
                 return EosStatus::SendEos;
             }
             return EosStatus::AlreadySent;
         }
         EosStatus::None
+    }
+
+    fn on_eos_sent(&mut self) {
+        self.did_send_eos = true;
     }
 
     pub(super) fn did_output_end(&self) -> bool {
