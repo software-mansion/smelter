@@ -1,27 +1,35 @@
 use crossbeam_channel::Receiver;
 use ffmpeg_next::{
     codec::{Context as FfmpegContext, Id},
+    color,
+    ffi::{
+        AV_NOPTS_VALUE, AVCodecID, AVCodecParserContext, av_parser_close, av_parser_init,
+        av_parser_parse2,
+    },
     frame,
     media::Type,
 };
 use gpu_video::{
     BytesDecoderH264, EncodedInputChunk, OutputFrame, RawFrameData, VideoDeviceExt, VideoTexture,
     WgpuTexturesDecoderH264,
-    parameters::DecoderParameters,
-    parser::h264::{AccessUnit, H264Parser},
+    parameters::{ColorRange, ColorSpace, DecoderParameters},
 };
 
-use crate::{
-    gpu_video_tests::{Nv12Frame, harness::decode_test_runner::Decoder},
-    video_decoder::copy_plane_from_av,
-};
+use crate::{gpu_video_tests::Nv12Frame, video_decoder::copy_plane_from_av};
 
-pub(super) struct GvBytesDecoderH264 {
+pub(super) trait Decoder {
+    fn decoder_name(&self) -> &'static str;
+
+    fn decode_bytes(&mut self, data: &[u8]) -> Vec<Nv12Frame>;
+    fn flush_frames(&mut self) -> Vec<Nv12Frame>;
+}
+
+pub(super) struct GvBytesDecoder {
     decoder: BytesDecoderH264,
     frame_receiver: Receiver<OutputFrame<RawFrameData>>,
 }
 
-impl GvBytesDecoderH264 {
+impl GvBytesDecoder {
     pub fn new(wgpu_device: &wgpu::Device, parameters: DecoderParameters) -> Self {
         let (frame_sender, frame_receiver) = crossbeam_channel::unbounded();
         let decoder = wgpu_device
@@ -43,12 +51,14 @@ impl GvBytesDecoderH264 {
                 width: frame.data.width as usize,
                 height: frame.data.height as usize,
                 data: frame.data.frame,
+                color_space: frame.metadata.color_space,
+                color_range: frame.metadata.color_range,
             })
             .collect()
     }
 }
 
-impl Decoder for GvBytesDecoderH264 {
+impl Decoder for GvBytesDecoder {
     fn decoder_name(&self) -> &'static str {
         "BytesDecoderH264"
     }
@@ -66,14 +76,14 @@ impl Decoder for GvBytesDecoderH264 {
     }
 }
 
-pub(super) struct GvWgpuTexturesDecoderH264 {
+pub(super) struct GvWgpuTexturesDecoder {
     decoder: WgpuTexturesDecoderH264,
     frame_receiver: Receiver<OutputFrame<VideoTexture>>,
     wgpu_device: wgpu::Device,
     wgpu_queue: wgpu::Queue,
 }
 
-impl GvWgpuTexturesDecoderH264 {
+impl GvWgpuTexturesDecoder {
     pub fn new(
         wgpu_device: &wgpu::Device,
         wgpu_queue: &wgpu::Queue,
@@ -99,12 +109,12 @@ impl GvWgpuTexturesDecoderH264 {
     fn drain(&mut self) -> Vec<Nv12Frame> {
         self.frame_receiver
             .try_iter()
-            .map(|frame| download_nv12_texture(&self.wgpu_device, &self.wgpu_queue, frame.data))
+            .map(|frame| download_nv12_texture(&self.wgpu_device, &self.wgpu_queue, frame))
             .collect()
     }
 }
 
-impl Decoder for GvWgpuTexturesDecoderH264 {
+impl Decoder for GvWgpuTexturesDecoder {
     fn decoder_name(&self) -> &'static str {
         "WgpuTexturesDecoderH264"
     }
@@ -122,100 +132,174 @@ impl Decoder for GvWgpuTexturesDecoderH264 {
     }
 }
 
-impl Decoder for FfmpegDecoderH264 {
+impl Decoder for FfmpegDecoder {
     fn decoder_name(&self) -> &'static str {
-        "FfmpegDecoderH264"
+        "FfmpegDecoder"
     }
 
     fn decode_bytes(&mut self, data: &[u8]) -> Vec<Nv12Frame> {
-        let access_units = self.parser.parse(data, None).unwrap();
-
-        let mut frames = Vec::new();
-        self.send_access_units(access_units, &mut frames);
-        frames
+        let access_units = self.parser.parse(&mut self.decoder, data);
+        access_units
+            .iter()
+            .flat_map(|access_unit| self.decode_access_unit(access_unit))
+            .collect()
     }
 
     fn flush_frames(&mut self) -> Vec<Nv12Frame> {
-        let access_units = self.parser.flush().unwrap();
-
         let mut frames = Vec::new();
-        self.send_access_units(access_units, &mut frames);
+        if let Some(access_unit) = self.parser.flush(&mut self.decoder) {
+            frames.extend(self.decode_access_unit(&access_unit));
+        }
         self.decoder.send_eof().unwrap();
-        self.receive_ffmpeg_frames(&mut frames);
+        frames.extend(self.receive_frames());
         frames
     }
 }
 
-pub(super) struct FfmpegDecoderH264 {
-    parser: H264Parser,
+pub(super) struct FfmpegDecoder {
+    parser: FfmpegParser,
     decoder: ffmpeg_next::decoder::Opened,
 }
 
-impl FfmpegDecoderH264 {
-    pub fn new() -> Self {
+impl FfmpegDecoder {
+    pub fn new(codec_id: Id) -> Self {
         let mut parameters = ffmpeg_next::codec::Parameters::new();
         unsafe {
             let parameters = &mut *parameters.as_mut_ptr();
             parameters.codec_type = Type::Video.into();
-            parameters.codec_id = Id::H264.into();
+            parameters.codec_id = codec_id.into();
         };
-        let decoder = FfmpegContext::from_parameters(parameters.clone())
+        let decoder = FfmpegContext::from_parameters(parameters)
             .unwrap()
             .decoder()
-            .open_as(Into::<Id>::into(parameters.id()))
+            .open_as(codec_id)
             .unwrap();
 
         Self {
-            parser: H264Parser::default(),
+            parser: FfmpegParser::new(codec_id),
             decoder,
         }
     }
 
-    fn send_access_units(&mut self, access_units: Vec<AccessUnit>, frames: &mut Vec<Nv12Frame>) {
-        for access_unit in access_units {
-            let mut data = Vec::new();
-            for nalu in access_unit.0.iter() {
-                data.extend_from_slice(&nalu.raw_bytes);
-            }
-
-            let mut packet = ffmpeg_next::Packet::new(data.len());
-            packet.data_mut().unwrap().copy_from_slice(&data);
-            self.decoder.send_packet(&packet).unwrap();
-            self.receive_ffmpeg_frames(frames);
-        }
+    fn decode_access_unit(&mut self, access_unit: &ffmpeg_next::Packet) -> Vec<Nv12Frame> {
+        self.decoder.send_packet(access_unit).unwrap();
+        self.receive_frames()
     }
 
-    fn receive_ffmpeg_frames(&mut self, frames: &mut Vec<Nv12Frame>) {
+    fn receive_frames(&mut self) -> Vec<Nv12Frame> {
+        let mut frames = Vec::new();
         let mut decoded = frame::Video::empty();
         while self.decoder.receive_frame(&mut decoded).is_ok() {
-            let width = decoded.width() as usize;
-            let height = decoded.height() as usize;
-
-            let y_plane = copy_plane_from_av(&decoded, 0);
-            let u_plane = copy_plane_from_av(&decoded, 1);
-            let v_plane = copy_plane_from_av(&decoded, 2);
-
-            let mut data = Vec::with_capacity(width * height * 3 / 2);
-            data.extend_from_slice(&y_plane);
-            for (u, v) in u_plane.iter().zip(v_plane.iter()) {
-                data.push(*u);
-                data.push(*v);
-            }
-
-            frames.push(Nv12Frame {
-                width,
-                height,
-                data,
-            });
+            frames.push(nv12_frame_from_av(&decoded));
         }
+        frames
+    }
+}
+
+struct FfmpegParser(*mut AVCodecParserContext);
+
+impl FfmpegParser {
+    fn new(codec_id: Id) -> Self {
+        // depending on ffmpeg version `av_parser_init` accepts int or enum, hence `as _`
+        let parser = unsafe { av_parser_init(AVCodecID::from(codec_id) as _) };
+        assert!(!parser.is_null());
+        Self(parser)
+    }
+
+    fn parse(
+        &mut self,
+        decoder: &mut ffmpeg_next::decoder::Opened,
+        mut data: &[u8],
+    ) -> Vec<ffmpeg_next::Packet> {
+        let mut access_units = Vec::new();
+        while !data.is_empty() {
+            let (consumed, access_unit) = self.parse_next(decoder, data);
+            data = &data[consumed..];
+            access_units.extend(access_unit);
+        }
+        access_units
+    }
+
+    fn flush(&mut self, decoder: &mut ffmpeg_next::decoder::Opened) -> Option<ffmpeg_next::Packet> {
+        let (_, access_unit) = self.parse_next(decoder, &[]);
+        access_unit
+    }
+
+    fn parse_next(
+        &mut self,
+        decoder: &mut ffmpeg_next::decoder::Opened,
+        data: &[u8],
+    ) -> (usize, Option<ffmpeg_next::Packet>) {
+        let mut output = std::ptr::null_mut();
+        let mut output_size = 0;
+        let consumed = unsafe {
+            av_parser_parse2(
+                self.0,
+                decoder.as_mut_ptr(),
+                &mut output,
+                &mut output_size,
+                data.as_ptr(),
+                data.len() as i32,
+                AV_NOPTS_VALUE,
+                AV_NOPTS_VALUE,
+                0,
+            )
+        };
+        let access_unit = (output_size > 0).then(|| {
+            let data = unsafe { std::slice::from_raw_parts(output, output_size as usize) };
+            ffmpeg_next::Packet::copy(data)
+        });
+        (consumed as usize, access_unit)
+    }
+}
+
+impl Drop for FfmpegParser {
+    fn drop(&mut self) {
+        unsafe { av_parser_close(self.0) };
+    }
+}
+
+fn nv12_frame_from_av(decoded: &frame::Video) -> Nv12Frame {
+    let width = decoded.width() as usize;
+    let height = decoded.height() as usize;
+
+    let y_plane = copy_plane_from_av(decoded, 0);
+    let u_plane = copy_plane_from_av(decoded, 1);
+    let v_plane = copy_plane_from_av(decoded, 2);
+
+    let mut data = Vec::with_capacity(width * height * 3 / 2);
+    data.extend_from_slice(&y_plane);
+    for (u, v) in u_plane.iter().zip(v_plane.iter()) {
+        data.push(*u);
+        data.push(*v);
+    }
+
+    let color_space = match decoded.color_primaries() {
+        color::Primaries::BT709 => ColorSpace::BT709,
+        color::Primaries::SMPTE170M => ColorSpace::BT601Ntsc,
+        color::Primaries::BT470BG => ColorSpace::BT601Pal,
+        _ => ColorSpace::Unspecified,
+    };
+    let color_range = match decoded.color_range() {
+        color::Range::JPEG => ColorRange::Full,
+        _ => ColorRange::Limited,
+    };
+
+    Nv12Frame {
+        width,
+        height,
+        data,
+        color_space,
+        color_range,
     }
 }
 
 fn download_nv12_texture(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-    texture: VideoTexture,
+    frame: OutputFrame<VideoTexture>,
 ) -> Nv12Frame {
+    let texture = frame.data;
     let width = texture.width();
     let height = texture.height();
 
@@ -260,31 +344,22 @@ fn download_nv12_texture(
 
     queue.submit(Some(encoder.finish()));
 
-    let y = read_buffer(
+    let data = read_buffer(
         device,
         queue,
         &buffer,
         0,
-        y_plane_size,
-        bytes_per_row,
-        width,
-    );
-    let uv = read_buffer(
-        device,
-        queue,
-        &buffer,
-        y_plane_size,
         y_plane_size + uv_plane_size,
         bytes_per_row,
         width,
     );
 
-    let mut data = y;
-    data.extend(uv);
     Nv12Frame {
         width: width as usize,
         height: height as usize,
         data,
+        color_space: frame.metadata.color_space,
+        color_range: frame.metadata.color_range,
     }
 }
 
