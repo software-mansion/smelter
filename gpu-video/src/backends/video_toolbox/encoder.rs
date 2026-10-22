@@ -35,10 +35,10 @@ use crate::{
     parameters::{EncoderPreset, EncoderUsage, H264Profile, H265Profile, RateControl},
 };
 
+#[cfg(metal_interop)]
+use super::metal_interop::{IOSurfaceTextures, TimelinePoint};
 #[cfg(feature = "transcoder")]
 use super::metal_interop::{PlaneTextures, plane_textures_from_pixel_buffer};
-#[cfg(metal_interop)]
-use super::metal_interop::{SyncCache, TimelinePoint};
 
 #[cfg(feature = "wgpu")]
 pub(crate) mod wgpu_api;
@@ -388,7 +388,7 @@ pub(crate) struct VTEncoder<C: EncodeCodec> {
     #[cfg(feature = "wgpu")]
     wgpu: Option<wgpu_api::VTWgpuEncodeState>,
     #[cfg(metal_interop)]
-    texture_cache: Option<SyncCache>,
+    input_textures: Option<IOSurfaceTextures>,
     #[cfg(metal_interop)]
     listener: Option<Retained<mtl::MTLSharedEventListener>>,
 }
@@ -499,12 +499,12 @@ impl<C: EncodeCodec> VTEncoder<C> {
             on_chunk_callback,
         )?;
 
-        encoder.texture_cache = Some(SyncCache::new_from_mtl(
+        encoder.input_textures = Some(IOSurfaceTextures::new_from_mtl(
             device,
             mtl::MTLTextureUsage(
                 mtl::MTLTextureUsage::ShaderWrite.0 | mtl::MTLTextureUsage::RenderTarget.0,
             ),
-        )?);
+        ));
         encoder.listener = Some(mtl::MTLSharedEventListener::new());
 
         Ok(encoder)
@@ -563,7 +563,7 @@ impl<C: EncodeCodec> VTEncoder<C> {
             #[cfg(feature = "wgpu")]
             wgpu: None,
             #[cfg(metal_interop)]
-            texture_cache: None,
+            input_textures: None,
             #[cfg(metal_interop)]
             listener: None,
         })
@@ -716,13 +716,13 @@ impl<C: EncodeCodec> VTEncoder<C> {
 
     #[cfg(feature = "transcoder")]
     pub(crate) fn acquire_input_frame(&self) -> Result<MetalInputFrame, VTEncoderError> {
-        let texture_cache = self
-            .texture_cache
+        let input_textures = self
+            .input_textures
             .as_ref()
             .ok_or(VTEncoderError::NotConfiguredForMetalInput)?;
 
         let buffer = self.session.acquire_input_buffer()?;
-        let planes = plane_textures_from_pixel_buffer(texture_cache, &buffer)?;
+        let planes = plane_textures_from_pixel_buffer(input_textures, &buffer)?;
 
         Ok(MetalInputFrame { buffer, planes })
     }

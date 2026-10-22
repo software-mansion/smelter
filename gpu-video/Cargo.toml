@@ -25,9 +25,8 @@ expose-backends = []
 # Internal; enabled by `wgpu` and `transcoder`. Do not enable directly.
 _metal-interop = [
     "dep:objc2-metal",
-    "objc2-core-video/CVMetalTexture",
-    "objc2-core-video/CVMetalTextureCache",
-    "objc2-core-video/objc2-metal",
+    "dep:objc2-io-surface",
+    "objc2-core-video/objc2-io-surface",
 ]
 wgpu = ["dep:wgpu", "_metal-interop"]
 transcoder = [
@@ -111,10 +110,19 @@ objc2-core-video = { version = "0.3.2", default-features = false, features = [
 objc2-metal = { version = "0.3.2", default-features = false, features = [
     "std",
     "block2",
+    "MTLAllocation",
     "MTLDevice",
     "MTLEvent",
     "MTLPixelFormat",
+    "MTLResource",
     "MTLTexture",
+    "objc2-io-surface",
+], optional = true }
+objc2-io-surface = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "IOSurfaceRef",
+    "objc2",
+    "objc2-core-foundation",
 ], optional = true }
 objc2-metal-performance-shaders = { version = "0.3.2", default-features = false, features = [
     "std",
