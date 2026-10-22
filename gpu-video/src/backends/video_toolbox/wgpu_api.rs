@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use objc2::{rc::Retained, runtime::ProtocolObject};
 
+use objc2_core_foundation as cf;
 use objc2_core_video as cv;
 use objc2_metal as mtl;
 use objc2_metal::MTLDevice;
@@ -17,7 +18,8 @@ use crate::{
             encoder::{H264Codec, H265Codec, VTEncoder},
             error::VTInitError,
             metal_interop::{
-                MetalTextureError, SendSyncCVBuffer, SyncCache, plane_textures_from_pixel_buffer,
+                IOSurfaceTextures, MetalTextureError, PlaneTextures, SendSyncCVBuffer,
+                plane_textures_from_pixel_buffer,
             },
         },
     },
@@ -145,7 +147,7 @@ impl WgpuVideoDeviceBackend for VTDevice {
     }
 }
 
-impl SyncCache {
+impl IOSurfaceTextures {
     pub(crate) fn new_from_wgpu(
         device: &wgpu::Device,
         usage: mtl::MTLTextureUsage,
@@ -158,25 +160,28 @@ impl SyncCache {
                 .clone()
         };
 
-        Self::new_from_mtl(&metal_device, usage)
+        Ok(Self::new_from_mtl(&metal_device, usage))
     }
 }
 
 pub(crate) fn video_texture_from_pixel_buffer(
-    cache: &SyncCache,
+    textures: &IOSurfaceTextures,
     device: &wgpu::Device,
-    buffer: &cv::CVBuffer,
+    buffer: &cf::CFRetained<cv::CVBuffer>,
     usage: wgpu::TextureUsages,
     initial_use: wgpu::TextureUses,
     label: &str,
 ) -> Result<VideoTexture, MetalTextureError> {
-    let planes = plane_textures_from_pixel_buffer(cache, buffer)?;
-    let [y_guard, uv_guard] = planes.guards;
+    let PlaneTextures {
+        y,
+        uv,
+        buffer: guard,
+    } = plane_textures_from_pixel_buffer(textures, buffer)?;
 
     let y_texture = plane_wgpu_texture(
         device,
-        planes.y,
-        y_guard,
+        y,
+        SendSyncCVBuffer(guard.0.clone()),
         plane_size(buffer, 0),
         wgpu::TextureFormat::R8Unorm,
         usage,
@@ -185,8 +190,8 @@ pub(crate) fn video_texture_from_pixel_buffer(
     );
     let uv_texture = plane_wgpu_texture(
         device,
-        planes.uv,
-        uv_guard,
+        uv,
+        guard,
         plane_size(buffer, 1),
         wgpu::TextureFormat::Rg8Unorm,
         usage,
