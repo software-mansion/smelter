@@ -82,6 +82,7 @@ By @noituri ([#2039](https://github.com/software-mansion/smelter/pull/2039))
 - Fix artifacts on AMD GPUs on Windows when multiple encoders or decoders are used at the same time ([#2249](https://github.com/software-mansion/smelter/pull/2249) by @noituri)
 - Fix the RGBA to NV12 conversion shader to output limited range NV12 ([#2050](https://github.com/software-mansion/smelter/pull/2050) by @jerzywilczek)
 - Fix device feature collisions when gpu-video is used with wgpu ([#2255](https://github.com/software-mansion/smelter/pull/2255) by @noituri)
+- Fix decoder and encoder sometimes panicking on drop ([#2294](https://github.com/software-mansion/smelter/pull/2294) by @noituri)
 
 ## [v0.4.0](https://github.com/software-mansion/smelter/releases/tag/gpu-video%2Fv0.4.0)
 
