@@ -29,6 +29,46 @@ struct TestCase<Options> {
     pub allowed_error: f32,
 }
 
+trait RunnableTestCase {
+    fn supports_adapter(&self, adapter: &wgpu::Adapter) -> bool;
+    fn start<'a>(&'a self, device: &wgpu::Device, queue: &wgpu::Queue) -> Box<dyn TestRun + 'a>;
+}
+
+trait TestRun {
+    fn step(&mut self) -> TestRunStatus;
+}
+
+enum TestRunStatus {
+    Running,
+    Finished,
+}
+
+impl<Options> TestCase<Options>
+where
+    Self: RunnableTestCase,
+{
+    pub fn run(&self) {
+        run_concurrently(&[self]);
+    }
+}
+
+/// Runs all test cases on one device, interleaving their work.
+fn run_concurrently(test_cases: &[&dyn RunnableTestCase]) {
+    let (device, queue) = create_video_device(|adapter| {
+        test_cases
+            .iter()
+            .all(|test_case| test_case.supports_adapter(adapter))
+    });
+
+    let mut runs = test_cases
+        .iter()
+        .map(|test_case| test_case.start(&device, &queue))
+        .collect::<Vec<_>>();
+    while !runs.is_empty() {
+        runs.retain_mut(|run| matches!(run.step(), TestRunStatus::Running));
+    }
+}
+
 fn create_video_device(filter: impl Fn(&wgpu::Adapter) -> bool) -> (wgpu::Device, wgpu::Queue) {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
     let mut adapters = pollster::block_on(

@@ -40,11 +40,11 @@ fn quality_across_idr_periods() {
     super::quality_across_idr_periods(Codec::H264);
 }
 
-/// Multiple encoders and decoders working at the same time on one device.
+/// Multiple encoders working at the same time on one device.
 /// Related PRs: #2249
 #[test]
-fn concurrent_encoders_and_decoders() {
-    super::concurrent_encoders_and_decoders(Codec::H264);
+fn concurrent_encoders() {
+    super::concurrent_encoders(Codec::H264);
 }
 
 /// Keyframes are produced when forced and reported in chunks.
