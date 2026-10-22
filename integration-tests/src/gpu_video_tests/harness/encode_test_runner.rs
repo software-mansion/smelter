@@ -11,9 +11,10 @@ use gpu_video::{
 
 use crate::{
     gpu_video_tests::{
-        Nv12Frame, TestCase, create_video_device, frame_data_diff,
+        Nv12Frame, RunnableTestCase, TestCase, TestRun, TestRunStatus, create_video_device,
+        frame_data_diff,
         harness::{
-            decoders::{Decoder, FfmpegDecoder, GvBytesDecoderH264, GvWgpuTexturesDecoderH264},
+            decoders::{Decoder, FfmpegDecoder},
             encoders::{Encoder, EncoderParameters, GvBytesEncoder, GvWgpuTexturesEncoder},
         },
     },
@@ -38,7 +39,6 @@ pub struct EncoderOptions {
     pub max_in_flight_submissions: Option<u32>,
     pub forced_keyframes: Vec<usize>,
     pub flush_at: Vec<usize>,
-    pub concurrent: usize,
     pub max_frames: Option<usize>,
     pub bitrate_tolerance: Option<f64>,
 }
@@ -59,7 +59,6 @@ impl EncoderOptions {
             max_in_flight_submissions: None,
             forced_keyframes: Vec::new(),
             flush_at: Vec::new(),
-            concurrent: 0,
             max_frames: None,
             bitrate_tolerance: None,
         }
@@ -134,105 +133,115 @@ impl EncoderOptions {
 }
 
 pub fn create_encoding_device(codec: Codec) -> (wgpu::Device, wgpu::Queue) {
-    create_video_device(|adapter| {
-        adapter
-            .video_adapter_info()
-            .is_some_and(|info| match codec {
-                Codec::H264 => info.encode_capabilities.h264.is_some(),
-                Codec::H265 => info.encode_capabilities.h265.is_some(),
-            })
-    })
+    create_video_device(|adapter| supports_encoding(adapter, codec))
 }
 
-impl TestCase<EncoderOptions> {
-    pub fn run(&self) {
-        let (device, queue) = create_encoding_device(self.options.codec);
+fn supports_encoding(adapter: &wgpu::Adapter, codec: Codec) -> bool {
+    adapter
+        .video_adapter_info()
+        .is_some_and(|info| match codec {
+            Codec::H264 => info.encode_capabilities.h264.is_some(),
+            Codec::H265 => info.encode_capabilities.h265.is_some(),
+        })
+}
 
-        let mut source_decoder = FfmpegDecoder::new(Id::H264);
-        let mut concurrent_decoders: Vec<Box<dyn Decoder>> = match self.options.concurrent {
-            0 => Vec::new(),
-            _ => vec![
-                Box::new(GvBytesDecoderH264::new(&device, Default::default())),
-                Box::new(GvWgpuTexturesDecoderH264::new(
-                    &device,
-                    &queue,
-                    Default::default(),
-                )),
-            ],
-        };
-        let mut encoders: Vec<VerifiedEncoder> = Vec::new();
-        let mut source_frames = VecDeque::new();
-        let mut source_frame_count = 0;
+impl RunnableTestCase for TestCase<EncoderOptions> {
+    fn supports_adapter(&self, adapter: &wgpu::Adapter) -> bool {
+        supports_encoding(adapter, self.options.codec)
+    }
 
-        let mut dump = File::open(gpu_video_dumps_dir_path().join(&self.dump_file_path)).unwrap();
+    fn start<'a>(&'a self, device: &wgpu::Device, queue: &wgpu::Queue) -> Box<dyn TestRun + 'a> {
+        Box::new(EncodeTestRun {
+            test_case: self,
+            device: device.clone(),
+            queue: queue.clone(),
+            dump: File::open(gpu_video_dumps_dir_path().join(&self.dump_file_path)).unwrap(),
+            source_decoder: FfmpegDecoder::new(Id::H264),
+            encoders: Vec::new(),
+            source_frames: VecDeque::new(),
+            source_frame_count: 0,
+        })
+    }
+}
+
+struct EncodeTestRun<'a> {
+    test_case: &'a TestCase<EncoderOptions>,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    dump: File,
+    source_decoder: FfmpegDecoder,
+    encoders: Vec<VerifiedEncoder>,
+    source_frames: VecDeque<(Nv12Frame, usize)>,
+    source_frame_count: usize,
+}
+
+impl TestRun for EncodeTestRun<'_> {
+    fn step(&mut self) -> TestRunStatus {
+        let test_case = self.test_case;
         let mut buffer = [0; 4096];
-        loop {
-            let n = dump.read(&mut buffer).unwrap();
-            let frames = match n {
-                0 => source_decoder.flush_frames(),
-                _ => source_decoder.decode_bytes(&buffer[..n]),
-            };
-            for decoder in concurrent_decoders.iter_mut() {
-                match n {
-                    0 => decoder.flush_frames(),
-                    _ => decoder.decode_bytes(&buffer[..n]),
-                };
-            }
+        let n = self.dump.read(&mut buffer).unwrap();
+        let frames = match n {
+            0 => self.source_decoder.flush_frames(),
+            _ => self.source_decoder.decode_bytes(&buffer[..n]),
+        };
 
-            for frame in frames {
-                if self
-                    .options
-                    .max_frames
-                    .is_some_and(|max| source_frame_count >= max)
-                {
-                    break;
-                }
-                if encoders.is_empty() {
-                    encoders = self.create_encoders(&device, &queue, frame.width, frame.height);
-                }
-
-                let frame_idx = source_frame_count;
-                let force_keyframe = self.options.forced_keyframes.contains(&frame_idx);
-                for encoder in encoders.iter_mut() {
-                    assert_eq!(
-                        (frame.width, frame.height),
-                        encoder.resolution,
-                        "Test {:?}: Dumps with changing resolution are not supported by encoder tests",
-                        self.dump_file_path,
-                    );
-                    let chunks = encoder
-                        .encoder
-                        .encode(&frame, frame_idx as u64, force_keyframe);
-                    self.process_chunks(encoder, chunks);
-                    if self.options.flush_at.contains(&frame_idx) {
-                        let chunks = encoder.encoder.flush();
-                        self.process_chunks(encoder, chunks);
-                    }
-                }
-
-                source_frames.push_back((frame, frame_idx));
-                source_frame_count += 1;
-                self.compare_ready_frames(&mut source_frames, &mut encoders);
-            }
-
-            if n == 0 {
+        for frame in frames {
+            if test_case
+                .options
+                .max_frames
+                .is_some_and(|max| self.source_frame_count >= max)
+            {
                 break;
             }
+            if self.encoders.is_empty() {
+                self.encoders =
+                    test_case.create_encoders(&self.device, &self.queue, frame.width, frame.height);
+            }
+
+            let frame_idx = self.source_frame_count;
+            let force_keyframe = test_case.options.forced_keyframes.contains(&frame_idx);
+            for encoder in self.encoders.iter_mut() {
+                assert_eq!(
+                    (frame.width, frame.height),
+                    encoder.resolution,
+                    "Test {:?}: Dumps with changing resolution are not supported by encoder tests",
+                    test_case.dump_file_path,
+                );
+                let chunks = encoder
+                    .encoder
+                    .encode(&frame, frame_idx as u64, force_keyframe);
+                test_case.process_chunks(encoder, chunks);
+                if test_case.options.flush_at.contains(&frame_idx) {
+                    let chunks = encoder.encoder.flush();
+                    test_case.process_chunks(encoder, chunks);
+                }
+            }
+
+            self.source_frames.push_back((frame, frame_idx));
+            self.source_frame_count += 1;
+            test_case.compare_ready_frames(&mut self.source_frames, &mut self.encoders);
         }
 
-        for encoder in encoders.iter_mut() {
+        if n > 0 {
+            return TestRunStatus::Running;
+        }
+
+        for encoder in self.encoders.iter_mut() {
             let chunks = encoder.encoder.flush();
-            self.process_chunks(encoder, chunks);
+            test_case.process_chunks(encoder, chunks);
             let frames = encoder.reference_decoder.flush_frames();
             encoder.decoded_frames.extend(frames);
         }
-        self.compare_ready_frames(&mut source_frames, &mut encoders);
+        test_case.compare_ready_frames(&mut self.source_frames, &mut self.encoders);
 
-        for encoder in encoders {
-            self.verify_summary(&encoder, source_frame_count);
+        for encoder in self.encoders.iter() {
+            test_case.verify_summary(encoder, self.source_frame_count);
         }
+        TestRunStatus::Finished
     }
+}
 
+impl TestCase<EncoderOptions> {
     fn create_encoders(
         &self,
         device: &wgpu::Device,
@@ -248,22 +257,20 @@ impl TestCase<EncoderOptions> {
             Codec::H265 => Id::HEVC,
         };
 
-        (0..=self.options.concurrent)
-            .flat_map(|_| {
-                [
-                    Box::new(GvBytesEncoder::new(device, parameters)) as Box<dyn Encoder>,
-                    Box::new(GvWgpuTexturesEncoder::new(device, queue, parameters)),
-                ]
-            })
-            .map(|encoder| VerifiedEncoder {
-                encoder,
-                resolution: (width, height),
-                reference_decoder: FfmpegDecoder::new(codec_id),
-                decoded_frames: VecDeque::new(),
-                chunk_count: 0,
-                total_bytes: 0,
-            })
-            .collect()
+        [
+            Box::new(GvBytesEncoder::new(device, parameters)) as Box<dyn Encoder>,
+            Box::new(GvWgpuTexturesEncoder::new(device, queue, parameters)),
+        ]
+        .into_iter()
+        .map(|encoder| VerifiedEncoder {
+            encoder,
+            resolution: (width, height),
+            reference_decoder: FfmpegDecoder::new(codec_id),
+            decoded_frames: VecDeque::new(),
+            chunk_count: 0,
+            total_bytes: 0,
+        })
+        .collect()
     }
 
     fn process_chunks(

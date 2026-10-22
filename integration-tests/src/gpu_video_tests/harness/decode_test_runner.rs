@@ -5,7 +5,7 @@ use gpu_video::{VideoAdapterExt, parameters::DecoderParameters};
 
 use crate::{
     gpu_video_tests::{
-        Nv12Frame, TestCase, create_video_device, frame_data_diff,
+        Nv12Frame, RunnableTestCase, TestCase, TestRun, TestRunStatus, frame_data_diff,
         harness::decoders::{
             Decoder, FfmpegDecoder, GvBytesDecoderH264, GvWgpuTexturesDecoderH264,
         },
@@ -13,81 +13,92 @@ use crate::{
     paths::gpu_video_dumps_dir_path,
 };
 
-impl TestCase<DecoderOptions> {
-    pub fn run(&self) {
-        let (device, queue) = create_video_device(|adapter| {
-            adapter
-                .video_adapter_info()
-                .is_some_and(|info| info.supports_decoding)
-        });
+impl RunnableTestCase for TestCase<DecoderOptions> {
+    fn supports_adapter(&self, adapter: &wgpu::Adapter) -> bool {
+        adapter
+            .video_adapter_info()
+            .is_some_and(|info| info.supports_decoding)
+    }
 
+    fn start<'a>(&'a self, device: &wgpu::Device, queue: &wgpu::Queue) -> Box<dyn TestRun + 'a> {
         let (reference_decoder, gv_decoders) = match self.options {
             DecoderOptions::H264(params) => (
                 BufferedDecoder::from_decoder(FfmpegDecoder::new(Id::H264)),
                 vec![
-                    BufferedDecoder::from_decoder(GvBytesDecoderH264::new(&device, params)),
+                    BufferedDecoder::from_decoder(GvBytesDecoderH264::new(device, params)),
                     BufferedDecoder::from_decoder(GvWgpuTexturesDecoderH264::new(
-                        &device, &queue, params,
+                        device, queue, params,
                     )),
                 ],
             ),
         };
 
-        self.verify_decoders(reference_decoder, gv_decoders);
+        Box::new(DecodeTestRun {
+            test_case: self,
+            dump: File::open(gpu_video_dumps_dir_path().join(&self.dump_file_path)).unwrap(),
+            reference_decoder,
+            gv_decoders,
+        })
     }
+}
 
-    fn verify_decoders(
-        &self,
-        mut reference_decoder: BufferedDecoder,
-        mut gv_decoders: Vec<BufferedDecoder>,
-    ) {
-        let mut source = File::open(gpu_video_dumps_dir_path().join(&self.dump_file_path)).unwrap();
+struct DecodeTestRun<'a> {
+    test_case: &'a TestCase<DecoderOptions>,
+    dump: File,
+    reference_decoder: BufferedDecoder,
+    gv_decoders: Vec<BufferedDecoder>,
+}
 
+impl TestRun for DecodeTestRun<'_> {
+    fn step(&mut self) -> TestRunStatus {
         let mut buffer = [0; 4096];
-        while let Ok(n) = source.read(&mut buffer) {
-            match n {
-                0 => {
-                    reference_decoder.flush_frames();
-                    for decoder in gv_decoders.iter_mut() {
-                        decoder.flush_frames();
-                    }
-                }
-                _ => {
-                    reference_decoder.decode_bytes(&buffer[..n]);
-                    for decoder in gv_decoders.iter_mut() {
-                        decoder.decode_bytes(&buffer[..n]);
-                    }
+        let n = self.dump.read(&mut buffer).unwrap();
+        match n {
+            0 => {
+                self.reference_decoder.flush_frames();
+                for decoder in self.gv_decoders.iter_mut() {
+                    decoder.flush_frames();
                 }
             }
-
-            while reference_decoder.has_next_frame()
-                && gv_decoders.iter().all(BufferedDecoder::has_next_frame)
-            {
-                let reference_frame = reference_decoder.next_frame().unwrap();
-                for decoder in gv_decoders.iter_mut() {
-                    let actual_frame = decoder.next_frame().unwrap();
-                    self.compare(decoder.decoder_name(), &reference_frame, &actual_frame);
+            _ => {
+                self.reference_decoder.decode_bytes(&buffer[..n]);
+                for decoder in self.gv_decoders.iter_mut() {
+                    decoder.decode_bytes(&buffer[..n]);
                 }
-            }
-
-            if n == 0 {
-                break;
             }
         }
 
-        for decoder in gv_decoders {
+        while self.reference_decoder.has_next_frame()
+            && self.gv_decoders.iter().all(BufferedDecoder::has_next_frame)
+        {
+            let reference_frame = self.reference_decoder.next_frame().unwrap();
+            for decoder in self.gv_decoders.iter_mut() {
+                let actual_frame = decoder.next_frame().unwrap();
+                self.test_case
+                    .compare(decoder.decoder_name(), &reference_frame, &actual_frame);
+            }
+        }
+
+        if n > 0 {
+            return TestRunStatus::Running;
+        }
+
+        for decoder in self.gv_decoders.iter() {
             assert_eq!(
-                reference_decoder.frame_count,
+                self.reference_decoder.frame_count,
                 decoder.frame_count,
                 "Test {:?} ({}): Wrong number of decoded frames, (actual) {} != (expected) {}",
-                self.dump_file_path,
+                self.test_case.dump_file_path,
                 decoder.decoder_name(),
                 decoder.frame_count,
-                reference_decoder.frame_count,
+                self.reference_decoder.frame_count,
             );
         }
+        TestRunStatus::Finished
     }
+}
 
+impl TestCase<DecoderOptions> {
     fn compare(
         &self,
         decoder_name: &str,

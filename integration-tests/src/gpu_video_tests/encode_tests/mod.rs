@@ -2,15 +2,17 @@ use std::time::Duration;
 
 use gpu_video::{
     InputFrame, RawFrameRef, VideoDeviceExt, VideoEncoderError,
-    parameters::{ColorRange, ColorSpace, EncoderPreset, RateControl},
+    parameters::{ColorRange, ColorSpace, DecoderParameters, EncoderPreset, RateControl},
 };
 
 use crate::gpu_video_tests::{
     TestCase,
     harness::{
+        decode_test_runner::DecoderOptions,
         encode_test_runner::{Codec, EncoderOptions, create_encoding_device},
         encoders::GvBytesEncoder,
     },
+    run_concurrently,
 };
 
 mod h264;
@@ -99,15 +101,23 @@ pub(super) fn quality_across_idr_periods(codec: Codec) {
 }
 
 pub(super) fn concurrent_encoders_and_decoders(codec: Codec) {
-    TestCase {
-        dump_file_path: BIG_BUCK_BUNNY.into(),
-        options: EncoderOptions {
-            concurrent: 2,
-            ..EncoderOptions::new(codec)
+    run_concurrently(&[
+        &TestCase {
+            dump_file_path: BIG_BUCK_BUNNY.into(),
+            options: EncoderOptions::new(codec),
+            allowed_error: ALLOWED_ERROR,
         },
-        allowed_error: ALLOWED_ERROR,
-    }
-    .run();
+        &TestCase {
+            dump_file_path: "h264/frame_cropping_and_stutter.h264".into(),
+            options: EncoderOptions::new(codec),
+            allowed_error: ALLOWED_ERROR,
+        },
+        &TestCase {
+            dump_file_path: BIG_BUCK_BUNNY.into(),
+            options: DecoderOptions::H264(DecoderParameters::default()),
+            allowed_error: 0.0,
+        },
+    ]);
 }
 
 pub(super) fn forced_keyframes(codec: Codec) {
