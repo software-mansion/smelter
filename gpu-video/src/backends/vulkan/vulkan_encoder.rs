@@ -122,6 +122,7 @@ struct VideoSessionResources<'a> {
     quality_level: u32,
     rate_control: RateControl,
     framerate: Rational,
+    initialized: bool,
 }
 
 impl VideoSessionResources<'_> {
@@ -194,6 +195,7 @@ impl VideoSessionResources<'_> {
             quality_level: parameters.quality_level,
             rate_control: RateControl::EncoderDefault,
             framerate: parameters.framerate,
+            initialized: false,
         })
     }
 }
@@ -555,7 +557,8 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
 
         self.begin_video_coding(cmd_buffer.buffer());
 
-        if is_idr {
+        let needs_reset = !self.session_resources.initialized;
+        if needs_reset {
             self.issue_coding_control_reset_for(cmd_buffer.buffer(), self.rate_control);
         }
 
@@ -709,6 +712,10 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
             vk::PipelineStageFlags2::ALL_COMMANDS,
             EncoderTrackerWaitState::Encode,
         )?;
+
+        if needs_reset {
+            self.session_resources.initialized = true;
+        }
 
         C::advance_counters(&mut self.counters, is_idr);
         drop(std_reference_info);
