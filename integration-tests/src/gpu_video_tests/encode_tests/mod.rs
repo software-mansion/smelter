@@ -147,7 +147,6 @@ pub(super) fn color_space_and_range(codec: Codec) {
             dump_file_path: BIG_BUCK_BUNNY.into(),
             options: EncoderOptions {
                 color: Some(color),
-                max_frames: Some(30),
                 ..EncoderOptions::new(codec)
             },
             allowed_error: ALLOWED_ERROR,

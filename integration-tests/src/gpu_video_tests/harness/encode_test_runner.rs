@@ -21,7 +21,7 @@ use crate::{
     paths::gpu_video_dumps_dir_path,
 };
 
-const FRAMERATE: u32 = 25;
+const FRAMERATE: u32 = 30;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Codec {
@@ -39,7 +39,6 @@ pub struct EncoderOptions {
     pub max_in_flight_submissions: Option<u32>,
     pub forced_keyframes: Vec<usize>,
     pub flush_at: Vec<usize>,
-    pub max_frames: Option<usize>,
     pub bitrate_tolerance: Option<f64>,
 }
 
@@ -49,7 +48,7 @@ impl EncoderOptions {
             codec,
             preset: EncoderPreset::HighQuality,
             rate_control: RateControl::VariableBitrate {
-                average_bitrate: 4_000_000,
+                average_bitrate: 2_000_000,
                 max_bitrate: 8_000_000,
                 virtual_buffer_size: Duration::from_secs(2),
             },
@@ -59,7 +58,6 @@ impl EncoderOptions {
             max_in_flight_submissions: None,
             forced_keyframes: Vec::new(),
             flush_at: Vec::new(),
-            max_frames: None,
             bitrate_tolerance: None,
         }
     }
@@ -186,13 +184,6 @@ impl TestRun for EncodeTestRun<'_> {
         };
 
         for frame in frames {
-            if test_case
-                .options
-                .max_frames
-                .is_some_and(|max| self.source_frame_count >= max)
-            {
-                break;
-            }
             if self.encoders.is_empty() {
                 self.encoders =
                     test_case.create_encoders(&self.device, &self.queue, frame.width, frame.height);
