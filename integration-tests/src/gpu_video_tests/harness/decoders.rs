@@ -10,7 +10,8 @@ use ffmpeg_next::{
 };
 use gpu_video::{
     BytesDecoderH264, EncodedInputChunk, OutputFrame, RawFrameData, VideoDeviceExt, VideoTexture,
-    WgpuTexturesDecoderH264, parameters::DecoderParameters,
+    WgpuTexturesDecoderH264,
+    parameters::{ColorRange, ColorSpace, DecoderParameters},
 };
 
 use crate::{gpu_video_tests::Nv12Frame, video_decoder::copy_plane_from_av};
@@ -49,6 +50,8 @@ impl GvBytesDecoderH264 {
                 width: frame.data.width as usize,
                 height: frame.data.height as usize,
                 data: frame.data.frame,
+                color_space: frame.metadata.color_space,
+                color_range: frame.metadata.color_range,
             })
             .collect()
     }
@@ -105,7 +108,7 @@ impl GvWgpuTexturesDecoderH264 {
     fn drain(&mut self) -> Vec<Nv12Frame> {
         self.frame_receiver
             .try_iter()
-            .map(|frame| download_nv12_texture(&self.wgpu_device, &self.wgpu_queue, frame.data))
+            .map(|frame| download_nv12_texture(&self.wgpu_device, &self.wgpu_queue, frame))
             .collect()
     }
 }
@@ -134,14 +137,21 @@ impl Decoder for FfmpegDecoder {
     }
 
     fn decode_bytes(&mut self, data: &[u8]) -> Vec<Nv12Frame> {
-        self.decode(data)
-            .into_iter()
-            .map(|(frame, ..)| frame)
+        let access_units = self.parser.parse(&mut self.decoder, data);
+        access_units
+            .iter()
+            .flat_map(|access_unit| self.decode_access_unit(access_unit))
             .collect()
     }
 
     fn flush_frames(&mut self) -> Vec<Nv12Frame> {
-        self.flush().into_iter().map(|(frame, ..)| frame).collect()
+        let mut frames = Vec::new();
+        if let Some(access_unit) = self.parser.flush(&mut self.decoder) {
+            frames.extend(self.decode_access_unit(&access_unit));
+        }
+        self.decoder.send_eof().unwrap();
+        frames.extend(self.receive_frames());
+        frames
     }
 }
 
@@ -170,41 +180,16 @@ impl FfmpegDecoder {
         }
     }
 
-    pub fn decode(&mut self, data: &[u8]) -> Vec<(Nv12Frame, color::Space, color::Range)> {
-        let access_units = self.parser.parse(&mut self.decoder, data);
-        access_units
-            .iter()
-            .flat_map(|access_unit| self.decode_access_unit(access_unit))
-            .collect()
-    }
-
-    pub fn flush(&mut self) -> Vec<(Nv12Frame, color::Space, color::Range)> {
-        let mut frames = Vec::new();
-        if let Some(access_unit) = self.parser.flush(&mut self.decoder) {
-            frames.extend(self.decode_access_unit(&access_unit));
-        }
-        self.decoder.send_eof().unwrap();
-        frames.extend(self.receive_frames());
-        frames
-    }
-
-    fn decode_access_unit(
-        &mut self,
-        access_unit: &ffmpeg_next::Packet,
-    ) -> Vec<(Nv12Frame, color::Space, color::Range)> {
+    fn decode_access_unit(&mut self, access_unit: &ffmpeg_next::Packet) -> Vec<Nv12Frame> {
         self.decoder.send_packet(access_unit).unwrap();
         self.receive_frames()
     }
 
-    fn receive_frames(&mut self) -> Vec<(Nv12Frame, color::Space, color::Range)> {
+    fn receive_frames(&mut self) -> Vec<Nv12Frame> {
         let mut frames = Vec::new();
         let mut decoded = frame::Video::empty();
         while self.decoder.receive_frame(&mut decoded).is_ok() {
-            frames.push((
-                nv12_frame_from_av(&decoded),
-                decoded.color_space(),
-                decoded.color_range(),
-            ));
+            frames.push(nv12_frame_from_av(&decoded));
         }
         frames
     }
@@ -287,18 +272,32 @@ fn nv12_frame_from_av(decoded: &frame::Video) -> Nv12Frame {
         data.push(*v);
     }
 
+    let color_space = match decoded.color_space() {
+        color::Space::BT709 => ColorSpace::BT709,
+        color::Space::SMPTE170M => ColorSpace::BT601Ntsc,
+        color::Space::BT470BG => ColorSpace::BT601Pal,
+        _ => ColorSpace::Unspecified,
+    };
+    let color_range = match decoded.color_range() {
+        color::Range::JPEG => ColorRange::Full,
+        _ => ColorRange::Limited,
+    };
+
     Nv12Frame {
         width,
         height,
         data,
+        color_space,
+        color_range,
     }
 }
 
 fn download_nv12_texture(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-    texture: VideoTexture,
+    frame: OutputFrame<VideoTexture>,
 ) -> Nv12Frame {
+    let texture = frame.data;
     let width = texture.width();
     let height = texture.height();
 
@@ -368,6 +367,8 @@ fn download_nv12_texture(
         width: width as usize,
         height: height as usize,
         data,
+        color_space: frame.metadata.color_space,
+        color_range: frame.metadata.color_range,
     }
 }
 

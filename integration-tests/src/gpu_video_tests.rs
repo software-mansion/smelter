@@ -1,6 +1,9 @@
 use std::path::PathBuf;
 
-use gpu_video::{VideoAdapterExt, parameters::VideoDeviceDescriptor};
+use gpu_video::{
+    VideoAdapterExt,
+    parameters::{ColorRange, ColorSpace, VideoDeviceDescriptor},
+};
 
 mod decode_tests;
 mod encode_tests;
@@ -14,6 +17,8 @@ struct Nv12Frame {
     pub width: usize,
     pub height: usize,
     pub data: Vec<u8>,
+    pub color_space: ColorSpace,
+    pub color_range: ColorRange,
 }
 
 struct TestCase<Options> {

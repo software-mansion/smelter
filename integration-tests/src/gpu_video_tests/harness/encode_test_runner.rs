@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, fs::File, io::Read, num::NonZeroU32, time::Duration};
 
-use ffmpeg_next::{codec::Id, color};
+use ffmpeg_next::codec::Id;
 use gpu_video::{
     EncodedOutputChunk, VideoAdapterExt, VideoDevice, VideoDeviceExt,
     parameters::{
@@ -223,7 +223,7 @@ impl TestCase<EncoderOptions> {
         for encoder in encoders.iter_mut() {
             let chunks = encoder.encoder.flush();
             self.process_chunks(encoder, chunks);
-            let frames = encoder.reference_decoder.flush();
+            let frames = encoder.reference_decoder.flush_frames();
             encoder.decoded_frames.extend(frames);
         }
         self.compare_ready_frames(&mut source_frames, &mut encoders);
@@ -329,8 +329,8 @@ impl TestCase<EncoderOptions> {
             let frames = match (chunk_idx, self.options.inline_stream_params) {
                 (0, false) => encoder
                     .reference_decoder
-                    .decode(&[encoder.encoder.stream_params(), chunk.data].concat()),
-                _ => encoder.reference_decoder.decode(&chunk.data),
+                    .decode_bytes(&[encoder.encoder.stream_params(), chunk.data].concat()),
+                _ => encoder.reference_decoder.decode_bytes(&chunk.data),
             };
             encoder.decoded_frames.extend(frames);
         }
@@ -360,7 +360,7 @@ impl TestCase<EncoderOptions> {
         encoder_name: &str,
         frame_idx: usize,
         source_frame: &Nv12Frame,
-        (decoded_frame, color_space, color_range): (Nv12Frame, color::Space, color::Range),
+        decoded_frame: Nv12Frame,
     ) {
         assert_eq!(
             (decoded_frame.width, decoded_frame.height),
@@ -377,20 +377,10 @@ impl TestCase<EncoderOptions> {
             self.allowed_error
         );
 
-        if let Some((expected_space, expected_range)) = self.options.color {
-            let expected_space = match expected_space {
-                ColorSpace::Unspecified => color::Space::Unspecified,
-                ColorSpace::BT709 => color::Space::BT709,
-                ColorSpace::BT601Ntsc => color::Space::SMPTE170M,
-                ColorSpace::BT601Pal => color::Space::BT470BG,
-            };
-            let expected_range = match expected_range {
-                ColorRange::Full => color::Range::JPEG,
-                ColorRange::Limited => color::Range::MPEG,
-            };
+        if let Some(color) = self.options.color {
             assert_eq!(
-                (color_space, color_range),
-                (expected_space, expected_range),
+                (decoded_frame.color_space, decoded_frame.color_range),
+                color,
                 "Test {:?} ({encoder_name}, frame {frame_idx}): wrong color metadata",
                 self.dump_file_path,
             );
@@ -452,7 +442,7 @@ struct VerifiedEncoder {
     encoder: Box<dyn Encoder>,
     resolution: (usize, usize),
     reference_decoder: FfmpegDecoder,
-    decoded_frames: VecDeque<(Nv12Frame, color::Space, color::Range)>,
+    decoded_frames: VecDeque<Nv12Frame>,
     chunk_count: usize,
     total_bytes: usize,
 }
