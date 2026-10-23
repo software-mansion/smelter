@@ -2506,6 +2506,10 @@ export interface AudioMixerInputStatsReport {
    */
   drops: number;
   /**
+   * Total count of cases when part of a silent passage was cut out because input timestamps fell behind the received audio.
+   */
+  silence_cuts: number;
+  /**
    * Total count of cases when the end of input audio was extended with generated audio to cover a gap.
    */
   concealments: number;
@@ -2555,6 +2559,10 @@ export interface AudioMixerInputSlidingWindowStatsReport {
    * Count of cases when audio was dropped because input timestamps fell behind the received audio by more than 500ms during the given time window.
    */
   drops: number;
+  /**
+   * Count of cases when part of a silent passage was cut out because input timestamps fell behind the received audio during the given time window.
+   */
+  silence_cuts: number;
   /**
    * Count of cases when the end of input audio was extended with generated audio during the given time window.
    */
