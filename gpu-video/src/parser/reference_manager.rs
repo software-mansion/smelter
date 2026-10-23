@@ -58,12 +58,15 @@ enum MaxLongTermFrameIdx {
 
 /// Table A-1 from the H.264 spec: MaxDpbMbs per level
 fn h264_max_dpb_mbs(sps: &SeqParameterSet) -> Option<u64> {
-    // Level 1b is level_idc 9, or level_idc 11 with constraint_set3_flag for profile_idc 66, 77
-    // and 88.
-    let is_level_1b = sps.level_idc == 9
-        || (sps.level_idc == 11
-            && sps.constraint_flags.flag3()
-            && [66u8, 77, 88].contains(&sps.profile_idc.into()));
+    let is_level_1b = match [66u8, 77, 88].contains(&sps.profile_idc.into()) {
+        // Baseline, Main and Extended profiles signal level 1b with level_idc 11 and
+        // constraint_set3_flag (H.264 spec A.3.1).
+        true => sps.level_idc == 11 && sps.constraint_flags.flag3(),
+        // High profiles (H.264 spec A.3.2) and SVC/MVC profiles (H.264 spec F.10.2.1, G.10.2,
+        // H.10.2) signal level 1b with level_idc 9. For other profile_idc values, the spec does not
+        // define level_idc (H.264 spec A.1). We assume they follow the same rules as High profiles.
+        false => sps.level_idc == 9,
+    };
     if is_level_1b {
         return Some(396);
     }
@@ -100,10 +103,14 @@ pub(crate) fn calculate_max_num_reorder_frames(sps: &SeqParameterSet) -> u64 {
     } else if let Profile::Baseline = sps.profile() {
         0
     } else {
-        let frame_height_in_mbs = match sps.frame_mbs_flags {
-            FrameMbsFlags::Frames => sps.pic_height_in_map_units_minus1 as u64 + 1,
-            FrameMbsFlags::Fields { .. } => 2 * (sps.pic_height_in_map_units_minus1 as u64 + 1),
+        // Height of a map unit in a frame (H.264 spec 8.2.2.8). When fields can be coded, a map
+        // unit is one macroblock of a field, so two macroblocks of a frame.
+        let mbs_per_map_unit = match sps.frame_mbs_flags {
+            FrameMbsFlags::Frames => 1,
+            FrameMbsFlags::Fields { .. } => 2,
         };
+        let frame_height_in_mbs =
+            mbs_per_map_unit * (sps.pic_height_in_map_units_minus1 as u64 + 1);
         let frame_size_in_mbs = (sps.pic_width_in_mbs_minus1 as u64 + 1) * frame_height_in_mbs;
         // Unknown level falls back to the largest DPB.
         h264_max_dpb_mbs(sps).map_or(16, |max_dpb_mbs| max_dpb_mbs / frame_size_in_mbs)
@@ -217,7 +224,7 @@ impl ReferenceContext {
             Some(DecRefPicMarking::Idr { .. })
         );
         if !is_idr && self.corrupted_state_handling == CorruptedStateHandling::Strict {
-            self.verify_frame_num(&sps, &header)?;
+            self.detect_frame_num_gap(&sps, &header)?;
         }
 
         let has_gap = header.frame_num != self.PrevRefFrameNum
@@ -894,15 +901,16 @@ impl ReferenceContext {
             .collect()
     }
 
-    fn verify_frame_num(
+    /// Detects lost reference frames from frame_num. Does not validate frame_num otherwise.
+    fn detect_frame_num_gap(
         &mut self,
         sps: &SeqParameterSet,
         header: &SliceHeader,
     ) -> Result<(), ReferenceManagementError> {
-        let has_frame_num_gap = !sps.gaps_in_frame_num_value_allowed_flag
+        let has_unexpected_frame_num_gap = !sps.gaps_in_frame_num_value_allowed_flag
             && header.frame_num != self.PrevRefFrameNum
             && header.frame_num != ((self.PrevRefFrameNum as i64 + 1) % sps.max_frame_num()) as u16;
-        if has_frame_num_gap || self.detected_corrupted_state {
+        if has_unexpected_frame_num_gap || self.detected_corrupted_state {
             self.detected_corrupted_state = true;
             return Err(ReferenceManagementError::CorruptedState);
         }
@@ -985,6 +993,8 @@ impl SliceHeaderExt for SliceHeader {
 
     fn frame_num_after_decoding(&self) -> u16 {
         // A picture with MMCO 5 is inferred to have had frame_num equal to 0 (H.264 spec 7.4.3).
+        // IDR also resets frame_num, but its frame_num is already required to be 0 (H.264 spec
+        // 7.4.3).
         match self.includes_mmco_equal_5() {
             true => 0,
             false => self.frame_num,
