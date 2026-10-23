@@ -46,6 +46,20 @@ impl TimelineSemaphore {
 
         Ok(())
     }
+
+    pub(crate) fn wait(
+        &self,
+        value: SemaphoreWaitValue,
+        timeout: u64,
+    ) -> Result<(), VulkanCommonError> {
+        let wait_info = vk::SemaphoreWaitInfo::default()
+            .semaphores(std::slice::from_ref(&self.semaphore))
+            .values(std::slice::from_ref(&value.0));
+
+        unsafe { self.device.wait_semaphores(&wait_info, timeout)? };
+
+        Ok(())
+    }
 }
 
 impl Drop for TimelineSemaphore {
@@ -190,6 +204,17 @@ impl<S> SemaphoreTracker<S> {
             wgpu_fence: wgpu::hal::vulkan::Fence::TimelineSemaphore(self.semaphore.semaphore),
             tracker: self,
         }
+    }
+
+    pub(crate) fn wait(&mut self, timeout: u64) -> Result<(), VulkanCommonError> {
+        let Some(wait_for) = &self.wait_for else {
+            return Ok(());
+        };
+
+        self.semaphore.wait(wait_for.value, timeout)?;
+        self.wait_for = None;
+
+        Ok(())
     }
 }
 

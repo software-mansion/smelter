@@ -5,7 +5,7 @@ use std::{
 };
 
 use ash::vk;
-use tracing::warn;
+use tracing::{error, warn};
 
 use crate::{
     EncodedOutputChunk, VideoBackendError,
@@ -377,6 +377,14 @@ pub(crate) struct VulkanEncoder<'a, C: EncodeCodec> {
     rate_control: RateControl,
     inline_stream_params: bool,
     encoding_device: Arc<EncodingDevice>,
+}
+
+impl<'a, C: EncodeCodec> Drop for VulkanEncoder<'a, C> {
+    fn drop(&mut self) {
+        if let Err(err) = self.tracker.semaphore_tracker.wait(u64::MAX) {
+            error!("Failed to wait for encoder submission: {err}");
+        }
+    }
 }
 
 impl<'a> VideoEncoderParametersInfoH264 for VulkanEncoder<'a, H264Codec> {

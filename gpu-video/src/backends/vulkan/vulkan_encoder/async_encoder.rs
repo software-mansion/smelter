@@ -53,6 +53,14 @@ pub(crate) struct AsyncVulkanEncoder<'a, C: EncodeCodec> {
     encoding_device: Arc<EncodingDevice>,
 }
 
+impl<'a, C: EncodeCodec> Drop for AsyncVulkanEncoder<'a, C> {
+    fn drop(&mut self) {
+        if let Err(err) = self.input_tracker.wait(u64::MAX) {
+            error!("Failed to wait for encoder input submission: {err}");
+        }
+    }
+}
+
 impl<'a, C: EncodeCodec + 'a> AsyncVulkanEncoder<'a, C> {
     pub(crate) fn new(
         encoding_device: Arc<EncodingDevice>,
