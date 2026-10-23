@@ -1,50 +1,50 @@
-use std::{cell::Cell, ptr::NonNull, sync::Mutex};
+use std::{cell::Cell, ptr::NonNull};
 
-use objc2::{rc::Retained, runtime::ProtocolObject};
+use objc2::{Message as _, rc::Retained, runtime::ProtocolObject};
 use objc2_core_foundation as cf;
 use objc2_core_video as cv;
+use objc2_io_surface::IOSurfaceRef;
 #[cfg(feature = "transcoder")]
 use objc2_metal::MTLCommandBuffer as _;
-use objc2_metal::{self as mtl, MTLSharedEvent as _};
+use objc2_metal::{self as mtl, MTLDevice as _, MTLSharedEvent as _};
 
-use crate::backends::video_toolbox::{
-    allocate_retained,
-    error::{OSStatusError, VTInitError},
-};
+/// Makes Metal textures over the planes of pixel buffers' IOSurfaces. Unlike a
+/// `CVMetalTextureCache` texture, whose release updates the cache, a texture made here only holds
+/// its pixel buffer, so dropping it on any thread races with nothing.
+pub(crate) struct IOSurfaceTextures {
+    device: Retained<ProtocolObject<dyn mtl::MTLDevice>>,
+    usage: mtl::MTLTextureUsage,
+}
 
-pub(crate) struct SyncCache(Mutex<MetalTextureCache>);
-
-struct MetalTextureCache(cf::CFRetained<cv::CVMetalTextureCache>);
-
-// Safety: texture caches are not marked in docs as thread-affine (required to be used on the
-// thread that created them)
-unsafe impl Send for MetalTextureCache {}
-
-impl SyncCache {
+impl IOSurfaceTextures {
     pub(crate) fn new_from_mtl(
         device: &ProtocolObject<dyn mtl::MTLDevice>,
         usage: mtl::MTLTextureUsage,
-    ) -> Result<Self, VTInitError> {
-        let texture_attributes = unsafe {
-            cf::CFDictionary::<cf::CFString, cf::CFNumber>::from_slices(
-                &[cv::kCVMetalTextureUsage],
-                &[cf::CFNumber::new_i64(usage.0 as i64).as_ref()],
+    ) -> Self {
+        Self {
+            device: device.retain(),
+            usage,
+        }
+    }
+
+    fn plane(
+        &self,
+        surface: &IOSurfaceRef,
+        buffer: &cv::CVBuffer,
+        format: mtl::MTLPixelFormat,
+        plane: usize,
+    ) -> Result<Retained<ProtocolObject<dyn mtl::MTLTexture>>, MetalTextureError> {
+        let width = cv::CVPixelBufferGetWidthOfPlane(buffer, plane);
+        let height = cv::CVPixelBufferGetHeightOfPlane(buffer, plane);
+        let descriptor = unsafe {
+            mtl::MTLTextureDescriptor::texture2DDescriptorWithPixelFormat_width_height_mipmapped(
+                format, width, height, false,
             )
         };
-
-        let texture_cache = unsafe {
-            allocate_retained(|ptr| {
-                cv::CVMetalTextureCache::create(
-                    None,
-                    None,
-                    device,
-                    Some(texture_attributes.as_ref()),
-                    ptr,
-                )
-            })?
-        };
-
-        Ok(SyncCache(Mutex::new(MetalTextureCache(texture_cache))))
+        descriptor.setUsage(self.usage);
+        self.device
+            .newTextureWithDescriptor_iosurface_plane(&descriptor, surface, plane)
+            .ok_or(MetalTextureError::TextureCreationFailed(plane))
     }
 }
 
@@ -54,64 +54,33 @@ unsafe impl Sync for SendSyncCVBuffer {}
 
 #[derive(Debug, thiserror::Error)]
 pub enum MetalTextureError {
-    #[error(transparent)]
-    OSStatus(#[from] OSStatusError),
+    #[error("The pixel buffer is not backed by an IOSurface")]
+    NoIOSurface,
 
-    #[error("Failed to extract Metal texture from CVMetalTexture")]
-    ExtractionFailed,
+    #[error("Failed to create a Metal texture on plane {0} of the pixel buffer's IOSurface")]
+    TextureCreationFailed(usize),
 }
 
 pub(crate) struct PlaneTextures {
     pub(crate) y: Retained<ProtocolObject<dyn mtl::MTLTexture>>,
     pub(crate) uv: Retained<ProtocolObject<dyn mtl::MTLTexture>>,
-    /// Keeps the CVMetalTextures (and thus the backing pixel buffer) alive while
-    /// the MTLTextures are in use.
+    /// Keeps the pixel buffer, which VideoToolbox reuses only once released, alive while the
+    /// MTLTextures are in use.
     #[cfg_attr(not(feature = "wgpu"), expect(dead_code))]
-    pub(crate) guards: [SendSyncCVBuffer; 2],
+    pub(crate) buffer: SendSyncCVBuffer,
 }
 
 pub(crate) fn plane_textures_from_pixel_buffer(
-    cache: &SyncCache,
-    buffer: &cv::CVBuffer,
+    textures: &IOSurfaceTextures,
+    buffer: &cf::CFRetained<cv::CVBuffer>,
 ) -> Result<PlaneTextures, MetalTextureError> {
-    let cache = cache.0.lock().unwrap();
-    cache.0.flush(0);
-    let (y, y_guard) = plane_texture(&cache.0, buffer, mtl::MTLPixelFormat::R8Unorm, 0)?;
-    let (uv, uv_guard) = plane_texture(&cache.0, buffer, mtl::MTLPixelFormat::RG8Unorm, 1)?;
-
+    let surface =
+        cv::CVPixelBufferGetIOSurface(Some(buffer)).ok_or(MetalTextureError::NoIOSurface)?;
     Ok(PlaneTextures {
-        y,
-        uv,
-        guards: [y_guard, uv_guard],
+        y: textures.plane(&surface, buffer, mtl::MTLPixelFormat::R8Unorm, 0)?,
+        uv: textures.plane(&surface, buffer, mtl::MTLPixelFormat::RG8Unorm, 1)?,
+        buffer: SendSyncCVBuffer(buffer.clone()),
     })
-}
-
-fn plane_texture(
-    cache: &cv::CVMetalTextureCache,
-    buffer: &cv::CVBuffer,
-    format: mtl::MTLPixelFormat,
-    plane: usize,
-) -> Result<
-    (
-        Retained<ProtocolObject<dyn mtl::MTLTexture>>,
-        SendSyncCVBuffer,
-    ),
-    MetalTextureError,
-> {
-    let width = cv::CVPixelBufferGetWidthOfPlane(buffer, plane);
-    let height = cv::CVPixelBufferGetHeightOfPlane(buffer, plane);
-
-    let cv_texture = unsafe {
-        allocate_retained(|ptr| {
-            cv::CVMetalTextureCache::create_texture_from_image(
-                None, cache, buffer, None, format, width, height, plane, ptr,
-            )
-        })?
-    };
-    let texture =
-        cv::CVMetalTextureGetTexture(&cv_texture).ok_or(MetalTextureError::ExtractionFailed)?;
-
-    Ok((texture, SendSyncCVBuffer(cv_texture)))
 }
 
 pub(crate) struct SharedEventTimeline {

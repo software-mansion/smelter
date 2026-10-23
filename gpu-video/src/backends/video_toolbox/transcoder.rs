@@ -12,7 +12,7 @@ use crate::{
         encoder::{H264Codec, H265Codec, MetalInputFrame},
         error::{VTEncoderError, VTTranscoderError},
         metal_interop::{
-            PlaneTextures, SendSyncCVBuffer, SharedEventTimeline, SyncCache, TimelinePoint,
+            IOSurfaceTextures, PlaneTextures, SendSyncCVBuffer, SharedEventTimeline, TimelinePoint,
             add_completed_handler, plane_textures_from_pixel_buffer,
         },
     },
@@ -169,7 +169,7 @@ impl ResizeOutcome {
 }
 
 struct ResizeEncodePipeline {
-    decoder_texture_cache: SyncCache,
+    decoder_textures: IOSurfaceTextures,
     backends: Vec<Backend>,
     _device: Retained<ProtocolObject<dyn mtl::MTLDevice>>,
     queue: Retained<ProtocolObject<dyn mtl::MTLCommandQueue>>,
@@ -187,8 +187,8 @@ impl Transcoder {
         let queue = device
             .newCommandQueue()
             .ok_or(VTTranscoderError::CommandQueueCreationFailed)?;
-        let decoder_texture_cache =
-            SyncCache::new_from_mtl(&device, mtl::MTLTextureUsage::ShaderRead)?;
+        let decoder_textures =
+            IOSurfaceTextures::new_from_mtl(&device, mtl::MTLTextureUsage::ShaderRead);
 
         let resize_finished_event = device
             .newSharedEvent()
@@ -221,7 +221,7 @@ impl Transcoder {
             .collect::<Result<Vec<_>, _>>()?;
 
         let pipeline = Arc::new(Mutex::new(ResizeEncodePipeline {
-            decoder_texture_cache,
+            decoder_textures,
             backends,
             _device: device,
             queue,
@@ -310,7 +310,7 @@ impl ResizeEncodePipeline {
         decoded: OutputFrame<SendSyncCVBuffer>,
     ) -> Result<(), VTTranscoderError> {
         let input_planes =
-            plane_textures_from_pixel_buffer(&self.decoder_texture_cache, &decoded.data.0)?;
+            plane_textures_from_pixel_buffer(&self.decoder_textures, &decoded.data.0)?;
 
         let cmd = self
             .queue

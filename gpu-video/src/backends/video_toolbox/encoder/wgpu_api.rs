@@ -75,14 +75,15 @@ impl<C: EncodeCodec> VTEncoder<C> {
         &mut self,
         wgpu_device: &wgpu::Device,
     ) -> Result<EncodeTexture, VTEncoderError> {
-        let (Some(state), Some(texture_cache)) = (self.wgpu.as_ref(), self.texture_cache.as_ref())
+        let (Some(state), Some(input_textures)) =
+            (self.wgpu.as_ref(), self.input_textures.as_ref())
         else {
             return Err(VTEncoderError::NotConfiguredForWgpuInput);
         };
 
         let buffer = self.session.acquire_input_buffer()?;
         let texture = video_texture_from_pixel_buffer(
-            texture_cache,
+            input_textures,
             wgpu_device,
             &buffer,
             wgpu::TextureUsages::COPY_DST
