@@ -187,7 +187,7 @@ pub(super) fn drop_without_flush(codec: Codec) {
         options: EncoderOptions::new(codec),
         allowed_error: ALLOWED_ERROR,
     }
-    .run_drop_without_flush(30);
+    .encode_and_drop_after(30);
 }
 
 pub(super) fn drop_right_after_encode(codec: Codec) {
@@ -196,7 +196,7 @@ pub(super) fn drop_right_after_encode(codec: Codec) {
         options: EncoderOptions::new(codec),
         allowed_error: ALLOWED_ERROR,
     }
-    .run_drop_without_flush(1);
+    .encode_and_drop_after(1);
 }
 
 pub(super) fn drop_before_first_encode(codec: Codec) {
@@ -205,7 +205,7 @@ pub(super) fn drop_before_first_encode(codec: Codec) {
         options: EncoderOptions::new(codec),
         allowed_error: ALLOWED_ERROR,
     }
-    .run_drop_without_flush(0);
+    .encode_and_drop_after(0);
 }
 
 pub(super) fn rejects_invalid_input(codec: Codec) {

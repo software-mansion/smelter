@@ -6,9 +6,7 @@ use gpu_video::{VideoAdapterExt, parameters::DecoderParameters};
 use crate::{
     gpu_video_tests::{
         Nv12Frame, RunnableTestCase, TestCase, TestRun, TestRunStatus, frame_data_diff,
-        harness::decoders::{
-            Decoder, FfmpegDecoder, GvBytesDecoderH264, GvWgpuTexturesDecoderH264,
-        },
+        harness::decoders::{Decoder, FfmpegDecoder, GvBytesDecoder, GvWgpuTexturesDecoder},
     },
     paths::gpu_video_dumps_dir_path,
 };
@@ -25,8 +23,8 @@ impl RunnableTestCase for TestCase<DecoderOptions> {
             DecoderOptions::H264(params) => (
                 BufferedDecoder::from_decoder(FfmpegDecoder::new(Id::H264)),
                 vec![
-                    BufferedDecoder::from_decoder(GvBytesDecoderH264::new(device, params)),
-                    BufferedDecoder::from_decoder(GvWgpuTexturesDecoderH264::new(
+                    BufferedDecoder::from_decoder(GvBytesDecoder::new(device, params)),
+                    BufferedDecoder::from_decoder(GvWgpuTexturesDecoder::new(
                         device, queue, params,
                     )),
                 ],

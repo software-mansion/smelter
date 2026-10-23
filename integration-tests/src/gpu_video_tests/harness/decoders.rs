@@ -23,12 +23,12 @@ pub(super) trait Decoder {
     fn flush_frames(&mut self) -> Vec<Nv12Frame>;
 }
 
-pub(super) struct GvBytesDecoderH264 {
+pub(super) struct GvBytesDecoder {
     decoder: BytesDecoderH264,
     frame_receiver: Receiver<OutputFrame<RawFrameData>>,
 }
 
-impl GvBytesDecoderH264 {
+impl GvBytesDecoder {
     pub fn new(wgpu_device: &wgpu::Device, parameters: DecoderParameters) -> Self {
         let (frame_sender, frame_receiver) = crossbeam_channel::unbounded();
         let decoder = wgpu_device
@@ -57,7 +57,7 @@ impl GvBytesDecoderH264 {
     }
 }
 
-impl Decoder for GvBytesDecoderH264 {
+impl Decoder for GvBytesDecoder {
     fn decoder_name(&self) -> &'static str {
         "BytesDecoderH264"
     }
@@ -75,14 +75,14 @@ impl Decoder for GvBytesDecoderH264 {
     }
 }
 
-pub(super) struct GvWgpuTexturesDecoderH264 {
+pub(super) struct GvWgpuTexturesDecoder {
     decoder: WgpuTexturesDecoderH264,
     frame_receiver: Receiver<OutputFrame<VideoTexture>>,
     wgpu_device: wgpu::Device,
     wgpu_queue: wgpu::Queue,
 }
 
-impl GvWgpuTexturesDecoderH264 {
+impl GvWgpuTexturesDecoder {
     pub fn new(
         wgpu_device: &wgpu::Device,
         wgpu_queue: &wgpu::Queue,
@@ -113,7 +113,7 @@ impl GvWgpuTexturesDecoderH264 {
     }
 }
 
-impl Decoder for GvWgpuTexturesDecoderH264 {
+impl Decoder for GvWgpuTexturesDecoder {
     fn decoder_name(&self) -> &'static str {
         "WgpuTexturesDecoderH264"
     }

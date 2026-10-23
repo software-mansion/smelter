@@ -168,7 +168,7 @@ struct EncodeTestRun<'a> {
     queue: wgpu::Queue,
     dump: File,
     source_decoder: FfmpegDecoder,
-    encoders: Vec<VerifiedEncoder>,
+    encoders: Vec<EncoderState>,
     source_frames: VecDeque<(Nv12Frame, usize)>,
     source_frame_count: usize,
 }
@@ -226,7 +226,7 @@ impl TestRun for EncodeTestRun<'_> {
         test_case.compare_ready_frames(&mut self.source_frames, &mut self.encoders);
 
         for encoder in self.encoders.iter() {
-            test_case.verify_summary(encoder, self.source_frame_count);
+            test_case.verify_bitrate(encoder, self.source_frame_count);
         }
         TestRunStatus::Finished
     }
@@ -239,7 +239,7 @@ impl TestCase<EncoderOptions> {
         queue: &wgpu::Queue,
         width: usize,
         height: usize,
-    ) -> Vec<VerifiedEncoder> {
+    ) -> Vec<EncoderState> {
         let parameters =
             self.options
                 .encoder_parameters(&device.video().unwrap(), width as u32, height as u32);
@@ -253,7 +253,7 @@ impl TestCase<EncoderOptions> {
             Box::new(GvWgpuTexturesEncoder::new(device, queue, parameters)),
         ]
         .into_iter()
-        .map(|encoder| VerifiedEncoder {
+        .map(|encoder| EncoderState {
             encoder,
             resolution: (width, height),
             reference_decoder: FfmpegDecoder::new(codec_id),
@@ -264,11 +264,7 @@ impl TestCase<EncoderOptions> {
         .collect()
     }
 
-    fn process_chunks(
-        &self,
-        encoder: &mut VerifiedEncoder,
-        chunks: Vec<EncodedOutputChunk<Vec<u8>>>,
-    ) {
+    fn process_chunks(&self, encoder: &mut EncoderState, chunks: Vec<EncodedOutputChunk<Vec<u8>>>) {
         let name = encoder.encoder.encoder_name();
         for chunk in chunks {
             let chunk_idx = encoder.chunk_count;
@@ -337,13 +333,13 @@ impl TestCase<EncoderOptions> {
     fn compare_ready_frames(
         &self,
         source_frames: &mut VecDeque<(Nv12Frame, usize)>,
-        encoders: &mut [VerifiedEncoder],
+        encoders: &mut [EncoderState],
     ) {
         while !source_frames.is_empty() && encoders.iter().all(|e| !e.decoded_frames.is_empty()) {
             let (source_frame, frame_idx) = source_frames.pop_front().unwrap();
             for encoder in encoders.iter_mut() {
                 let decoded = encoder.decoded_frames.pop_front().unwrap();
-                self.compare(
+                self.compare_frame(
                     encoder.encoder.encoder_name(),
                     frame_idx,
                     &source_frame,
@@ -353,7 +349,7 @@ impl TestCase<EncoderOptions> {
         }
     }
 
-    fn compare(
+    fn compare_frame(
         &self,
         encoder_name: &str,
         frame_idx: usize,
@@ -385,7 +381,7 @@ impl TestCase<EncoderOptions> {
         }
     }
 
-    fn verify_summary(&self, encoder: &VerifiedEncoder, source_frame_count: usize) {
+    fn verify_bitrate(&self, encoder: &EncoderState, source_frame_count: usize) {
         let name = encoder.encoder.encoder_name();
         assert_eq!(
             encoder.chunk_count, source_frame_count,
@@ -410,7 +406,7 @@ impl TestCase<EncoderOptions> {
         }
     }
 
-    pub fn run_drop_without_flush(&self, frame_count: usize) {
+    pub fn encode_and_drop_after(&self, frame_count: usize) {
         let (device, queue) = create_encoding_device(self.options.codec);
 
         let mut source_decoder = FfmpegDecoder::new(Id::H264);
@@ -436,7 +432,7 @@ impl TestCase<EncoderOptions> {
     }
 }
 
-struct VerifiedEncoder {
+struct EncoderState {
     encoder: Box<dyn Encoder>,
     resolution: (usize, usize),
     reference_decoder: FfmpegDecoder,
