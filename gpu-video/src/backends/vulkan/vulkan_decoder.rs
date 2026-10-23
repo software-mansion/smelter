@@ -1,4 +1,5 @@
 use ash::vk;
+use tracing::error;
 
 use std::sync::Arc;
 
@@ -35,6 +36,14 @@ pub struct VulkanDecoder<'a> {
     usage_info: vk::VideoDecodeUsageInfoKHR<'a>,
     image_modifiers: ImageModifiers,
     decode_query_pool_size: u32,
+}
+
+impl<'a> Drop for VulkanDecoder<'a> {
+    fn drop(&mut self) {
+        if let Err(err) = self.tracker.semaphore_tracker.wait(u64::MAX) {
+            error!("Failed to wait for decoder submission: {err}");
+        }
+    }
 }
 
 impl VulkanDecoder<'_> {
