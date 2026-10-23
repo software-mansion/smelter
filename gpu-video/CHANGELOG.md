@@ -72,6 +72,7 @@ By @noituri ([#2039](https://github.com/software-mansion/smelter/pull/2039))
 - Improved encoder performance on Vulkan by using a better synchronisation approach ([#2269](https://github.com/software-mansion/smelter/pull/2269) by @noituri)
 
 ### 🐛 Bug fixes
+- Stop isuing coding control reset every IDR on Vulkan. This increases the quality of encoding. ([#2297](https://github.com/software-mansion/smelter/pull/2297) by @jerzywilczek)
 - Request only the transfer and compute queues that are actually used when creating the device. ([#2223](https://github.com/software-mansion/smelter/pull/2223) by @jerzywilczek)
 - H.264 decoder now hands the whole DPB to the Vulkan driver and lets it build the reference picture lists. ([#2219](https://github.com/software-mansion/smelter/pull/2219) by @jerzywilczek)
 - Fix artifacts in h264 decoder caused by unnecessary short reference deletion ([#1991](https://github.com/software-mansion/smelter/pull/1991) by @noituri)
