@@ -133,7 +133,7 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
     ///   how much time should be cut from the beginning of the track.
     /// - `presentation_delay` - the sum of `duration` of all leading empty edits. Contains information on how
     ///   much track presentation should be delayed
-    fn calculate_elst_edits(track: &Mp4Track, movie_timescale: u32) -> (Duration, Duration) {
+    fn calculate_elst_edits(track: &Mp4Track, movie_timescale: u32) -> (u64, Duration) {
         let entries = track
             .trak
             .edts
@@ -143,21 +143,20 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
             .unwrap_or(&[]);
 
         let mut delay_ticks: u64 = 0;
-        let mut track_start_offset = Duration::ZERO;
+        let mut track_start_offset = 0;
 
         for entry in entries {
             // u32::MAX value is the result of overflowing -1
             if entry.media_time == u32::MAX as u64 || entry.media_time == u64::MAX {
                 delay_ticks += entry.segment_duration;
             } else {
-                track_start_offset =
-                    Duration::from_secs_f64(entry.media_time as f64 / track.timescale() as f64);
+                track_start_offset = entry.media_time;
                 break;
             }
         }
 
         let presentation_delay =
-            Duration::from_secs_f64(delay_ticks as f64 / movie_timescale as f64);
+            Timestamp::from_timescale(delay_ticks as i64, movie_timescale).to_duration_saturating();
         (track_start_offset, presentation_delay)
     }
 }
@@ -170,9 +169,9 @@ pub(crate) struct Track<Reader: Read + Seek + Send + 'static> {
     duration: Duration,
     decoder_options: DecoderOptions,
 
-    /// How much time should be cut from the beginning of the track, derived from the `media_time`
-    /// field of the first non-empty edit in the `elst` box.
-    track_start_offset: Duration,
+    /// How much should be cut from the beginning of the track, in units of `timescale`: the
+    /// `media_time` field of the first non-empty edit in the `elst` box.
+    track_start_offset: u64,
 
     /// How much the track presentation should be delayed, derived from the summed `segment_duration`
     /// of all leading empty edits (`media_time == -1`) in the `elst` box.
@@ -192,18 +191,13 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
         // sample the `elst` box tells us to actually play"; excess seek beyond the
         // black screen advances further into media.
         let delayed_user_seek = user_seek.saturating_sub(self.presentation_delay);
-        let media_seek = self.track_start_offset + delayed_user_seek;
-
-        // Used in `sample_into_chunk` to shift each sample's pts so that the user's
-        // seek point becomes pts 0. If the user seeks into the leading black screen
-        // (user_seek < presentation_delay), the first real sample gets a positive pts
-        // equal to the remaining black screen, which the pipeline fills with black.
-        let track_seek = self.track_start_offset + user_seek;
+        let media_seek = self.track_start_offset
+            + (delayed_user_seek.as_secs_f64() * self.timescale as f64) as u64;
 
         let start_index = self.find_seek_start_sample(media_seek);
         TrackChunks {
             track: self,
-            track_seek,
+            user_seek,
             next_sample_index: start_index,
         }
     }
@@ -220,10 +214,9 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
         }
     }
 
-    /// Returns the index of the last sync sample before the given seek position
-    /// (for decoder warmup). If seek is past the end returns last_sample_idx + 1.
-    fn find_seek_start_sample(&self, seek: Duration) -> u32 {
-        let seek_timestamp = (seek.as_secs_f64() * self.timescale as f64) as u64;
+    /// Returns the index of the last sync sample before the given seek position, in units of
+    /// `timescale` (for decoder warmup). If seek is past the end returns last_sample_idx + 1.
+    fn find_seek_start_sample(&self, seek_timestamp: u64) -> u32 {
         let track = &self.reader.tracks()[&self.track_id];
 
         // The STTS box maps samples to batches of samples with the same length
@@ -276,10 +269,11 @@ impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
 pub(crate) struct TrackChunks<'a, Reader: Read + Seek + Send + 'static> {
     track: &'a mut Track<Reader>,
 
-    /// Value subtracted from each sample's pts to align presentation with the user's seek.
-    /// Equals the user-provided seek time plus `track_start_offset` (the leading media trimmed
-    /// by the `elst` box).
-    track_seek: Duration,
+    /// Subtracted from each sample's pts so that the user's seek point becomes pts 0. If the
+    /// user seeks into the leading black screen (user_seek < presentation_delay), the first real
+    /// sample gets a positive pts equal to the remaining black screen, which the pipeline fills
+    /// with black.
+    user_seek: Duration,
     next_sample_index: u32,
 }
 
@@ -317,11 +311,14 @@ impl<Reader: Read + Seek + Send + 'static> TrackChunks<'_, Reader> {
         let presentation_delay = self.track.presentation_delay;
 
         let dts = Timestamp::from_secs_f64(start_time as f64 / self.track.timescale as f64);
-        let mut pts = Timestamp::from_secs_f64(
-            (start_time as f64 + rendering_offset as f64) / self.track.timescale as f64,
-        );
+        // Trimmed in track units, then rounded down once: rounding each value to nearest could
+        // put a frame 1 ns after the output frame it belongs to, so the queue would show the
+        // previous frame again.
+        let presentation_time =
+            start_time as i64 + rendering_offset as i64 - self.track.track_start_offset as i64;
+        let mut pts = Timestamp::from_timescale(presentation_time, self.track.timescale);
         pts += presentation_delay;
-        pts -= self.track_seek;
+        pts -= self.user_seek;
 
         // When seeking in video, we start reading from the nearest sync (keyframe)
         // sample before the seek point so the decoder can build up its reference
