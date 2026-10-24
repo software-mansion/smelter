@@ -44,6 +44,13 @@ impl Timestamp {
         Timestamp { nanos }
     }
 
+    /// `count` units of `1 / timescale` seconds, rounded down.
+    pub fn from_timescale(count: i64, timescale: u32) -> Self {
+        Timestamp {
+            nanos: (count as i128 * NANOS_PER_SEC as i128).div_euclid(timescale as i128) as i64,
+        }
+    }
+
     pub fn from_secs_f64(secs: f64) -> Self {
         Timestamp {
             nanos: (secs * NANOS_PER_SEC as f64).round() as i64,
