@@ -1,6 +1,5 @@
 use ffmpeg_next::format::Pixel;
 use smelter_render::{FrameData, Resolution, YuvPlanes};
-use tracing::error;
 
 use crate::prelude::*;
 
@@ -23,12 +22,6 @@ pub(super) fn from_av_frame(
             "missing pts".to_owned(),
         ));
     };
-    if pts < 0 {
-        error!(
-            pts,
-            "Received negative PTS. PTS values of the decoder output are not monotonically increasing."
-        )
-    }
     let pts = Timestamp::from_nanos(pts);
 
     let data = match decoded.format() {

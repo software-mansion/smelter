@@ -13,6 +13,11 @@ use crate::{
     },
 };
 
+/// Frames up to this much newer than the requested pts are still used for it. Without it, a frame
+/// that matches an output frame but lands slightly after it (rounding, millisecond timestamps in
+/// FLV or remuxed MP4) shows one output frame late, and the next frame is skipped.
+const FRAME_PTS_TOLERANCE: Duration = Duration::from_millis(2);
+
 pub(crate) struct VideoQueueInput {
     queue_ctx: QueueContext,
     /// Frames from the channel might have any PTS, they need to be processed
@@ -284,12 +289,13 @@ impl VideoInputReceiver {
 
     /// Get for pts returns the frame for specified pts.
     ///
-    /// Frame pts always needs to be older (lower value). If it is not return None,
-    /// this behavior diverges from `is_ready_for_pts`.
+    /// Frame pts always needs to be older (lower value), up to `FRAME_PTS_TOLERANCE`. If it is
+    /// not return None, this behavior diverges from `is_ready_for_pts`.
     fn get_for_pts(&mut self, pts: Timestamp) -> Option<Frame> {
         if self.state == ReceiverState::Done {
             return None;
         }
+        let pts = pts + FRAME_PTS_TOLERANCE;
         self.prepare_for_pts(pts);
         match self.buffer.front() {
             Some(front) if front.pts > pts => return None,
@@ -315,6 +321,7 @@ impl VideoInputReceiver {
         if self.disconnected {
             return true;
         }
+        let pts = pts + FRAME_PTS_TOLERANCE;
         self.prepare_for_pts(pts);
         let mut iter = self.buffer.iter();
         match (iter.next(), iter.next()) {
