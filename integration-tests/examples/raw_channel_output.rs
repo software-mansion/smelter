@@ -21,7 +21,7 @@ use smelter_core::{
 use smelter_render::{
     FrameData, InputId, OutputId, Resolution,
     error::ErrorStack,
-    scene::{Component, InputStreamComponent},
+    scene::{Component, InputStreamComponent, Scene},
 };
 
 // Start simple pipeline with output that sends PCM audio and wgpu::Textures via Rust channel.
@@ -62,10 +62,10 @@ fn main() {
             audio: Some(RawDataOutputAudioOptions),
         },
         video: Some(RegisterOutputVideoOptions {
-            initial: Component::InputStream(InputStreamComponent {
+            initial: Scene::ComponentTree(Component::InputStream(InputStreamComponent {
                 id: None,
                 input_id: input_id.clone(),
-            }),
+            })),
             end_condition: PipelineOutputEndCondition::Never,
         }),
         audio: Some(RegisterOutputAudioOptions {

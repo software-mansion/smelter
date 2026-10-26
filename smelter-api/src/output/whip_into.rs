@@ -1,3 +1,5 @@
+use smelter_render::scene::Scene;
+
 use crate::common_core::prelude as core;
 use crate::*;
 
@@ -22,7 +24,7 @@ impl TryFrom<WhipOutput> for core::RegisterOutputOptions {
                 let resolution = options.resolution;
 
                 let output_options = core::RegisterOutputVideoOptions {
-                    initial: options.initial.try_into()?,
+                    initial: Scene::ComponentTree(options.initial.try_into()?),
                     end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
                 };
 

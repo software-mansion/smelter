@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::scene::{self, OutputNode};
-use crate::{InputId, OutputFrameFormat, OutputId};
+use crate::scene;
+use crate::{InputId, OutputFrameFormat, OutputId, Resolution};
 use crate::{error::UpdateSceneError, wgpu::WgpuErrorScope};
 
 use super::input_texture::InputTexture;
@@ -10,18 +10,27 @@ use super::output_texture::OutputTexture;
 use super::{RenderCtx, node::RenderNode};
 
 pub(super) struct RenderGraph {
-    pub(super) outputs: HashMap<OutputId, OutputRenderTree>,
+    /// Root nodes keyed by the output that defines the scene.
+    pub(super) render_trees: HashMap<OutputId, RenderNode>,
+    pub(super) outputs: HashMap<OutputId, OutputRenderer>,
     pub(super) inputs: HashMap<InputId, (NodeTexture, InputTexture)>,
 }
 
-pub(super) struct OutputRenderTree {
-    pub(super) root: RenderNode,
+pub(super) struct OutputRenderer {
+    /// Own id, or id of the primary output for linked outputs.
+    pub(super) render_tree_id: OutputId,
     pub(super) output_texture: OutputTexture,
+}
+
+pub(super) enum OutputSpec {
+    RenderTree(scene::Node),
+    LinkedOutput(OutputId),
 }
 
 impl RenderGraph {
     pub fn empty() -> Self {
         Self {
+            render_trees: HashMap::new(),
             outputs: HashMap::new(),
             inputs: HashMap::new(),
         }
@@ -37,27 +46,43 @@ impl RenderGraph {
     }
 
     pub(super) fn unregister_output(&mut self, output_id: &OutputId) {
+        self.render_trees.remove(output_id);
         self.outputs.remove(output_id);
     }
 
-    pub(super) fn update(
+    pub(super) fn update_output(
         &mut self,
         ctx: &RenderCtx,
-        output: OutputNode,
+        output_id: OutputId,
+        resolution: Resolution,
         output_format: OutputFrameFormat,
+        source: OutputSpec,
     ) -> Result<(), UpdateSceneError> {
         // TODO: If we want nodes to be stateful we could try reusing nodes instead
         //       of recreating them on every scene update
         let scope = WgpuErrorScope::push(&ctx.wgpu_ctx.device);
 
-        let output_tree = OutputRenderTree {
-            root: Self::create_node(ctx, output.node)?,
-            output_texture: OutputTexture::new(ctx.wgpu_ctx, output.resolution, output_format),
+        let output_texture = OutputTexture::new(ctx.wgpu_ctx, resolution, output_format);
+        let (root, render_tree_id) = match source {
+            OutputSpec::RenderTree(node) => {
+                (Some(Self::create_node(ctx, node)?), output_id.clone())
+            }
+            OutputSpec::LinkedOutput(primary_output_id) => (None, primary_output_id),
         };
 
         scope.pop()?;
 
-        self.outputs.insert(output.output_id, output_tree);
+        match root {
+            Some(root) => self.render_trees.insert(output_id.clone(), root),
+            None => self.render_trees.remove(&output_id),
+        };
+        self.outputs.insert(
+            output_id,
+            OutputRenderer {
+                render_tree_id,
+                output_texture,
+            },
+        );
 
         Ok(())
     }

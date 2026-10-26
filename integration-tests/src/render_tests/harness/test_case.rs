@@ -11,7 +11,8 @@ use super::{
 use anyhow::Result;
 use smelter_render::{
     Frame, FrameSet, InputId, OutputFrameFormat, OutputId, Renderer, RendererId, RendererSpec,
-    RenderingMode, Resolution, scene::Component,
+    RenderingMode, Resolution,
+    scene::{Component, Scene},
 };
 
 pub(crate) struct TestRunner {
@@ -22,6 +23,7 @@ pub(crate) struct TestRunner {
     allowed_error: f32,
     resolution: Resolution,
     output_format: OutputFrameFormat,
+    snapshot_output_id: OutputId,
     failed: bool,
 }
 
@@ -38,6 +40,7 @@ impl TestRunner {
                 height: 360,
             },
             output_format: OutputFrameFormat::PlanarYuv420Bytes,
+            snapshot_output_id: OutputId(OUTPUT_ID.into()),
             failed: false,
         }
     }
@@ -74,7 +77,20 @@ impl TestRunner {
                 OutputId(OUTPUT_ID.into()),
                 self.resolution,
                 self.output_format,
-                scene,
+                Scene::ComponentTree(scene),
+            )
+            .unwrap();
+    }
+
+    /// Registers an output linked to the main one. Snapshots are taken from the linked output.
+    pub(crate) fn link_output(&mut self, resolution: Resolution) {
+        self.snapshot_output_id = OutputId("linked_output".into());
+        self.renderer
+            .update_scene(
+                self.snapshot_output_id.clone(),
+                resolution,
+                self.output_format,
+                Scene::LinkedOutput(OutputId(OUTPUT_ID.into())),
             )
             .unwrap();
     }
@@ -144,7 +160,7 @@ impl TestRunner {
         let mut outputs = self.renderer.render(frame_set)?;
         let output_frame = outputs
             .frames
-            .remove(&OutputId(OUTPUT_ID.into()))
+            .remove(&self.snapshot_output_id)
             .expect("No scene update provided before render");
         Ok(output_frame)
     }
@@ -222,7 +238,7 @@ impl TestCase {
                         OutputId(OUTPUT_ID.into()),
                         self.resolution,
                         self.output_format,
-                        scene,
+                        Scene::ComponentTree(scene),
                     )
                     .unwrap(),
                 Step::RenderWithSnapshot(pts) => {

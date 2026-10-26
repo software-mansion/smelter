@@ -40,12 +40,6 @@ struct OutputSceneState {
     resolution: Resolution,
 }
 
-pub(crate) struct OutputNode {
-    pub(crate) output_id: OutputId,
-    pub(crate) node: Node,
-    pub(crate) resolution: Resolution,
-}
-
 impl SceneState {
     pub fn new() -> Self {
         Self {
@@ -66,7 +60,7 @@ impl SceneState {
         // TODO: pass input stream sizes and populate it in the ComponentState tree
     }
 
-    pub(crate) fn unregister_output(&mut self, output_id: &OutputId) {
+    pub(crate) fn clear_output_state(&mut self, output_id: &OutputId) {
         self.output_scenes.remove(output_id);
         self.output_states.remove(output_id);
     }
@@ -76,7 +70,7 @@ impl SceneState {
         output_scene: OutputScene,
         renderers: &Renderers,
         text_renderer_ctx: &TextRendererCtx,
-    ) -> Result<OutputNode, SceneError> {
+    ) -> Result<Node, SceneError> {
         let output_id = output_scene.output_id.clone();
         validate_scene_update(&self.output_scenes, &output_scene)?;
 
@@ -110,19 +104,15 @@ impl SceneState {
             resolution: output_scene.resolution,
         };
 
-        let output_node_tree = OutputNode {
-            output_id: output_id.clone(),
-            node: output_state_tree
-                .root
-                .intermediate_node()
-                .build_tree(Some(output_scene.resolution), self.last_pts)?,
-            resolution: output_scene.resolution,
-        };
+        let node = output_state_tree
+            .root
+            .intermediate_node()
+            .build_tree(Some(output_scene.resolution), self.last_pts)?;
 
         self.output_scenes.insert(output_id.clone(), output_scene);
         self.output_states.insert(output_id, output_state_tree);
 
-        Ok(output_node_tree)
+        Ok(node)
     }
 }
 

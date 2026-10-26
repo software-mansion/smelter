@@ -18,7 +18,7 @@ use self::text_component::StatefulTextComponent;
 use self::web_view_component::StatefulWebViewComponent;
 
 pub(crate) use layout::LayoutNode;
-pub(crate) use scene_state::{OutputNode, SceneState};
+pub(crate) use scene_state::SceneState;
 pub(crate) use shader_component::ShaderComponentParams;
 
 pub use components::*;
@@ -44,6 +44,16 @@ pub struct OutputScene {
     pub output_id: OutputId,
     pub scene_root: Component,
     pub resolution: Resolution,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Scene {
+    ComponentTree(Component),
+    /// Root of the scene rendered for a different output, only the conversion to this output's
+    /// frame format is done separately. If resolutions differ, the frame is resampled to this
+    /// output's resolution without preserving the aspect ratio. Renders black frames while the
+    /// other output does not render its own scene.
+    LinkedOutput(OutputId),
 }
 
 #[derive(Debug, Clone, PartialEq)]

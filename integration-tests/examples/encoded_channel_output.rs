@@ -7,7 +7,7 @@ use smelter_core::{codecs::*, protocols::*, *};
 use smelter_render::{
     InputId, OutputId, Resolution,
     error::ErrorStack,
-    scene::{Component, InputStreamComponent},
+    scene::{Component, InputStreamComponent, Scene},
 };
 
 // Start simple pipeline with output that sends encoded video/audio via Rust channel.
@@ -53,10 +53,10 @@ fn main() {
             })),
         },
         video: Some(RegisterOutputVideoOptions {
-            initial: Component::InputStream(InputStreamComponent {
+            initial: Scene::ComponentTree(Component::InputStream(InputStreamComponent {
                 id: None,
                 input_id: input_id.clone(),
-            }),
+            })),
             end_condition: PipelineOutputEndCondition::Never,
         }),
         audio: Some(RegisterOutputAudioOptions {

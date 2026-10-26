@@ -27,7 +27,7 @@ mod main_module {
     use smelter_render::{
         Framerate, InputId, OutputId, Resolution,
         error::ErrorStack,
-        scene::{Component, InputStreamComponent},
+        scene::{Component, InputStreamComponent, Scene},
     };
 
     const VIDEO_RESOLUTION: Resolution = Resolution {
@@ -120,7 +120,10 @@ mod main_module {
                     .unwrap(),
             }),
             video: Some(RegisterOutputVideoOptions {
-                initial: Component::InputStream(InputStreamComponent { id: None, input_id }),
+                initial: Scene::ComponentTree(Component::InputStream(InputStreamComponent {
+                    id: None,
+                    input_id,
+                })),
                 end_condition: PipelineOutputEndCondition::Never,
             }),
             audio: None, // TODO: add audio example

@@ -6,6 +6,7 @@ use smelter_api::{
     UpdateOutputRequest,
 };
 use smelter_core::Pipeline;
+use smelter_render::scene::Scene;
 
 use crate::{error::ApiError, routes::Json, state::ApiState};
 
@@ -83,7 +84,7 @@ pub async fn handle_update(
 ) -> Result<Json<OkResponse>, ApiError> {
     let schedule_time = request.schedule_time()?;
     let scene = match request.video {
-        Some(component) => Some(component.try_into()?),
+        Some(component) => Some(Scene::ComponentTree(component.try_into()?)),
         None => None,
     };
     let audio = request.audio.map(|a| a.try_into()).transpose()?;

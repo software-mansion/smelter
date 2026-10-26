@@ -4,6 +4,7 @@ use glyphon::fontdb::Source;
 use smelter_api as api;
 use smelter_render::{
     InputId, OutputFrameFormat, OutputId, RegistryType, RendererId, RendererOptions, RendererSpec,
+    scene::Scene,
 };
 use wasm_bindgen::JsValue;
 
@@ -69,7 +70,7 @@ impl Renderer {
                 OutputId(output_id.into()),
                 resolution.into(),
                 OutputFrameFormat::RgbaWgpuTexture,
-                scene.try_into().map_err(types::to_js_error)?,
+                Scene::ComponentTree(scene.try_into().map_err(types::to_js_error)?),
             )
             .map_err(types::to_js_error)
     }
