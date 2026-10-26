@@ -4,34 +4,113 @@ use bytes::{Buf, BufMut, BytesMut};
 use memchr::memmem::Finder;
 
 const START_CODE: [u8; 3] = [0, 0, 1];
+const OUTPUT_START_CODE: [u8; 4] = [0, 0, 0, 1];
+const BOUNDARY_PATTERN_LEN: usize = START_CODE.len();
 
-#[derive(Debug)]
-pub(crate) struct NALUSplitter {
-    /// Bytes of the current NAL unit after its start code. Outside of a NAL unit, only the bytes
-    /// that can still turn out to be the beginning of a start code.
-    buffer: BytesMut,
-    /// PTS of the chunk where the NAL unit in `buffer` starts.
-    pts: Option<u64>,
-    previous_search_end: usize,
-    /// True while searching for the start code of the next NAL unit. When false, `buffer` holds
-    /// the beginning of the current NAL unit, without its start code.
-    ///
-    /// Some parts of the bitstream don't belong to any NAL unit and need to be dropped:
-    /// - Data before the first start code. It can be leading zeros or the remainder of a
-    ///   previous NAL unit when the stream is joined in the middle.
-    /// - Data after a NAL unit that ended on 0x000000, up to the next start code. That start code
-    ///   can begin within those zeros, e.g. in 0x00000001.
-    waiting_for_start_code: bool,
+#[derive(Debug, Default)]
+enum State {
+    #[default]
+    DiscardingUntilStartCode,
+    AtStartCodeEnd,
+    InNalu {
+        payload_start_pts: Option<u64>,
+        resume_search_at: usize,
+    },
 }
 
-impl Default for NALUSplitter {
-    fn default() -> Self {
-        Self {
-            buffer: BytesMut::new(),
-            pts: None,
-            previous_search_end: 0,
-            waiting_for_start_code: true,
+#[derive(Debug, Default)]
+pub(crate) struct NALUSplitter {
+    buffer: BytesMut,
+    state: State,
+}
+
+impl NALUSplitter {
+    pub(crate) fn push(
+        &mut self,
+        chunk: &[u8],
+        chunk_pts: Option<u64>,
+    ) -> Vec<(Vec<u8>, Option<u64>)> {
+        if let State::AtStartCodeEnd = self.state
+            && !chunk.is_empty()
+        {
+            self.state = State::InNalu {
+                payload_start_pts: chunk_pts,
+                resume_search_at: 0,
+            };
         }
+
+        self.buffer.put(chunk);
+        let mut result = Vec::new();
+
+        loop {
+            match self.state {
+                State::DiscardingUntilStartCode => {
+                    if !self.skip_past_start_code(chunk_pts) {
+                        break;
+                    }
+                }
+                State::AtStartCodeEnd => break,
+                State::InNalu {
+                    payload_start_pts,
+                    resume_search_at,
+                } => {
+                    let Some(nalu) = self.split_off_nalu(resume_search_at) else {
+                        break;
+                    };
+                    result.extend(to_output_nalu(&nalu, payload_start_pts));
+                }
+            }
+        }
+
+        let fully_searched_len = self.buffer.len().saturating_sub(BOUNDARY_PATTERN_LEN - 1);
+        match &mut self.state {
+            State::DiscardingUntilStartCode => self.buffer.advance(fully_searched_len),
+            State::AtStartCodeEnd => {}
+            State::InNalu {
+                resume_search_at, ..
+            } => *resume_search_at = fully_searched_len,
+        }
+
+        result
+    }
+
+    pub(crate) fn flush(&mut self) -> Vec<(Vec<u8>, Option<u64>)> {
+        let mut result = Vec::new();
+        if let State::InNalu {
+            payload_start_pts, ..
+        } = self.state
+        {
+            result.extend(to_output_nalu(&self.buffer, payload_start_pts));
+        }
+
+        self.buffer.clear();
+        self.state = State::DiscardingUntilStartCode;
+
+        result
+    }
+
+    fn skip_past_start_code(&mut self, chunk_pts: Option<u64>) -> bool {
+        let Some(start_code_position) = find_start_code(&self.buffer) else {
+            return false;
+        };
+
+        self.buffer.advance(start_code_position + START_CODE.len());
+        self.state = if self.buffer.is_empty() {
+            State::AtStartCodeEnd
+        } else {
+            State::InNalu {
+                payload_start_pts: chunk_pts,
+                resume_search_at: 0,
+            }
+        };
+        true
+    }
+
+    fn split_off_nalu(&mut self, resume_search_at: usize) -> Option<BytesMut> {
+        let nalu_len =
+            resume_search_at + find_start_code_or_zero_padding(&self.buffer[resume_search_at..])?;
+        self.state = State::DiscardingUntilStartCode;
+        Some(self.buffer.split_to(nalu_len))
     }
 }
 
@@ -40,10 +119,7 @@ fn find_start_code(buf: &[u8]) -> Option<usize> {
     FINDER.find(buf)
 }
 
-/// A NAL unit ends before a byte-aligned 0x000001 (start code) or 0x000000, because only zero
-/// bytes can follow it (H.264 B.2). h264-reader does the same. FFmpeg ends NAL units only on
-/// start codes and trims trailing zeros, so garbage after 0x000000 stays in its NAL unit.
-fn find_nalu_end(buf: &[u8]) -> Option<usize> {
+fn find_start_code_or_zero_padding(buf: &[u8]) -> Option<usize> {
     static FINDER: LazyLock<Finder> = LazyLock::new(|| Finder::new(&[0, 0]));
     // Matches don't overlap. A skipped match at `i + 1` needs `buf[i + 2] == 0`, so the match at
     // `i` would be accepted.
@@ -52,86 +128,20 @@ fn find_nalu_end(buf: &[u8]) -> Option<usize> {
         .find(|&i| matches!(buf.get(i + 2), Some(0 | 1)))
 }
 
-impl NALUSplitter {
-    /// Accepts an Annex B byte stream divided into chunks at any byte, chunks don't have to be
-    /// aligned to NAL units or start codes.
-    pub(crate) fn push(
-        &mut self,
-        bytestream: &[u8],
-        pts: Option<u64>,
-    ) -> Vec<(Vec<u8>, Option<u64>)> {
-        if self.buffer.is_empty() {
-            self.pts = pts;
-        }
-
-        self.buffer.put(bytestream);
-        let mut result = Vec::new();
-
-        loop {
-            if self.waiting_for_start_code {
-                // Bytes before first START_CODE or between 0x000000 and next START_CODE
-                // should be dropped.
-                let Some(bytes_to_drop) = find_start_code(&self.buffer) else {
-                    break;
-                };
-
-                self.buffer.advance(bytes_to_drop + START_CODE.len());
-                self.waiting_for_start_code = false;
-                self.pts = pts;
-            } else {
-                let Some(i) = find_nalu_end(&self.buffer[self.previous_search_end..]) else {
-                    break;
-                };
-                let nalu = self.buffer.split_to(self.previous_search_end + i);
-                if let Some(nalu) = nalu_with_start_code(&nalu) {
-                    result.push((nalu, self.pts));
-                }
-
-                // We can't just drop START_CODE.len() because we don't know if
-                // end was START_CODE or 3 zero bytes.
-                self.waiting_for_start_code = true;
-            }
-            self.previous_search_end = 0;
-        }
-
-        // A NAL unit end or a start code split between this and the next chunk starts within
-        // the last 2 bytes.
-        let search_end = self.buffer.len().saturating_sub(START_CODE.len() - 1);
-        if self.waiting_for_start_code {
-            self.buffer.advance(search_end);
-        } else {
-            self.previous_search_end = search_end;
-        }
-
-        result
+fn to_output_nalu(nalu: &[u8], pts: Option<u64>) -> Option<(Vec<u8>, Option<u64>)> {
+    let payload = strip_trailing_zero_8bits(nalu);
+    if payload.is_empty() {
+        return None;
     }
-
-    /// Signals the end of the current NAL unit and returns it.
-    pub(crate) fn flush(&mut self) -> Vec<(Vec<u8>, Option<u64>)> {
-        let mut result = Vec::new();
-        if !self.waiting_for_start_code
-            && let Some(nalu) = nalu_with_start_code(&self.buffer)
-        {
-            result.push((nalu, self.pts));
-        }
-
-        self.buffer.clear();
-        self.previous_search_end = 0;
-        self.waiting_for_start_code = true;
-
-        result
-    }
+    Some(([&OUTPUT_START_CODE[..], payload].concat(), pts))
 }
 
-/// Returns `None` for an empty NAL unit. Trailing zeros at the end of the stream are dropped,
-/// they are trailing_zero_8bits, because the last byte of a NAL unit can't be 0.
-fn nalu_with_start_code(nalu: &[u8]) -> Option<Vec<u8>> {
-    let len = nalu.iter().rposition(|&byte| byte != 0)? + 1;
-
-    let mut result = Vec::with_capacity(len + 4);
-    result.extend_from_slice(&[0, 0, 0, 1]);
-    result.extend_from_slice(&nalu[..len]);
-    Some(result)
+fn strip_trailing_zero_8bits(bytes: &[u8]) -> &[u8] {
+    let len = bytes
+        .iter()
+        .rposition(|&byte| byte != 0)
+        .map_or(0, |last_nonzero| last_nonzero + 1);
+    &bytes[..len]
 }
 
 #[cfg(test)]
