@@ -8,8 +8,8 @@ use gpu_video::{
 mod decode_tests;
 mod encode_tests;
 mod harness;
+mod parser_tests;
 
-// TODO: Parser tests?
 // TODO: Tests on windows
 // TODO: if test fails, dump it to file so that it's viewable
 
