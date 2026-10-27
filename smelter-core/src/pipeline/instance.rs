@@ -27,10 +27,9 @@ use crate::{
     event::{Event, EventEmitter},
     graphics_context::{GraphicsContext, GraphicsContextOptions},
     pipeline::{
-        MoqPipelineState, RtmpPipelineState,
+        RtmpPipelineState,
         channel::{EncodedDataOutput, RawDataInput, RawDataOutput},
         input::{PipelineInput, new_external_input, register_pipeline_input},
-        moq::{MoqServer, spawn_moq_server},
         output::{
             OutputSender, OutputState, PipelineOutput, new_external_output,
             register_pipeline_output,
@@ -67,9 +66,6 @@ pub struct Pipeline {
     #[allow(dead_code)]
     // triggers cleanup on drop
     rtmp_server: Option<RtmpServer>,
-
-    #[allow(dead_code)]
-    moq_server: Option<MoqServer>,
 
     #[allow(dead_code)]
     // triggers cleanup on drop
@@ -639,13 +635,6 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         PipelineRtmpServerOptions::Disable => None,
     };
 
-    let moq_state = match opts.moq_server {
-        PipelineMoqServerOptions::Enable { port, tls_config } => {
-            Some(MoqPipelineState::new(port, tls_config)?)
-        }
-        PipelineMoqServerOptions::Disable => None,
-    };
-
     let (webrtc_setting_engine, udp_mux_handle) = WebrtcSettingEngineCtx::new(
         opts.webrtc_nat_1to1_ips,
         opts.webrtc_udp_port_strategy,
@@ -676,7 +665,6 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         webrtc_stun_servers: opts.webrtc_stun_servers.clone(),
         webrtc_setting_engine,
         rtmp_state: rtmp_state.clone(),
-        moq_state: moq_state.clone(),
         moq_disable_tls_verification: opts.moq_disable_tls_verification,
     });
 
@@ -687,11 +675,6 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
 
     let rtmp_server = match rtmp_state.as_ref() {
         Some(state) => Some(spawn_rtmp_server(ctx.clone(), state)?),
-        None => None,
-    };
-
-    let moq_server = match moq_state.as_ref() {
-        Some(state) => Some(ctx.block_on_async_task(|ctx| spawn_moq_server(ctx, state))?),
         None => None,
     };
 
@@ -706,7 +689,6 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         ctx,
         whip_whep_handle,
         rtmp_server,
-        moq_server,
         udp_mux_handle,
         tokio_rt: Some(tokio_rt),
     };

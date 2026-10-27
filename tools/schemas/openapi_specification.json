@@ -2673,27 +2673,6 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/MoqServerInputStatsReport"
-              },
-              {
-                "type": "object",
-                "required": [
-                  "type"
-                ],
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "enum": [
-                      "moq_server"
-                    ]
-                  }
-                }
-              }
-            ]
-          },
-          {
-            "allOf": [
-              {
                 "$ref": "#/components/schemas/MoqClientInputStatsReport"
               },
               {
@@ -2895,7 +2874,6 @@
         "enum": [
           "rtp_stream",
           "rtmp_server",
-          "moq_server",
           "moq_client",
           "mp4",
           "whip_server",
@@ -3781,170 +3759,6 @@
           "legacy",
           "cmaf",
           "loc"
-        ]
-      },
-      "MoqServerInput": {
-        "type": "object",
-        "required": [
-          "auth_token"
-        ],
-        "properties": {
-          "auth_token": {
-            "type": "string",
-            "description": "Token used for authentication in MoQ server input. The broadcaster must provide\nit as a `token` query parameter when connecting"
-          },
-          "required": {
-            "type": [
-              "boolean",
-              "null"
-            ],
-            "description": "If input is required and the stream is not delivered on time, then Smelter will delay\nproducing output frames.\n\nDefaults to `false`."
-          },
-          "decoder_map": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "description": "Assigns which decoder should be used for media encoded with a specific codec.",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/MoqServerVideoDecoderOptions"
-            },
-            "propertyNames": {
-              "type": "string",
-              "enum": [
-                "h264"
-              ]
-            }
-          },
-          "side_channel": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SideChannel",
-                "description": "Enable side channel for video and/or audio track."
-              }
-            ]
-          },
-          "buffer": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/InputBuffer",
-                "description": "Input buffer configuration.\n\nDefaults: `desired_ms=2000`, `min_ms=1000`, `max_ms=5000`."
-              }
-            ]
-          }
-        },
-        "additionalProperties": false
-      },
-      "MoqServerInputAudioTrackStatsReport": {
-        "type": "object",
-        "description": "Stats report for the audio track in `MoQ` server input.",
-        "required": [
-          "bitrate_1_second",
-          "bitrate_1_minute",
-          "mixer"
-        ],
-        "properties": {
-          "bitrate_1_second": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Bitrate of the media in the 1-second window, calculated from timestamps.",
-            "minimum": 0
-          },
-          "bitrate_1_minute": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Bitrate of the media in the 1-minute window, calculated from timestamps.",
-            "minimum": 0
-          },
-          "sync": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/InputSyncTrackStatsReport",
-                "description": "Stats for the synchronization. `None` when the track is not active."
-              }
-            ]
-          },
-          "mixer": {
-            "$ref": "#/components/schemas/AudioMixerInputStatsReport",
-            "description": "Stats for the audio mixer."
-          }
-        }
-      },
-      "MoqServerInputStatsReport": {
-        "type": "object",
-        "description": "Stats report for `MoQ` server input.",
-        "properties": {
-          "video": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/MoqServerInputVideoTrackStatsReport",
-                "description": "Stats for the video track. `None` before any video arrives."
-              }
-            ]
-          },
-          "audio": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/MoqServerInputAudioTrackStatsReport",
-                "description": "Stats for the audio track. `None` before any audio arrives."
-              }
-            ]
-          }
-        }
-      },
-      "MoqServerInputVideoTrackStatsReport": {
-        "type": "object",
-        "description": "Stats report for the video track in `MoQ` server input.",
-        "required": [
-          "bitrate_1_second",
-          "bitrate_1_minute"
-        ],
-        "properties": {
-          "bitrate_1_second": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Bitrate of the media in the 1-second window, calculated from timestamps.",
-            "minimum": 0
-          },
-          "bitrate_1_minute": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Bitrate of the media in the 1-minute window, calculated from timestamps.",
-            "minimum": 0
-          },
-          "sync": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/InputSyncTrackStatsReport",
-                "description": "Stats for the synchronization. `None` when the track is not active."
-              }
-            ]
-          }
-        }
-      },
-      "MoqServerVideoDecoderOptions": {
-        "type": "string",
-        "enum": [
-          "ffmpeg_h264",
-          "vulkan_h264"
         ]
       },
       "Mp4AudioEncoderOptions": {
@@ -5259,27 +5073,6 @@
                     "type": "string",
                     "enum": [
                       "rtmp_server"
-                    ]
-                  }
-                }
-              }
-            ]
-          },
-          {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/MoqServerInput"
-              },
-              {
-                "type": "object",
-                "required": [
-                  "type"
-                ],
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "enum": [
-                      "moq_server"
                     ]
                   }
                 }

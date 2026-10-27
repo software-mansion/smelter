@@ -239,36 +239,6 @@ export type RegisterRtmpServerInput = {
   buffer?: InputBuffer | null;
 };
 
-export type RegisterMoqServerInput = {
-  type: 'moq_server';
-  /**
-   * Token used for authentication in MoQ server input. The broadcaster must provide it as a
-   * `token` query parameter when connecting.
-   */
-  authToken: string;
-  /**
-   * If input is required and the stream is not delivered on time, then Smelter will delay producing
-   * output frames.
-   *
-   * Defaults to `false`.
-   */
-  required?: boolean | null;
-  /**
-   * Assigns which decoder should be used for media encoded with a specific codec.
-   */
-  decoderMap?: InputMoqDecoderMap | null;
-  /**
-   * Enable side channel for video and/or audio track.
-   */
-  sideChannel?: SideChannel;
-  /**
-   * Input buffer configuration.
-   *
-   * Defaults: `desiredMs=2000`, `minMs=1000`, `maxMs=5000`.
-   */
-  buffer?: InputBuffer | null;
-};
-
 export type RegisterMoqClientInput = {
   type: 'moq_client';
   /**

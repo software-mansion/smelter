@@ -12,7 +12,6 @@ use tracing::{debug, error};
 use crate::inputs::InputHandle;
 use crate::inputs::hls::HlsInputBuilder;
 use crate::inputs::moq_client::MoqClientInputBuilder;
-use crate::inputs::moq_server::MoqServerInputBuilder;
 use crate::inputs::mp4::Mp4InputBuilder;
 use crate::inputs::rtmp::RtmpInputBuilder;
 use crate::inputs::v4l2::V4l2InputBuilder;
@@ -154,11 +153,6 @@ impl SmelterState {
                 let hls_input = HlsInputBuilder::new().prompt()?.build();
                 let register_request = hls_input.serialize_register();
                 (InputHandle::Hls(hls_input), register_request)
-            }
-            InputProtocol::MoqServer => {
-                let moq_server_input = MoqServerInputBuilder::new().prompt()?.build();
-                let register_request = moq_server_input.serialize_register();
-                (InputHandle::MoqServer(moq_server_input), register_request)
             }
             InputProtocol::MoqClient => {
                 let moq_client_input = MoqClientInputBuilder::new().prompt()?.build();

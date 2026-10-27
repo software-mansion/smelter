@@ -91,35 +91,6 @@ export type RegisterInput =
       buffer?: InputBuffer | null;
     }
   | {
-      type: "moq_server";
-      /**
-       * Token used for authentication in MoQ server input. The broadcaster must provide it as a `token` query parameter when connecting
-       */
-      auth_token: string;
-      /**
-       * If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
-       *
-       * Defaults to `false`.
-       */
-      required?: boolean | null;
-      /**
-       * Assigns which decoder should be used for media encoded with a specific codec.
-       */
-      decoder_map?: {
-        [k: string]: MoqServerVideoDecoderOptions;
-      } | null;
-      /**
-       * Enable side channel for video and/or audio track.
-       */
-      side_channel?: SideChannel | null;
-      /**
-       * Input buffer configuration.
-       *
-       * Defaults: `desired_ms=2000`, `min_ms=1000`, `max_ms=5000`.
-       */
-      buffer?: InputBuffer | null;
-    }
-  | {
       type: "moq_client";
       /**
        * URL of the MoQ relay to connect to. Must use the `https://` scheme.
@@ -381,7 +352,6 @@ export type RtmpIngestMode = "realtime" | "offline";
  * Buffer a live input keeps between the live edge of the stream and playback. A larger buffer adds latency, but tolerates more delivery jitter and network stalls.
  */
 export type InputBuffer = number | InputBufferOptions;
-export type MoqServerVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
 export type MoqClientVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
 export type Mp4VideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
 export type WhipVideoDecoderOptions = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
@@ -1697,17 +1667,6 @@ export type InputStatsReport =
       audio?: RtmpInputAudioTrackStatsReport | null;
     }
   | {
-      type: "moq_server";
-      /**
-       * Stats for the video track. `None` before any video arrives.
-       */
-      video?: MoqServerInputVideoTrackStatsReport | null;
-      /**
-       * Stats for the audio track. `None` before any audio arrives.
-       */
-      audio?: MoqServerInputAudioTrackStatsReport | null;
-    }
-  | {
       type: "moq_client";
       /**
        * Stats for the video track. `None` before any video arrives.
@@ -2768,44 +2727,6 @@ export interface RtmpInputVideoTrackStatsReport {
  * Stats report for the audio track in `RTMP` input.
  */
 export interface RtmpInputAudioTrackStatsReport {
-  /**
-   * Bitrate of the media in the 1-second window, calculated from timestamps.
-   */
-  bitrate_1_second: number;
-  /**
-   * Bitrate of the media in the 1-minute window, calculated from timestamps.
-   */
-  bitrate_1_minute: number;
-  /**
-   * Stats for the synchronization. `None` when the track is not active.
-   */
-  sync?: InputSyncTrackStatsReport | null;
-  /**
-   * Stats for the audio mixer.
-   */
-  mixer: AudioMixerInputStatsReport;
-}
-/**
- * Stats report for the video track in `MoQ` server input.
- */
-export interface MoqServerInputVideoTrackStatsReport {
-  /**
-   * Bitrate of the media in the 1-second window, calculated from timestamps.
-   */
-  bitrate_1_second: number;
-  /**
-   * Bitrate of the media in the 1-minute window, calculated from timestamps.
-   */
-  bitrate_1_minute: number;
-  /**
-   * Stats for the synchronization. `None` when the track is not active.
-   */
-  sync?: InputSyncTrackStatsReport | null;
-}
-/**
- * Stats report for the audio track in `MoQ` server input.
- */
-export interface MoqServerInputAudioTrackStatsReport {
   /**
    * Bitrate of the media in the 1-second window, calculated from timestamps.
    */

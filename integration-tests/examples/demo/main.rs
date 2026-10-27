@@ -13,6 +13,7 @@ use tracing::{debug, error, info};
 
 mod autocompletion;
 mod inputs;
+mod moq_relay;
 mod outputs;
 mod players;
 mod smelter_state;

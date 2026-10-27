@@ -6,7 +6,6 @@ use crate::prelude::*;
 pub enum RegisterInputOptions {
     Rtp(RtpInputOptions),
     RtmpServer(RtmpServerInputOptions),
-    MoqServer(MoqServerInputOptions),
     MoqClient(MoqClientInputOptions),
     Mp4(Mp4InputOptions),
     Hls(HlsInputOptions),
@@ -23,7 +22,6 @@ impl RegisterInputOptions {
         match self {
             RegisterInputOptions::Rtp(_) => InputProtocolKind::Rtp,
             RegisterInputOptions::RtmpServer(_) => InputProtocolKind::Rtmp,
-            RegisterInputOptions::MoqServer(_) => InputProtocolKind::MoqServer,
             RegisterInputOptions::MoqClient(_) => InputProtocolKind::MoqClient,
             RegisterInputOptions::Mp4(_) => InputProtocolKind::Mp4,
             RegisterInputOptions::Hls(_) => InputProtocolKind::Hls,
@@ -61,7 +59,6 @@ pub struct InputInfo {
 pub enum InputProtocolKind {
     Rtp,
     Rtmp,
-    MoqServer,
     MoqClient,
     Mp4,
     Hls,
@@ -77,7 +74,6 @@ impl fmt::Display for InputProtocolKind {
         match self {
             InputProtocolKind::Rtp => write!(f, "rtp"),
             InputProtocolKind::Rtmp => write!(f, "rtmp"),
-            InputProtocolKind::MoqServer => write!(f, "moq_server"),
             InputProtocolKind::MoqClient => write!(f, "moq_client"),
             InputProtocolKind::Mp4 => write!(f, "mp4"),
             InputProtocolKind::Hls => write!(f, "hls"),
