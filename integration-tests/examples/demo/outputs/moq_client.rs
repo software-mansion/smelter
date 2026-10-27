@@ -4,7 +4,7 @@ use std::sync::{
 };
 
 use anyhow::Result;
-use inquire::{Confirm, Select, Text};
+use inquire::{Select, Text};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
@@ -12,11 +12,11 @@ use tracing::error;
 
 use crate::{
     inputs::{InputHandle, filter_video_inputs},
+    moq_relay::{MOQ_RELAY_DEFAULT_URL, tools_url, wait_for_relay},
     outputs::{AudioEncoder, VideoEncoder, VideoResolution, scene::Scene},
 };
 
-const MOQ_CLIENT_DEFAULT_URL: &str = "https://localhost:443";
-const MOQ_CLIENT_DEFAULT_BROADCAST_PATH: &str = "anon/test";
+const MOQ_CLIENT_DEFAULT_BROADCAST_PATH: &str = "anon/output";
 
 #[derive(Debug, Display, EnumIter, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -51,6 +51,8 @@ pub struct MoqClientOutput {
     container: MoqContainer,
     video: Option<MoqClientOutputVideoOptions>,
     audio: Option<MoqClientOutputAudioOptions>,
+    #[serde(skip)]
+    cert_fingerprint: Option<String>,
 }
 
 impl MoqClientOutput {
@@ -73,29 +75,23 @@ impl MoqClientOutput {
     }
 
     pub fn on_before_registration(&mut self) -> Result<()> {
-        println!(
-            "Make sure that a MoQ relay is listening at {}.",
-            self.endpoint_url
-        );
-
-        loop {
-            let confirmation = Confirm::new("Is server running? [Y/n]")
-                .with_default(true)
-                .prompt()?;
-            if confirmation {
-                return Ok(());
-            }
-        }
+        self.cert_fingerprint = wait_for_relay(&self.endpoint_url)?;
+        Ok(())
     }
 
     pub fn on_after_registration(&mut self) -> Result<()> {
-        let moq_player_url = "https://smelter-labs.github.io/tools/#moq-player";
-        let url = format!(
-            "{moq_player_url}?url={}&path={}",
-            self.endpoint_url, self.broadcast_path
+        let url = tools_url(
+            "moq-player",
+            &self.endpoint_url,
+            &self.broadcast_path,
+            self.cert_fingerprint.as_deref(),
         );
-        println!("Open in browser to receive stream:");
-        println!("{url}");
+        println!(
+            "Smelter publishes broadcast \"{}\" to MoQ relay {}.",
+            self.broadcast_path, self.endpoint_url
+        );
+        println!("Play this broadcast from the relay in the browser:");
+        println!("  {url}");
         Ok(())
     }
 }
@@ -112,7 +108,7 @@ pub struct MoqClientOutputBuilder {
 impl MoqClientOutputBuilder {
     pub fn new() -> Self {
         let name = Self::generate_name();
-        let endpoint_url = MOQ_CLIENT_DEFAULT_URL.to_string();
+        let endpoint_url = MOQ_RELAY_DEFAULT_URL.to_string();
         let broadcast_path = MOQ_CLIENT_DEFAULT_BROADCAST_PATH.to_string();
         Self {
             name,
@@ -277,6 +273,7 @@ impl MoqClientOutputBuilder {
             container: self.container,
             video: self.video,
             audio: self.audio,
+            cert_fingerprint: None,
         }
     }
 }

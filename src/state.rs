@@ -1,9 +1,9 @@
 use std::sync::{Arc, Mutex};
 
 use smelter_core::{
-    LateEventPolicy, Pipeline, PipelineMoqServerOptions, PipelineOptions,
-    PipelineRtmpServerOptions, PipelineWgpuOptions, PipelineWhipWhepServerOptions, Timestamp,
-    error::InitPipelineError, protocols::WebrtcUdpPortStrategy,
+    LateEventPolicy, Pipeline, PipelineOptions, PipelineRtmpServerOptions, PipelineWgpuOptions,
+    PipelineWhipWhepServerOptions, Timestamp, error::InitPipelineError,
+    protocols::WebrtcUdpPortStrategy,
 };
 use smelter_render::{
     error::ErrorStack,
@@ -215,14 +215,6 @@ pub fn pipeline_options_from_config(
                 tls_config: opt.rtmp_tls_config.clone(),
             },
             false => PipelineRtmpServerOptions::Disable,
-        },
-
-        moq_server: match opt.moq_enable {
-            true => PipelineMoqServerOptions::Enable {
-                port: opt.moq_server_port,
-                tls_config: opt.moq_tls_config.clone(),
-            },
-            false => PipelineMoqServerOptions::Disable,
         },
 
         moq_disable_tls_verification: opt.moq_disable_tls_verification,

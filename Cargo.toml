@@ -121,7 +121,6 @@ glyphon = { workspace = true }
 http-body-util = "0.1.2"
 tower-http = { workspace = true }
 regex = { workspace = true }
-moq-native = { workspace = true }
 rustls = "0.23.37"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

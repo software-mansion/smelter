@@ -1,6 +1,5 @@
 mod input;
 mod output;
-mod server;
 
 use hang::moq_net::Session;
 use moq_native::ClientConfig;
@@ -10,10 +9,8 @@ use std::{
 };
 use url::Url;
 
-pub use input::{MoqClientInput, MoqServerInput};
+pub use input::MoqClientInput;
 pub use output::MoqClientOutput;
-pub(crate) use server::SelfSignedTlsError;
-pub(super) use server::{MoqPipelineState, MoqServer, spawn_moq_server};
 
 /// Client config for connecting to `url`. The client picks the DNS entry
 /// matching the family of its local socket, so bind to IPv4 whenever the host

@@ -7,7 +7,6 @@ import type {
   RegisterWhipServerInput,
   RegisterWhepClientInput,
   RegisterRtmpServerInput,
-  RegisterMoqServerInput,
   RegisterMoqClientInput,
 } from '@swmansion/smelter';
 import { _smelterInternals } from '@swmansion/smelter';
@@ -23,7 +22,6 @@ export type RegisterInputRequest =
   | RegisterWhipServerInputRequest
   | RegisterWhepClientInputRequest
   | RegisterRtmpServerInputRequest
-  | RegisterMoqServerInputRequest
   | RegisterMoqClientInputRequest
   | RegisterV4l2InputRequest
   | RegisterDecklinkInputRequest
@@ -38,7 +36,6 @@ export type RegisterHlsInputRequest = Extract<Api.RegisterInput, { type: 'hls' }
 export type RegisterWhipServerInputRequest = Extract<Api.RegisterInput, { type: 'whip_server' }>;
 export type RegisterWhepClientInputRequest = Extract<Api.RegisterInput, { type: 'whep_client' }>;
 export type RegisterRtmpServerInputRequest = Extract<Api.RegisterInput, { type: 'rtmp_server' }>;
-export type RegisterMoqServerInputRequest = Extract<Api.RegisterInput, { type: 'moq_server' }>;
 export type RegisterMoqClientInputRequest = Extract<Api.RegisterInput, { type: 'moq_client' }>;
 export type RegisterV4l2InputRequest = Extract<Api.RegisterInput, { type: 'v4l2' }>;
 export type RegisterDecklinkInputRequest = Extract<Api.RegisterInput, { type: 'decklink' }>;
@@ -54,7 +51,6 @@ export type RegisterInput =
   | ({ type: 'whip_server' } & RegisterWhipServerInput)
   | ({ type: 'whep_client' } & RegisterWhepClientInput)
   | ({ type: 'rtmp_server' } & RegisterRtmpServerInput)
-  | ({ type: 'moq_server' } & RegisterMoqServerInput)
   | ({ type: 'moq_client' } & RegisterMoqClientInput)
   | ({ type: 'v4l2' } & RegisterV4l2InputRequest)
   | { type: 'camera' }
@@ -79,8 +75,6 @@ export function intoRegisterInput(input: RegisterInput): RegisterInputRequest {
     return intoWhepRegisterInput(input);
   } else if (input.type === 'rtmp_server') {
     return intoRtmpRegisterInput(input);
-  } else if (input.type === 'moq_server') {
-    return intoMoqRegisterInput(input);
   } else if (input.type === 'moq_client') {
     return intoMoqClientRegisterInput(input);
   } else if (input.type === 'v4l2') {
@@ -174,17 +168,6 @@ function intoRtmpRegisterInput(input: Inputs.RegisterRtmpServerInput): RegisterI
     decoder_map: input.decoderMap,
     side_channel: intoSideChannel(input.sideChannel),
     ingest_mode: input.ingestMode,
-    buffer: intoInputBuffer(input.buffer),
-  };
-}
-
-function intoMoqRegisterInput(input: Inputs.RegisterMoqServerInput): RegisterInputRequest {
-  return {
-    type: 'moq_server',
-    auth_token: input.authToken,
-    required: input.required,
-    decoder_map: input.decoderMap,
-    side_channel: intoSideChannel(input.sideChannel),
     buffer: intoInputBuffer(input.buffer),
   };
 }

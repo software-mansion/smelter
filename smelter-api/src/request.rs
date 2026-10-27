@@ -12,7 +12,6 @@ use crate::*;
 pub enum RegisterInput {
     RtpStream(RtpInput),
     RtmpServer(RtmpInput),
-    MoqServer(MoqServerInput),
     MoqClient(MoqClientInput),
     Mp4(Mp4Input),
     WhipServer(WhipInput),
@@ -30,7 +29,6 @@ impl TryFrom<RegisterInput> for core::RegisterInputOptions {
         match value {
             RegisterInput::RtpStream(rtp) => rtp.try_into(),
             RegisterInput::RtmpServer(rtmp) => rtmp.try_into(),
-            RegisterInput::MoqServer(moq_server) => moq_server.try_into(),
             RegisterInput::MoqClient(moq_client) => moq_client.try_into(),
             RegisterInput::Mp4(mp4) => mp4.try_into(),
             RegisterInput::WhipServer(whip) => whip.try_into(),

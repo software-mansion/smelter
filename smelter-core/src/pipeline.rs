@@ -10,7 +10,6 @@ use crate::{
     event::EventEmitter,
     graphics_context::GraphicsContext,
     pipeline::{
-        moq::MoqPipelineState,
         rtmp::RtmpPipelineState,
         webrtc::{WebrtcSettingEngineCtx, WhipWhepPipelineState},
     },
@@ -46,7 +45,6 @@ mod output;
 pub(crate) mod utils;
 
 pub use instance::Pipeline;
-pub(crate) use moq::SelfSignedTlsError;
 
 #[cfg(target_os = "linux")]
 pub use v4l2::{V4l2DeviceInfo, V4l2FormatInfo, V4l2ResolutionInfo, list_v4l2_devices};
@@ -80,7 +78,6 @@ pub struct PipelineOptions {
     pub webrtc_nat_1to1_ips: Arc<Vec<String>>,
 
     pub rtmp_server: PipelineRtmpServerOptions,
-    pub moq_server: PipelineMoqServerOptions,
 
     pub moq_disable_tls_verification: bool,
 }
@@ -111,15 +108,6 @@ pub enum PipelineRtmpServerOptions {
     Disable,
 }
 
-#[derive(Debug)]
-pub enum PipelineMoqServerOptions {
-    Enable {
-        port: u16,
-        tls_config: Option<moq_native::ServerTlsConfig>,
-    },
-    Disable,
-}
-
 pub const DEFAULT_BUFFER_DURATION: Duration = Duration::from_millis(16 * 5); // about 5 frames at 60 fps
 
 #[derive(Clone)]
@@ -143,7 +131,6 @@ pub(crate) struct PipelineCtx {
     tokio_rt: Handle,
     whip_whep_state: Option<Arc<WhipWhepPipelineState>>,
     rtmp_state: Option<Arc<RtmpPipelineState>>,
-    moq_state: Option<Arc<MoqPipelineState>>,
 }
 
 impl PipelineCtx {

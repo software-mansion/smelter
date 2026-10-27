@@ -1,5 +1,5 @@
 //! Interactive bad network simulation for local testing. Applies `tc netem` profiles to UDP
-//! traffic on a device, optionally only from/to a single port (e.g. MoQ server port).
+//! traffic on a device, optionally only from/to a single port.
 //!
 //! Requires `tc` (iproute2). Commands run through `sudo` unless started as root. The qdisc is
 //! removed on exit.

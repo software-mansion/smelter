@@ -6,7 +6,6 @@ mod audio_mixer;
 mod decklink;
 mod hls;
 mod moq_client;
-mod moq_server;
 mod mp4;
 mod raw_data;
 mod rtmp;
@@ -20,7 +19,6 @@ pub use audio_mixer::*;
 pub use decklink::*;
 pub use hls::*;
 pub use moq_client::*;
-pub use moq_server::*;
 pub use mp4::*;
 pub use raw_data::*;
 pub use rtmp::*;
@@ -39,7 +37,6 @@ pub enum InputStatsReport {
     Whep(WhepInputStatsReport),
     Hls(HlsInputStatsReport),
     Rtmp(RtmpInputStatsReport),
-    MoqServer(MoqServerInputStatsReport),
     MoqClient(MoqClientInputStatsReport),
     Mp4(Mp4InputStatsReport),
     V4l2(V4l2InputStatsReport),

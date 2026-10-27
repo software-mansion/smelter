@@ -120,7 +120,6 @@ pub struct InputStatus {
 pub enum InputType {
     RtpStream,
     RtmpServer,
-    MoqServer,
     MoqClient,
     Mp4,
     WhipServer,
@@ -137,7 +136,6 @@ impl From<core::InputProtocolKind> for InputType {
         match value {
             core::InputProtocolKind::Rtp => Self::RtpStream,
             core::InputProtocolKind::Rtmp => Self::RtmpServer,
-            core::InputProtocolKind::MoqServer => Self::MoqServer,
             core::InputProtocolKind::MoqClient => Self::MoqClient,
             core::InputProtocolKind::Mp4 => Self::Mp4,
             core::InputProtocolKind::Whip => Self::WhipServer,

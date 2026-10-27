@@ -5,7 +5,6 @@ pub(super) mod decklink;
 pub(super) mod hls;
 pub(super) mod media;
 pub(super) mod moq_client;
-pub(super) mod moq_server;
 pub(super) mod mp4;
 pub(super) mod raw_data;
 pub(super) mod rtmp;
@@ -21,10 +20,10 @@ use crate::{
     stats::{
         input::audio_mixer::AudioMixerInputStatsState, input::decklink::DeckLinkInputState,
         input::hls::HlsInputState, input::media::InputMediaStatsState,
-        input::moq_client::MoqClientInputState, input::moq_server::MoqServerInputState,
-        input::mp4::Mp4InputState, input::raw_data::RawDataInputState, input::rtmp::RtmpInputState,
-        input::rtp::RtpInputState, input::v4l2::V4l2InputState, input::whep::WhepInputState,
-        input::whip::WhipInputState, input_reports::InputStatsReport,
+        input::moq_client::MoqClientInputState, input::mp4::Mp4InputState,
+        input::raw_data::RawDataInputState, input::rtmp::RtmpInputState, input::rtp::RtpInputState,
+        input::v4l2::V4l2InputState, input::whep::WhepInputState, input::whip::WhipInputState,
+        input_reports::InputStatsReport,
     },
 };
 
@@ -66,7 +65,6 @@ pub enum InputStatsState {
     Whep(WhepInputState),
     Hls(HlsInputState),
     Rtmp(RtmpInputState),
-    MoqServer(MoqServerInputState),
     MoqClient(MoqClientInputState),
     Mp4(Mp4InputState),
     V4l2(V4l2InputState),
@@ -83,7 +81,6 @@ impl InputStatsState {
             InputProtocolKind::Rtmp => InputStatsState::Rtmp(RtmpInputState::new()),
             InputProtocolKind::Mp4 => InputStatsState::Mp4(Mp4InputState::new()),
             InputProtocolKind::Hls => InputStatsState::Hls(HlsInputState::new()),
-            InputProtocolKind::MoqServer => InputStatsState::MoqServer(MoqServerInputState::new()),
             InputProtocolKind::MoqClient => InputStatsState::MoqClient(MoqClientInputState::new()),
             InputProtocolKind::V4l2 => InputStatsState::V4l2(V4l2InputState),
             InputProtocolKind::DeckLink => InputStatsState::DeckLink(DeckLinkInputState),
@@ -108,9 +105,6 @@ impl InputStatsState {
             }
             (InputStatsState::Rtmp(state), InputStatsEvent::Rtmp(event)) => {
                 state.handle_event(event);
-            }
-            (InputStatsState::MoqServer(state), InputStatsEvent::Sync { track, event }) => {
-                state.sync.handle_event(track, event);
             }
             (InputStatsState::MoqClient(state), InputStatsEvent::Sync { track, event }) => {
                 state.sync.handle_event(track, event);
@@ -138,7 +132,6 @@ impl InputStatsState {
             InputStatsState::Whep(state) => Some(&mut state.media),
             InputStatsState::Hls(state) => Some(&mut state.media),
             InputStatsState::Rtmp(state) => Some(&mut state.media),
-            InputStatsState::MoqServer(state) => Some(&mut state.media),
             InputStatsState::MoqClient(state) => Some(&mut state.media),
             InputStatsState::Mp4(state) => Some(&mut state.media),
             InputStatsState::V4l2(_)
@@ -154,7 +147,6 @@ impl InputStatsState {
             InputStatsState::Whep(state) => Some(&mut state.audio_mixer),
             InputStatsState::Hls(state) => Some(&mut state.audio_mixer),
             InputStatsState::Rtmp(state) => Some(&mut state.audio_mixer),
-            InputStatsState::MoqServer(state) => Some(&mut state.audio_mixer),
             InputStatsState::MoqClient(state) => Some(&mut state.audio_mixer),
             InputStatsState::Mp4(state) => Some(&mut state.audio_mixer),
             InputStatsState::V4l2(_)
@@ -170,7 +162,6 @@ impl InputStatsState {
             InputStatsState::Whep(state) => InputStatsReport::Whep(state.report()),
             InputStatsState::Hls(state) => InputStatsReport::Hls(state.report()),
             InputStatsState::Rtmp(state) => InputStatsReport::Rtmp(state.report()),
-            InputStatsState::MoqServer(state) => InputStatsReport::MoqServer(state.report()),
             InputStatsState::MoqClient(state) => InputStatsReport::MoqClient(state.report()),
             InputStatsState::Mp4(state) => InputStatsReport::Mp4(state.report()),
             InputStatsState::V4l2(state) => InputStatsReport::V4l2(state.report()),
