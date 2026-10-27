@@ -62,9 +62,9 @@ fn h264_max_dpb_mbs(sps: &SeqParameterSet) -> Option<u64> {
         // Baseline, Main and Extended profiles signal level 1b with level_idc 11 and
         // constraint_set3_flag (H.264 spec A.3.1).
         true => sps.level_idc == 11 && sps.constraint_flags.flag3(),
-        // High profiles (H.264 spec A.3.2) and SVC/MVC profiles (H.264 spec F.10.2.1, G.10.2,
-        // H.10.2) signal level 1b with level_idc 9. For other profile_idc values, the spec does not
-        // define level_idc (H.264 spec A.1). We assume they follow the same rules as High profiles.
+        // High profiles (H.264 spec A.3.2) signal level 1b with level_idc 9. For other
+        // profile_idc values, the spec does not define level_idc (H.264 spec A.1).
+        // We assume they follow the same rules as High profiles.
         false => sps.level_idc == 9,
     };
     if is_level_1b {
@@ -103,7 +103,7 @@ pub(crate) fn calculate_max_num_reorder_frames(sps: &SeqParameterSet) -> u64 {
     } else if let Profile::Baseline = sps.profile() {
         0
     } else {
-        // Height of a map unit in a frame (H.264 spec 8.2.2.8). When fields can be coded, a map
+        // FrameHeightInMbs (H.264 spec 7.4.2.1.1, equation 7-18). When fields can be coded, a map
         // unit is one macroblock of a field, so two macroblocks of a frame.
         let mbs_per_map_unit = match sps.frame_mbs_flags {
             FrameMbsFlags::Frames => 1,
