@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use h264_reader::nal::{
     pps::PicParameterSet,
-    slice::{DecRefPicMarking, MemoryManagementControlOperation, SliceHeader},
-    sps::{Profile, SeqParameterSet},
+    slice::{DecRefPicMarking, MemoryManagementControlOperation, SliceFamily, SliceHeader},
+    sps::{FrameMbsFlags, Profile, SeqParameterSet},
 };
 
 use crate::{parameters::CorruptedStateHandling, parser::decoder_instructions::DecoderInstruction};
@@ -18,7 +18,7 @@ pub enum ReferenceManagementError {
     #[error("SP frames are not supported")]
     SPFramesNotSupported,
 
-    #[error("PicOrderCntType {0} is not supperted")]
+    #[error("PicOrderCntType {0} is not supported")]
     PicOrderCntTypeNotSupported(u8),
 
     #[error("The H.264 bytestream is not spec compliant: {0}.")]
@@ -28,9 +28,6 @@ pub enum ReferenceManagementError {
     /// cleared by decoding a valid IDR frame.
     #[error("Decoder is in a corrupted state. Waiting for IDR frame")]
     CorruptedState,
-
-    #[error("Unknown H.264 level_idc: {0}")]
-    UnknownLevelIdc(u8),
 }
 
 #[derive(Debug, Default, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -59,35 +56,46 @@ enum MaxLongTermFrameIdx {
     Idx(u64),
 }
 
-/// Table A-1 from the H.264 spec: MaxDpbMbs per level_idc
-fn h264_level_idc_to_max_dpb_mbs(level_idc: u8) -> Result<u64, ReferenceManagementError> {
-    match level_idc {
-        10 => Ok(396),
-        11 => Ok(900),
-        12 => Ok(2_376),
-        13 => Ok(2_376),
-        20 => Ok(2_376),
-        21 => Ok(4_752),
-        22 => Ok(8_100),
-        30 => Ok(8_100),
-        31 => Ok(18_000),
-        32 => Ok(20_480),
-        40 => Ok(32_768),
-        41 => Ok(32_768),
-        42 => Ok(34_816),
-        50 => Ok(110_400),
-        51 => Ok(184_320),
-        52 => Ok(184_320),
-        60 => Ok(696_320),
-        61 => Ok(696_320),
-        62 => Ok(696_320),
-        _ => Err(ReferenceManagementError::UnknownLevelIdc(level_idc)),
+/// Table A-1 from the H.264 spec: MaxDpbMbs per level
+fn h264_max_dpb_mbs(sps: &SeqParameterSet) -> Option<u64> {
+    let is_level_1b = match [66u8, 77, 88].contains(&sps.profile_idc.into()) {
+        // Baseline, Main and Extended profiles signal level 1b with level_idc 11 and
+        // constraint_set3_flag (H.264 spec A.3.1).
+        true => sps.level_idc == 11 && sps.constraint_flags.flag3(),
+        // High profiles (H.264 spec A.3.2) signal level 1b with level_idc 9. For other
+        // profile_idc values, the spec does not define level_idc (H.264 spec A.1).
+        // We assume they follow the same rules as High profiles.
+        false => sps.level_idc == 9,
+    };
+    if is_level_1b {
+        return Some(396);
+    }
+
+    match sps.level_idc {
+        10 => Some(396),
+        11 => Some(900),
+        12 => Some(2_376),
+        13 => Some(2_376),
+        20 => Some(2_376),
+        21 => Some(4_752),
+        22 => Some(8_100),
+        30 => Some(8_100),
+        31 => Some(18_000),
+        32 => Some(20_480),
+        40 => Some(32_768),
+        41 => Some(32_768),
+        42 => Some(34_816),
+        50 => Some(110_400),
+        51 => Some(184_320),
+        52 => Some(184_320),
+        60 => Some(696_320),
+        61 => Some(696_320),
+        62 => Some(696_320),
+        _ => None,
     }
 }
 
-pub(crate) fn calculate_max_num_reorder_frames(
-    sps: &SeqParameterSet,
-) -> Result<u64, ReferenceManagementError> {
+pub(crate) fn calculate_max_num_reorder_frames(sps: &SeqParameterSet) -> u64 {
     let fallback = if [44u8, 86, 100, 110, 122, 244].contains(&sps.profile_idc.into())
         && sps.constraint_flags.flag3()
     {
@@ -95,20 +103,25 @@ pub(crate) fn calculate_max_num_reorder_frames(
     } else if let Profile::Baseline = sps.profile() {
         0
     } else {
-        h264_level_idc_to_max_dpb_mbs(sps.level_idc)?
-            / ((sps.pic_width_in_mbs_minus1 as u64 + 1)
-                * (sps.pic_height_in_map_units_minus1 as u64 + 1))
+        // FrameHeightInMbs (H.264 spec 7.4.2.1.1, equation 7-18). When fields can be coded, a map
+        // unit is one macroblock of a field, so two macroblocks of a frame.
+        let mbs_per_map_unit = match sps.frame_mbs_flags {
+            FrameMbsFlags::Frames => 1,
+            FrameMbsFlags::Fields { .. } => 2,
+        };
+        let frame_height_in_mbs =
+            mbs_per_map_unit * (sps.pic_height_in_map_units_minus1 as u64 + 1);
+        let frame_size_in_mbs = (sps.pic_width_in_mbs_minus1 as u64 + 1) * frame_height_in_mbs;
+        // Unknown level falls back to the largest DPB.
+        h264_max_dpb_mbs(sps).map_or(16, |max_dpb_mbs| max_dpb_mbs / frame_size_in_mbs)
     };
 
-    let max_num_reorder_frames = sps
-        .vui_parameters
+    sps.vui_parameters
         .as_ref()
         .and_then(|v| v.bitstream_restrictions.as_ref())
         .map(|b| b.max_num_reorder_frames as u64)
         .unwrap_or(fallback)
-        .min(16);
-
-    Ok(max_num_reorder_frames)
+        .min(16)
 }
 
 impl ReferenceContext {
@@ -198,16 +211,20 @@ impl ReferenceContext {
         let pps = slices.last().unwrap().0.pps.clone();
         let pts = slices.last().unwrap().1;
 
+        // Checked before any state is modified.
+        match header.slice_type.family {
+            SliceFamily::P | SliceFamily::B | SliceFamily::I => {}
+            SliceFamily::SP => return Err(ReferenceManagementError::SPFramesNotSupported),
+            SliceFamily::SI => return Err(ReferenceManagementError::SIFramesNotSupported),
+        }
+
         let is_ref_frame = header.dec_ref_pic_marking.is_some();
         let is_idr = matches!(
             &header.dec_ref_pic_marking,
             Some(DecRefPicMarking::Idr { .. })
         );
-        if is_ref_frame
-            && !is_idr
-            && self.corrupted_state_handling == CorruptedStateHandling::Strict
-        {
-            self.verify_frame_num(&sps, &header)?;
+        if !is_idr && self.corrupted_state_handling == CorruptedStateHandling::Strict {
+            self.detect_frame_num_gap(&sps, &header)?;
         }
 
         let has_gap = header.frame_num != self.PrevRefFrameNum
@@ -281,9 +298,10 @@ impl ReferenceContext {
         };
 
         self.previous_picture_included_mmco_equal_5 = header.includes_mmco_equal_5();
-        self.prevFrameNum = header.frame_num;
+        let frame_num = header.frame_num_after_decoding();
+        self.prevFrameNum = frame_num;
         if is_ref_frame {
-            self.PrevRefFrameNum = header.frame_num;
+            self.PrevRefFrameNum = frame_num;
         }
 
         let mut instructions = Vec::new();
@@ -469,12 +487,12 @@ impl ReferenceContext {
 
         let reference_id = match new_long_term_frame_idx {
             Some(long_term_frame_idx) => self.add_long_term_reference(
-                header.frame_num,
+                header.frame_num_after_decoding(),
                 long_term_frame_idx,
                 decode_info.picture_info.PicOrderCnt_as_reference_pic,
             ),
             None => self.add_short_term_reference(
-                header.frame_num,
+                header.frame_num_after_decoding(),
                 decode_info.picture_info.PicOrderCnt_as_reference_pic,
             ),
         };
@@ -490,8 +508,9 @@ impl ReferenceContext {
         if let MaxLongTermFrameIdx::Idx(max) = self.MaxLongTermFrameIdx {
             if self.pictures.long_term.len() > max as usize + 1 {
                 return Err(ReferenceManagementError::IncorrectData(format!(
-                    "there are {} long-term references, but there shouldn't be more than {max}",
-                    self.pictures.long_term.len()
+                    "there are {} long-term references, but there shouldn't be more than {}",
+                    self.pictures.long_term.len(),
+                    max + 1
                 )));
             }
         }
@@ -605,18 +624,6 @@ impl ReferenceContext {
             PicOrderCnt_for_decoding
         };
 
-        match header.slice_type.family {
-            h264_reader::nal::slice::SliceFamily::P
-            | h264_reader::nal::slice::SliceFamily::B
-            | h264_reader::nal::slice::SliceFamily::I => {}
-            h264_reader::nal::slice::SliceFamily::SP => {
-                return Err(ReferenceManagementError::SPFramesNotSupported);
-            }
-            h264_reader::nal::slice::SliceFamily::SI => {
-                return Err(ReferenceManagementError::SIFramesNotSupported);
-            }
-        }
-
         // An IDR picture invalidates the whole DPB before it is decoded (H.264 spec 8.2.5.1), so
         // there is nothing to hand over as reference pictures.
         let reference_pictures = if matches!(
@@ -643,7 +650,7 @@ impl ReferenceContext {
                 FrameNum: header.frame_num,
             },
             pts,
-            max_num_reorder_frames: calculate_max_num_reorder_frames(sps)?,
+            max_num_reorder_frames: calculate_max_num_reorder_frames(sps),
         })
     }
 
@@ -815,18 +822,29 @@ impl ReferenceContext {
             prev_pic_order_cnt_msb
         };
 
-        let pic_order_cnt = if is_frame {
+        // TopFieldOrderCnt after MMCO 5 subtracts PicOrderCnt from it (H.264 spec 8.2.1). For
+        // fields, it is either 0 or not used.
+        let (pic_order_cnt, top_field_order_cnt_after_mmco_5) = if is_frame {
             let top_field_order_cnt = pic_order_cnt_msb + pic_order_cnt_lsb;
 
             let bottom_field_order_cnt = top_field_order_cnt + delta_pic_order_cnt_bottom;
 
-            top_field_order_cnt.min(bottom_field_order_cnt)
+            let pic_order_cnt = i32::min(top_field_order_cnt, bottom_field_order_cnt);
+            (pic_order_cnt, top_field_order_cnt - pic_order_cnt)
         } else {
-            pic_order_cnt_msb + pic_order_cnt_lsb
+            (pic_order_cnt_msb + pic_order_cnt_lsb, 0)
         };
 
-        self.prev_pic_order_cnt_msb = pic_order_cnt_msb;
-        self.prev_pic_order_cnt_lsb = pic_order_cnt_lsb;
+        // The next picture continues from the previous reference picture (H.264 spec 8.2.1.1).
+        if header.dec_ref_pic_marking.is_some() {
+            if header.includes_mmco_equal_5() {
+                self.prev_pic_order_cnt_msb = 0;
+                self.prev_pic_order_cnt_lsb = top_field_order_cnt_after_mmco_5;
+            } else {
+                self.prev_pic_order_cnt_msb = pic_order_cnt_msb;
+                self.prev_pic_order_cnt_lsb = pic_order_cnt_lsb;
+            }
+        }
 
         Ok([pic_order_cnt; 2])
     }
@@ -883,15 +901,16 @@ impl ReferenceContext {
             .collect()
     }
 
-    fn verify_frame_num(
+    /// Detects lost reference frames from frame_num. Does not validate frame_num otherwise.
+    fn detect_frame_num_gap(
         &mut self,
         sps: &SeqParameterSet,
         header: &SliceHeader,
     ) -> Result<(), ReferenceManagementError> {
-        let is_expected_frame_num = !sps.gaps_in_frame_num_value_allowed_flag
+        let has_unexpected_frame_num_gap = !sps.gaps_in_frame_num_value_allowed_flag
             && header.frame_num != self.PrevRefFrameNum
             && header.frame_num != ((self.PrevRefFrameNum as i64 + 1) % sps.max_frame_num()) as u16;
-        if is_expected_frame_num || self.detected_corrupted_state {
+        if has_unexpected_frame_num_gap || self.detected_corrupted_state {
             self.detected_corrupted_state = true;
             return Err(ReferenceManagementError::CorruptedState);
         }
@@ -957,6 +976,8 @@ struct ReferencePictures {
 
 trait SliceHeaderExt {
     fn includes_mmco_equal_5(&self) -> bool;
+    /// frame_num used for all pictures decoded after this one.
+    fn frame_num_after_decoding(&self) -> u16;
 }
 
 impl SliceHeaderExt for SliceHeader {
@@ -968,6 +989,16 @@ impl SliceHeaderExt for SliceHeader {
         mmcos
             .iter()
             .any(|mmco| matches!(mmco, MemoryManagementControlOperation::AllRefPicturesUnused))
+    }
+
+    fn frame_num_after_decoding(&self) -> u16 {
+        // A picture with MMCO 5 is inferred to have had frame_num equal to 0 (H.264 spec 7.4.3).
+        // IDR also resets frame_num, but its frame_num is already required to be 0 (H.264 spec
+        // 7.4.3).
+        match self.includes_mmco_equal_5() {
+            true => 0,
+            false => self.frame_num,
+        }
     }
 }
 
