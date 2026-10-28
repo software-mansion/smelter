@@ -22,8 +22,6 @@ pub(super) fn populate_inputs(
         input_textures.upload(ctx.wgpu_ctx, frame);
     }
 
-    ctx.wgpu_ctx.queue.submit([]);
-
     for (node_texture, input_textures) in scene.inputs.values_mut() {
         input_textures.convert_to_node_texture(ctx.wgpu_ctx, node_texture);
     }

@@ -110,8 +110,6 @@ impl FramePreProcessor {
 
     fn upload_and_convert_to_node_texture(&mut self, frame: Frame) {
         self.input_texture.upload(&self.wgpu_ctx, frame);
-        // Flush uploads before the conversion pass reads them.
-        self.wgpu_ctx.queue.submit([]);
         self.input_texture
             .convert_to_node_texture(&self.wgpu_ctx, &mut self.node_texture);
     }
