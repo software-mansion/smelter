@@ -183,9 +183,19 @@ jobs:
                   shared-key: "linux-test"
                   save-if: ${{ github.ref == 'refs/heads/master' }}
 
-            - name: 🧪 Run non-pipeline tests
+            - name: 🧪 Run unit tests
               run: |
-                  cargo nextest run --workspace --profile ci -E 'not test(/^pipeline_tests::/)'
+                  cargo nextest run --workspace --profile ci -E 'not test(/^pipeline_tests::/) and not test(/^render_tests::/) and not test(/^gpu_video_tests::/)'
+
+            - name: 🧪 Run render tests
+              if: ${{ !cancelled() }}
+              run: |
+                  cargo nextest run --workspace --profile ci -E 'test(/^render_tests::/)'
+
+            - name: 🧪 Run gpu-video tests
+              if: ${{ !cancelled() }}
+              run: |
+                  cargo nextest run --workspace --profile ci -E 'test(/^gpu_video_tests::/)'
 
             - name: 🧪 Run pipeline tests
               if: ${{ !cancelled() }}

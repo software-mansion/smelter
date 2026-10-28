@@ -16,6 +16,10 @@ retries = 4
 filter = 'package(/^integration-tests/) and test(/^pipeline_tests::/)'
 retries = 2
 
+[[profile.ci.overrides]]
+filter = 'package(/^integration-tests/) and test(/^gpu_video_tests::/)'
+slow-timeout = { period = "180s", terminate-after = 2 }
+
 [profile.audit]
 retries = 0
 slow-timeout = "60s"
