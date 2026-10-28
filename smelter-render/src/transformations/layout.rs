@@ -15,6 +15,7 @@ mod shader;
 
 use self::{resampled_child::ResampledChild, shader::LayoutShader};
 
+pub(crate) use crate::wgpu::resampler::Crop;
 pub(crate) use layout_renderer::LayoutRenderer;
 use tracing::error;
 
@@ -29,16 +30,6 @@ pub(crate) struct LayoutNode {
     layout_provider: Box<dyn LayoutProvider>,
     shader: Arc<LayoutShader>,
     resample_cache: HashMap<usize, ResampledChild>,
-}
-
-/// When rendering we cut this fragment from texture and stretch it on
-/// the expected position
-#[derive(Debug, Clone)]
-pub struct Crop {
-    pub top: f32,
-    pub left: f32,
-    pub width: f32,
-    pub height: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -253,13 +244,13 @@ impl LayoutNode {
                 width: (width.round() as usize).max(1),
                 height: (height.round() as usize).max(1),
             };
-            if !Lanczos3Resampler::needs_resample(crop, dst) {
+            if !Lanczos3Resampler::needs_resample(*crop, dst) {
                 continue;
             }
             self.resample_cache.entry(layout_index).or_default().render(
                 ctx.wgpu_ctx,
                 source,
-                crop,
+                *crop,
                 dst,
                 encoder,
             );

@@ -4,7 +4,7 @@ mod bilinear;
 mod lanczos3;
 
 pub use bilinear::BilinearResampler;
-pub use lanczos3::{Lanczos3Resampler, Lanczos3TextureCache};
+pub use lanczos3::{Crop, Lanczos3Resampler, Lanczos3TextureCache};
 
 #[derive(Debug)]
 pub struct Resamplers {

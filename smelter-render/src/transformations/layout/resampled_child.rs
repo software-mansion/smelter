@@ -1,10 +1,11 @@
 use crate::{
     Resolution,
     state::node_texture::{NodeTexture, NodeTextureState},
-    wgpu::{WgpuCtx, resampler::Lanczos3TextureCache},
+    wgpu::{
+        WgpuCtx,
+        resampler::{Crop, Lanczos3TextureCache},
+    },
 };
-
-use super::Crop;
 
 /// Child node resampled to its exact on-screen size.
 #[derive(Default)]
@@ -33,7 +34,7 @@ impl ResampledChild {
         &mut self,
         wgpu_ctx: &WgpuCtx,
         source: &NodeTextureState,
-        crop: &Crop,
+        crop: Crop,
         dst: Resolution,
         encoder: &mut wgpu::CommandEncoder,
     ) {

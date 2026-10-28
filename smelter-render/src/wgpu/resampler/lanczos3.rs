@@ -1,10 +1,19 @@
 use crate::{
     Resolution,
-    transformations::layout::Crop,
     wgpu::{WgpuCtx, common_pipeline},
 };
 
 const LABEL: Option<&str> = Some("Lanczos3 resampler");
+
+/// When rendering we cut this fragment from texture and stretch it on
+/// the expected position
+#[derive(Debug, Clone, Copy)]
+pub struct Crop {
+    pub top: f32,
+    pub left: f32,
+    pub width: f32,
+    pub height: f32,
+}
 
 /// Ratios up to this use the scaled kernel alone; beyond it a single box pass
 /// reduces the source first, keeping the tap count bounded and the box away from
@@ -229,27 +238,27 @@ impl Lanczos3Resampler {
         }
     }
 
-    /// `false` when `src_rect` maps 1:1 onto whole texels of `dst`, so the source can be sampled
+    /// `false` when `crop` maps 1:1 onto whole texels of `dst`, so the source can be sampled
     /// directly.
-    pub fn needs_resample(src_rect: &Crop, dst: Resolution) -> bool {
-        plan_passes(axis_mappings(src_rect, dst)).is_some()
+    pub fn needs_resample(crop: Crop, dst: Resolution) -> bool {
+        plan_passes(axis_mappings(crop, dst)).is_some()
     }
 
-    /// Resamples `src_rect` of `src` into the whole of `dst`. `src` MUST be a view whose format
+    /// Resamples `crop` of `src` into the whole of `dst`. `src` MUST be a view whose format
     /// matches the source storage, so sRGB textures auto-decode on load and filtering runs in
     /// linear space. `dst` must match the `dst_format` this resampler was built with.
     pub fn resample(
         &self,
         ctx: &WgpuCtx,
         src: &wgpu::TextureView,
-        src_rect: &Crop,
+        crop: Crop,
         dst: &wgpu::TextureView,
         texture_cache: &mut Lanczos3TextureCache,
         encoder: &mut wgpu::CommandEncoder,
     ) {
         let src_res = Resolution::from(src.texture().size());
         let dst_res = Resolution::from(dst.texture().size());
-        let mappings = axis_mappings(src_rect, dst_res);
+        let mappings = axis_mappings(crop, dst_res);
         let levels = mappings.map(|m| m.predecimate_levels());
         let factor = levels.map(|l| 1u32 << l);
 
@@ -343,7 +352,7 @@ impl Lanczos3Resampler {
     }
 }
 
-fn axis_mappings(crop: &Crop, dst: Resolution) -> [AxisMapping; 2] {
+fn axis_mappings(crop: Crop, dst: Resolution) -> [AxisMapping; 2] {
     [
         AxisMapping {
             axis: Axis::Horizontal,
@@ -379,7 +388,7 @@ mod tests {
             width: dst.0,
             height: dst.1,
         };
-        plan_passes(axis_mappings(&crop, dst))
+        plan_passes(axis_mappings(crop, dst))
     }
 
     #[test]
