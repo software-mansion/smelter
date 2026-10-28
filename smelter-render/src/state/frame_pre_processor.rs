@@ -128,12 +128,9 @@ impl FramePreProcessor {
             }
         };
 
-        let mut encoder =
-            self.wgpu_ctx
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("frame pre-processor resample encoder"),
-                });
+        let mut encoder = self
+            .wgpu_ctx
+            .create_command_encoder("frame pre-processor resample encoder");
         resampler.resample(&self.wgpu_ctx, src, dst.view(), &mut encoder);
         self.wgpu_ctx.queue.submit(Some(encoder.finish()));
     }
@@ -164,12 +161,9 @@ impl FramePreProcessor {
     fn download(&self, texture: &wgpu::Texture, resolution: Resolution) -> bytes::Bytes {
         let (buffer, _) = self.download_buffer.as_ref().unwrap();
 
-        let mut encoder =
-            self.wgpu_ctx
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("RGBA download encoder"),
-                });
+        let mut encoder = self
+            .wgpu_ctx
+            .create_command_encoder("RGBA download encoder");
         texture.copy_to_buffer(&mut encoder, buffer);
         self.wgpu_ctx.queue.submit(Some(encoder.finish()));
 

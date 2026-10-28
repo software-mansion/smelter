@@ -159,12 +159,7 @@ impl OutputResampler {
         }
         let resamplers = &ctx.wgpu_ctx.resamplers;
         let target = self.output.ensure_size(ctx.wgpu_ctx, dst);
-        let mut encoder =
-            ctx.wgpu_ctx
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Output resampler"),
-                });
+        let mut encoder = ctx.wgpu_ctx.create_command_encoder("Output resampler");
         match ctx.wgpu_ctx.mode {
             RenderingMode::CpuOptimized => {
                 resamplers.bilinear_linear.resample(

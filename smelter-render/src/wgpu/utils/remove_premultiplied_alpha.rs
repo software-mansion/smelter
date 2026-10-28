@@ -64,11 +64,7 @@ impl RemovePremultipliedAlphaPipeline {
     }
 
     pub fn render(&self, ctx: &WgpuCtx, src_bg: &wgpu::BindGroup, dst_view: &wgpu::TextureView) {
-        let mut encoder = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Remove pre-multiplied alpha encoder"),
-            });
+        let mut encoder = ctx.create_command_encoder("Remove pre-multiplied alpha encoder");
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

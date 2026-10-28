@@ -52,11 +52,7 @@ impl R8FillWithValue {
     }
 
     pub fn fill(&self, ctx: &WgpuCtx, dst: &wgpu::TextureView, value: f32) {
-        let mut encoder = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Fill R8 texture with value command encoder"),
-            });
+        let mut encoder = ctx.create_command_encoder("Fill R8 texture with value command encoder");
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

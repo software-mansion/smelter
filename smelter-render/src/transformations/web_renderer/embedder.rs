@@ -91,8 +91,7 @@ impl EmbeddingHelper {
     ) -> Result<(), EmbedError> {
         let mut encoder = self
             .wgpu_ctx
-            .device
-            .create_command_encoder(&Default::default());
+            .create_command_encoder("Web renderer embed encoder");
 
         for (texture, buffer) in sources.iter().zip(buffers) {
             let Some(texture_state) = texture.state() else {

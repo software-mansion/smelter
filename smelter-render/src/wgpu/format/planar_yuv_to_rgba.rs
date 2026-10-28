@@ -73,11 +73,8 @@ impl PlanarYuvToRgbaConverter {
         src_bg: &wgpu::BindGroup,
         dst_view: &wgpu::TextureView,
     ) {
-        let mut encoder = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Planar YUV 4:2:0 to RGBA color converter encoder"),
-            });
+        let mut encoder =
+            ctx.create_command_encoder("Planar YUV 4:2:0 to RGBA color converter encoder");
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

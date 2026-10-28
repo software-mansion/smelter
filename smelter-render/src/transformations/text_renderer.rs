@@ -11,10 +11,7 @@ use glyphon::{
     fontdb::{Database, Source},
 };
 use tracing::warn;
-use wgpu::{
-    CommandEncoderDescriptor, LoadOp, MultisampleState, Operations, RenderPassColorAttachment,
-    RenderPassDescriptor,
-};
+use wgpu::{LoadOp, MultisampleState, Operations, RenderPassColorAttachment, RenderPassDescriptor};
 
 use crate::{
     Resolution,
@@ -132,13 +129,9 @@ impl TextRendererNode {
             )
             .unwrap();
 
-        let mut encoder =
-            renderer_ctx
-                .wgpu_ctx
-                .device
-                .create_command_encoder(&CommandEncoderDescriptor {
-                    label: Some("Text renderer encoder"),
-                });
+        let mut encoder = renderer_ctx
+            .wgpu_ctx
+            .create_command_encoder("Text renderer encoder");
 
         let target_state = target.ensure_size(renderer_ctx.wgpu_ctx, self.resolution);
         let view = &target_state.view();
