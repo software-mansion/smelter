@@ -302,5 +302,4 @@ fn render_to_texture(
     tree.render(transform, &mut pixmap);
 
     texture.upload_data(&ctx.queue, pixmap.data_mut(), 4);
-    ctx.queue.submit([]);
 }

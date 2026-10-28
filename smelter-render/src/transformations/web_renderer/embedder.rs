@@ -37,10 +37,11 @@ impl EmbeddingHelper {
         &self,
         sources: &[&NodeTexture],
         embedding_data: &EmbeddingData,
+        encoder: &mut wgpu::CommandEncoder,
     ) -> Result<(), EmbedError> {
         match self.embedding_method {
             WebEmbeddingMethod::ChromiumEmbedding => {
-                self.chromium_embedding(sources, embedding_data)?
+                self.chromium_embedding(sources, embedding_data, encoder)?
             }
             WebEmbeddingMethod::NativeEmbeddingOverContent
             | WebEmbeddingMethod::NativeEmbeddingUnderContent => self
@@ -56,8 +57,18 @@ impl EmbeddingHelper {
         &self,
         sources: &[&NodeTexture],
         embedding_data: &EmbeddingData,
+        encoder: &mut wgpu::CommandEncoder,
     ) -> Result<(), EmbedError> {
         self.chromium_sender.ensure_shared_memory(sources)?;
+
+        // Sources are rendered by commands recorded into `encoder`, submit them before the
+        // textures are copied to CPU.
+        let recorded = std::mem::replace(
+            encoder,
+            self.wgpu_ctx.create_command_encoder("Render graph"),
+        );
+        self.wgpu_ctx.queue.submit(Some(recorded.finish()));
+
         self.copy_sources_to_buffers(sources, &embedding_data.buffers)?;
 
         let mut pending_downloads = Vec::new();

@@ -74,6 +74,7 @@ impl ShaderNode {
         sources: &[&NodeTexture],
         target: &mut NodeTexture,
         pts: Duration,
+        encoder: &mut wgpu::CommandEncoder,
     ) {
         let target = target.ensure_size(wgpu_ctx, self.resolution);
 
@@ -84,6 +85,7 @@ impl ShaderNode {
             target,
             pts,
             self.shader.clear_color,
+            encoder,
         )
     }
 }
