@@ -180,12 +180,19 @@ impl NV12Texture {
         })
     }
 
-    pub fn fill_with_color(&self, ctx: &WgpuCtx, color: RGBColor) {
+    pub fn fill_with_color(
+        &self,
+        ctx: &WgpuCtx,
+        color: RGBColor,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
         let (y, u, v) = color.to_yuv();
-        ctx.utils.r8_fill_with_value.fill(ctx, &self.view_y, y);
+        ctx.utils
+            .r8_fill_with_value
+            .fill(ctx, &self.view_y, y, encoder);
         ctx.utils
             .rg8_fill_with_value
-            .fill(ctx, &self.view_uv, [u, v]);
+            .fill(ctx, &self.view_uv, [u, v], encoder);
     }
 }
 
