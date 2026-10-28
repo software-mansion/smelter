@@ -1,3 +1,5 @@
+use smelter_render::scene::Scene;
+
 use crate::common_core::prelude as core;
 use crate::*;
 
@@ -28,7 +30,7 @@ impl TryFrom<Mp4Output> for core::RegisterOutputOptions {
             }) => {
                 let encoder_options = encoder.to_pipeline_options(resolution)?;
                 let output_options = core::RegisterOutputVideoOptions {
-                    initial: initial.try_into()?,
+                    initial: Scene::ComponentTree(initial.try_into()?),
                     end_condition: send_eos_when.unwrap_or_default().try_into()?,
                 };
 

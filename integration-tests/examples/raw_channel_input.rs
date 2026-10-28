@@ -25,7 +25,7 @@ use smelter_core::{
 use smelter_render::{
     FrameData, InputId, OutputId, Resolution,
     error::ErrorStack,
-    scene::{Component, InputStreamComponent},
+    scene::{Component, InputStreamComponent, Scene},
 };
 
 const OUTPUT_PORT: u16 = 8002;
@@ -82,10 +82,10 @@ fn main() {
             audio: None,
         }),
         video: Some(RegisterOutputVideoOptions {
-            initial: Component::InputStream(InputStreamComponent {
+            initial: Scene::ComponentTree(Component::InputStream(InputStreamComponent {
                 id: None,
                 input_id: input_id.clone(),
-            }),
+            })),
             end_condition: PipelineOutputEndCondition::Never,
         }),
         audio: None, // TODO: add audio example

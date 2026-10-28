@@ -11,7 +11,7 @@ use crate::{
         UnregisterRendererError, UpdateSceneError,
     },
     image,
-    scene::{Component, OutputScene, SceneState},
+    scene::{OutputScene, Scene, SceneState},
     shader,
     transformations::{
         image::Image,
@@ -24,7 +24,7 @@ use crate::{
 };
 
 use self::{
-    render_graph::RenderGraph,
+    render_graph::{OutputSpec, RenderGraph},
     render_loop::{populate_inputs, read_outputs, run_transforms},
     renderers::Renderers,
 };
@@ -112,7 +112,7 @@ impl Renderer {
             .unwrap()
             .render_graph
             .unregister_output(output_id);
-        self.0.lock().unwrap().scene.unregister_output(output_id)
+        self.0.lock().unwrap().scene.clear_output_state(output_id)
     }
 
     pub fn register_renderer(
@@ -174,12 +174,12 @@ impl Renderer {
         output_id: OutputId,
         resolution: Resolution,
         output_format: OutputFrameFormat,
-        scene_root: Component,
+        scene: Scene,
     ) -> Result<(), UpdateSceneError> {
         self.0
             .lock()
             .unwrap()
-            .update_scene(output_id, resolution, scene_root, output_format)
+            .update_scene(output_id, resolution, output_format, scene)
     }
 
     pub fn wgpu_ctx(&self) -> Arc<WgpuCtx> {
@@ -248,26 +248,32 @@ impl InnerRenderer {
         &mut self,
         output_id: OutputId,
         resolution: Resolution,
-        scene_root: Component,
         output_format: OutputFrameFormat,
+        scene: Scene,
     ) -> Result<(), UpdateSceneError> {
-        let output = OutputScene {
-            output_id: output_id.clone(),
-            scene_root,
-            resolution,
+        let update = match scene {
+            Scene::ComponentTree(component) => {
+                let output = OutputScene {
+                    output_id: output_id.clone(),
+                    scene_root: component,
+                    resolution,
+                };
+                let node =
+                    self.scene
+                        .update_scene(output, &self.renderers, &self.text_renderer_ctx)?;
+                OutputSpec::RenderTree(node)
+            }
+            Scene::LinkedOutput(primary_output_id) => {
+                self.scene.clear_output_state(&output_id);
+                OutputSpec::LinkedOutput(primary_output_id)
+            }
         };
-        let output_node =
-            self.scene
-                .update_scene(output, &self.renderers, &self.text_renderer_ctx)?;
-        self.render_graph.update(
-            &RenderCtx {
-                wgpu_ctx: &self.wgpu_ctx,
-                text_renderer_ctx: &self.text_renderer_ctx,
-                renderers: &self.renderers,
-            },
-            output_node,
-            output_format,
-        )?;
-        Ok(())
+        let ctx = RenderCtx {
+            wgpu_ctx: &self.wgpu_ctx,
+            text_renderer_ctx: &self.text_renderer_ctx,
+            renderers: &self.renderers,
+        };
+        self.render_graph
+            .update_output(&ctx, output_id, resolution, output_format, update)
     }
 }

@@ -16,7 +16,8 @@ use smelter_core::{
     *,
 };
 use smelter_render::{
-    InputId, OutputId, RendererId, RendererSpec, RenderingMode, YuvPlanes, scene::Component,
+    InputId, OutputId, RendererId, RendererSpec, RenderingMode, YuvPlanes,
+    scene::{Component, Scene},
 };
 use tracing::debug;
 
@@ -195,7 +196,7 @@ impl SingleBenchmarkPass {
             output_id.clone(),
             RegisterEncodedDataOutputOptions {
                 video: Some(RegisterOutputVideoOptions {
-                    initial: root,
+                    initial: Scene::ComponentTree(root),
                     end_condition: PipelineOutputEndCondition::Never,
                 }),
                 audio: Some(audio_output_options(audio_mix)),
@@ -235,7 +236,7 @@ impl SingleBenchmarkPass {
             output_id.clone(),
             RegisterEncodedDataOutputOptions {
                 video: Some(RegisterOutputVideoOptions {
-                    initial: root,
+                    initial: Scene::ComponentTree(root),
                     end_condition: PipelineOutputEndCondition::Never,
                 }),
                 audio: Some(audio_output_options(audio_mix)),
@@ -269,7 +270,7 @@ impl SingleBenchmarkPass {
             output_id.clone(),
             RegisterRawDataOutputOptions {
                 video: Some(RegisterOutputVideoOptions {
-                    initial: root,
+                    initial: Scene::ComponentTree(root),
                     end_condition: PipelineOutputEndCondition::Never,
                 }),
                 audio: Some(audio_output_options(audio_mix)),

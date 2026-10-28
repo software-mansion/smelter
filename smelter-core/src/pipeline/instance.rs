@@ -19,7 +19,7 @@ use smelter_render::{
         ErrorStack, RegisterFontError, RegisterRendererError, RequestKeyframeError,
         UnregisterRendererError, UpdateSceneError,
     },
-    scene::Component,
+    scene::Scene,
 };
 
 use crate::{
@@ -254,7 +254,7 @@ impl Pipeline {
     pub fn update_output(
         &mut self,
         output_id: OutputId,
-        video: Option<Component>,
+        video: Option<Scene>,
         audio: Option<AudioMixerConfig>,
     ) -> Result<(), UpdateSceneError> {
         self.check_output_spec(&output_id, &video, &audio)?;
@@ -290,7 +290,7 @@ impl Pipeline {
     fn check_output_spec(
         &self,
         output_id: &OutputId,
-        video: &Option<Component>,
+        video: &Option<Scene>,
         audio: &Option<AudioMixerConfig>,
     ) -> Result<(), UpdateSceneError> {
         let Some(output) = self.outputs.get(output_id) else {
@@ -308,7 +308,7 @@ impl Pipeline {
     fn update_scene_root(
         &mut self,
         output_id: OutputId,
-        scene_root: Component,
+        scene: Scene,
     ) -> Result<(), UpdateSceneError> {
         let output = self
             .outputs
@@ -327,12 +327,12 @@ impl Pipeline {
             return Err(UpdateSceneError::AudioVideoNotMatching(output_id));
         };
 
-        info!(?output_id, "Update scene {:?}", scene_root);
+        info!(?output_id, "Update scene {:?}", scene);
 
         if let OutputState::NotStarted { video, .. } = &mut output.state {
             // Output is not connected to the renderer yet, update the scene it will start with.
             if let Some(video) = video {
-                video.initial = scene_root;
+                video.initial = scene;
             }
             return Ok(());
         }
@@ -341,7 +341,7 @@ impl Pipeline {
             output_id,
             video_output.resolution,
             video_output.frame_format,
-            scene_root,
+            scene,
         )
     }
 

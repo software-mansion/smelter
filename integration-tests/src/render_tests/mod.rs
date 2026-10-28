@@ -1,6 +1,7 @@
 mod harness;
 
 mod image;
+mod linked_output;
 mod rescaler;
 mod shader;
 mod simple;
@@ -50,6 +51,7 @@ pub fn render_tests() -> Vec<&'static RenderTest> {
     [
         simple::TESTS,
         image::TESTS,
+        linked_output::TESTS,
         rescaler::TESTS,
         shader::TESTS,
         text::TESTS,

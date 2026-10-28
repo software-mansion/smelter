@@ -18,8 +18,8 @@ fn audio_scene() -> serde_json::Value {
 
 fn default_video() -> smelter_core::RegisterOutputVideoOptions {
     smelter_core::RegisterOutputVideoOptions {
-        initial: smelter_render::scene::Component::View(
-            smelter_render::scene::ViewComponent::default(),
+        initial: smelter_render::scene::Scene::ComponentTree(
+            smelter_render::scene::Component::View(smelter_render::scene::ViewComponent::default()),
         ),
         end_condition: smelter_core::PipelineOutputEndCondition::Never,
     }
@@ -461,8 +461,10 @@ fn rtmp_send_eos_when_any_of() {
                 },
             ),
             video: Some(smelter_core::RegisterOutputVideoOptions {
-                initial: smelter_render::scene::Component::View(
-                    smelter_render::scene::ViewComponent::default(),
+                initial: smelter_render::scene::Scene::ComponentTree(
+                    smelter_render::scene::Component::View(
+                        smelter_render::scene::ViewComponent::default(),
+                    ),
                 ),
                 end_condition: smelter_core::PipelineOutputEndCondition::AnyOf(vec![
                     smelter_render::InputId(Arc::from("input_1")),
@@ -519,8 +521,10 @@ fn rtmp_send_eos_when_all_inputs() {
                 },
             ),
             video: Some(smelter_core::RegisterOutputVideoOptions {
-                initial: smelter_render::scene::Component::View(
-                    smelter_render::scene::ViewComponent::default(),
+                initial: smelter_render::scene::Scene::ComponentTree(
+                    smelter_render::scene::Component::View(
+                        smelter_render::scene::ViewComponent::default(),
+                    ),
                 ),
                 end_condition: smelter_core::PipelineOutputEndCondition::AllInputs,
             }),
