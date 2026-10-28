@@ -54,11 +54,7 @@ impl RgbaToNv12Converter {
     pub fn convert(&self, ctx: &WgpuCtx, src_bg: &wgpu::BindGroup, dst_texture: &NV12Texture) {
         let (dst_y_view, dst_uv_view) = dst_texture.views();
 
-        let mut encoder = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("RGBA to NV12 color converter encoder"),
-            });
+        let mut encoder = ctx.create_command_encoder("RGBA to NV12 color converter encoder");
 
         convert_plane(
             ctx,

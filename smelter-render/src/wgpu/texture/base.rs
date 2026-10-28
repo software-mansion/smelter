@@ -119,7 +119,7 @@ impl TextureExt for wgpu::Texture {
 }
 
 fn copy_texture_to_texture(ctx: &WgpuCtx, source: &wgpu::Texture, destination: &wgpu::Texture) {
-    let mut encoder = ctx.device.create_command_encoder(&Default::default());
+    let mut encoder = ctx.create_command_encoder("Copy texture to texture encoder");
 
     encoder.copy_texture_to_texture(
         source.as_image_copy(),

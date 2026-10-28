@@ -40,11 +40,7 @@ impl ReinterpretToSrgb {
 
         self.ensure_size(ctx, size);
 
-        let mut encoder = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("copy static image asset to texture"),
-            });
+        let mut encoder = ctx.create_command_encoder("copy static image asset to texture");
 
         let buffer_desc = wgpu::TexelCopyBufferInfo {
             buffer: &self.buffer,

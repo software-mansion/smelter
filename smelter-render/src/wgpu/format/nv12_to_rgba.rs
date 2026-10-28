@@ -63,11 +63,7 @@ impl Nv12ToRgbaConverter {
     }
 
     pub fn convert(&self, ctx: &WgpuCtx, src_bg: &wgpu::BindGroup, dst_view: &wgpu::TextureView) {
-        let mut encoder = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("NV12 to RGBA color converter encoder"),
-            });
+        let mut encoder = ctx.create_command_encoder("NV12 to RGBA color converter encoder");
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

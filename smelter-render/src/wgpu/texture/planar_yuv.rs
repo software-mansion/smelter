@@ -171,11 +171,8 @@ impl PlanarYuvTextures {
     }
 
     pub fn copy_to_buffers(&self, ctx: &WgpuCtx, buffers: &[Buffer; 3]) {
-        let mut encoder = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("transfer result yuv texture to buffers encoder"),
-            });
+        let mut encoder =
+            ctx.create_command_encoder("transfer result yuv texture to buffers encoder");
 
         for plane in [0, 1, 2] {
             self.planes_textures[plane].copy_to_buffer(&mut encoder, &buffers[plane]);

@@ -59,6 +59,11 @@ impl WgpuCtx {
         }
     }
 
+    pub fn create_command_encoder(&self, label: &str) -> wgpu::CommandEncoder {
+        self.device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) })
+    }
+
     fn check_wgpu_ctx(device: &wgpu::Device, features: wgpu::Features) {
         let expected_features = features | required_wgpu_features();
 

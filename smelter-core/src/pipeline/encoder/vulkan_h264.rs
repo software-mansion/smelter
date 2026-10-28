@@ -155,12 +155,9 @@ impl VideoEncoder for VulkanH264Encoder {
         };
 
         // TODO: avoid this copy
-        let mut command_encoder =
-            self.wgpu_ctx
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Vulkan H264 encoder input copy"),
-                });
+        let mut command_encoder = self
+            .wgpu_ctx
+            .create_command_encoder("Vulkan H264 encoder input copy");
 
         let Some(destination) = input_texture.texture().nv12_texture() else {
             error!("Encoder input texture is not an NV12 texture. Dropping frame.");

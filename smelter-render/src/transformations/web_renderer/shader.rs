@@ -54,7 +54,7 @@ impl WebRendererShader {
         textures: &[(Option<&wgpu::TextureView>, RenderInfo)],
         target: &NodeTextureState,
     ) {
-        let mut encoder = wgpu_ctx.device.create_command_encoder(&Default::default());
+        let mut encoder = wgpu_ctx.create_command_encoder("Web renderer shader encoder");
 
         let mut render_plane =
             |(texture_view, render_info): &(Option<&wgpu::TextureView>, RenderInfo),

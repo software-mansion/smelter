@@ -167,12 +167,7 @@ impl LayoutNode {
         let layouts = self.layout_provider.layouts(pts, &input_resolutions);
         let mut layouts = layouts.flatten(&input_resolutions, output_resolution);
 
-        let mut encoder =
-            ctx.wgpu_ctx
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("layout node"),
-                });
+        let mut encoder = ctx.wgpu_ctx.create_command_encoder("layout node");
 
         self.resample_scaled_children(ctx, sources, &mut layouts, &mut encoder);
 

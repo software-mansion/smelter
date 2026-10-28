@@ -89,7 +89,7 @@ impl ShaderPipeline {
     ) {
         let input_textures_bg = self.input_textures_bg(wgpu_ctx, sources);
 
-        let mut encoder = wgpu_ctx.device.create_command_encoder(&Default::default());
+        let mut encoder = wgpu_ctx.create_command_encoder("Shader node encoder");
         let clear_color = clear_color.unwrap_or(wgpu::Color::TRANSPARENT);
 
         let mut render_plane = |plane_id: i32, clear: bool| {
