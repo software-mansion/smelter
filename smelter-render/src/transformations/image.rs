@@ -186,13 +186,19 @@ impl ImageNode {
         }
 
         let target = target.ensure_size(ctx.wgpu_ctx, resolution);
+        let mut encoder = ctx.wgpu_ctx.create_command_encoder("Image node");
         match self {
-            ImageNode::Bitmap { asset, state, .. } => asset.render(ctx.wgpu_ctx, target, state),
-            ImageNode::Animated { asset, state, .. } => {
-                asset.render(ctx.wgpu_ctx, target, state, pts)
+            ImageNode::Bitmap { asset, state, .. } => {
+                asset.render(ctx.wgpu_ctx, target, state, &mut encoder)
             }
-            ImageNode::Svg { asset, state, .. } => asset.render(ctx.wgpu_ctx, target, state),
+            ImageNode::Animated { asset, state, .. } => {
+                asset.render(ctx.wgpu_ctx, target, state, pts, &mut encoder)
+            }
+            ImageNode::Svg { asset, state, .. } => {
+                asset.render(ctx.wgpu_ctx, target, state, &mut encoder)
+            }
         }
+        ctx.wgpu_ctx.queue.submit(Some(encoder.finish()));
     }
 
     fn resolution(&self) -> Resolution {

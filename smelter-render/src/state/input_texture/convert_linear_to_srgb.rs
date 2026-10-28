@@ -16,8 +16,14 @@ impl RgbToSrgbConverter {
         }
     }
 
-    pub fn convert(&mut self, ctx: &WgpuCtx, dest: &wgpu::Texture) {
-        self.reinterpeter.convert(ctx, self.texture.texture(), dest);
+    pub fn convert(
+        &mut self,
+        ctx: &WgpuCtx,
+        dest: &wgpu::Texture,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
+        self.reinterpeter
+            .convert(ctx, self.texture.texture(), dest, encoder);
     }
 
     pub fn size(&self) -> wgpu::Extent3d {

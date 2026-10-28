@@ -110,8 +110,15 @@ impl FramePreProcessor {
 
     fn upload_and_convert_to_node_texture(&mut self, frame: Frame) {
         self.input_texture.upload(&self.wgpu_ctx, frame);
-        self.input_texture
-            .convert_to_node_texture(&self.wgpu_ctx, &mut self.node_texture);
+        let mut encoder = self
+            .wgpu_ctx
+            .create_command_encoder("Frame pre-processor input conversion");
+        self.input_texture.convert_to_node_texture(
+            &self.wgpu_ctx,
+            &mut self.node_texture,
+            &mut encoder,
+        );
+        self.wgpu_ctx.queue.submit(Some(encoder.finish()));
     }
 
     fn resample_node_texture(&mut self, resolution: Resolution) {

@@ -33,7 +33,12 @@ impl RgbaTextureInput {
         })
     }
 
-    pub fn convert(&self, ctx: &WgpuCtx, dest: &NodeTextureState) {
+    pub fn convert(
+        &self,
+        ctx: &WgpuCtx,
+        dest: &NodeTextureState,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
         match (dest, self.texture.format()) {
             (
                 NodeTextureState::GpuOptimized { texture, .. },
@@ -42,18 +47,20 @@ impl RgbaTextureInput {
                 ctx,
                 &self.bind_group(ctx),
                 texture.srgb_view(),
+                encoder,
             ),
             (NodeTextureState::CpuOptimized { texture, .. }, wgpu::TextureFormat::Rgba8Unorm) => {
                 ctx.utils.linear_rgba_add_premult_alpha.render(
                     ctx,
                     &self.bind_group(ctx),
                     texture.view(),
+                    encoder,
                 )
             }
             (NodeTextureState::WebGl { texture, .. }, wgpu::TextureFormat::Rgba8UnormSrgb) => ctx
                 .utils
                 .srgb_rgba_add_premult_alpha
-                .render(ctx, &self.bind_group(ctx), texture.view()),
+                .render(ctx, &self.bind_group(ctx), texture.view(), encoder),
             (_, format) => {
                 warn!("Unsupported format: {format:?}")
             }
