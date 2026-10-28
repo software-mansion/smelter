@@ -60,7 +60,6 @@ pub enum NodeTextureState {
     GpuOptimized {
         texture: RgbaMultiViewTexture,
         linear_bind_group: wgpu::BindGroup,
-        srgb_bind_group: wgpu::BindGroup,
     },
     CpuOptimized {
         texture: RgbaLinearTexture,
@@ -79,7 +78,6 @@ impl NodeTextureState {
                 let texture = RgbaMultiViewTexture::new(ctx, resolution);
                 NodeTextureState::GpuOptimized {
                     linear_bind_group: texture.new_linear_bind_group(ctx),
-                    srgb_bind_group: texture.new_srgb_bind_group(ctx),
                     texture,
                 }
             }
@@ -106,24 +104,6 @@ impl NodeTextureState {
             NodeTextureState::GpuOptimized {
                 linear_bind_group, ..
             } => linear_bind_group,
-            NodeTextureState::CpuOptimized {
-                linear_bind_group, ..
-            } => linear_bind_group,
-            NodeTextureState::WebGl {
-                srgb_bind_group, ..
-            } => srgb_bind_group,
-        }
-    }
-
-    /// Bind group whose view format matches the texture's storage format, so
-    /// the sampler auto-decodes sRGB bytes to linear values before filtering.
-    /// Use this when the shader needs values in linear space (e.g. correct
-    /// bilinear interpolation).
-    pub fn sampling_bind_group(&self) -> &wgpu::BindGroup {
-        match &self {
-            NodeTextureState::GpuOptimized {
-                srgb_bind_group, ..
-            } => srgb_bind_group,
             NodeTextureState::CpuOptimized {
                 linear_bind_group, ..
             } => linear_bind_group,

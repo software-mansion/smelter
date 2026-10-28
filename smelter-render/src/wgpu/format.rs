@@ -4,7 +4,7 @@ use nv12_to_rgba::Nv12ToRgbaConverter;
 
 use crate::wgpu::format::{
     argb_to_rgba::ArgbToRgbaConverter, bgra_to_rgba::BgraToRgbaConverter,
-    rgba_rescale::RgbaRescaler, rgba_to_nv12::RgbaToNv12Converter,
+    rgba_to_nv12::RgbaToNv12Converter,
 };
 
 use self::{planar_yuv_to_rgba::PlanarYuvToRgbaConverter, rgba_to_yuv::RgbaToYuvConverter};
@@ -20,7 +20,6 @@ mod interleaved_uyvy_to_rgba;
 mod interleaved_yuyv_to_rgba;
 mod nv12_to_rgba;
 mod planar_yuv_to_rgba;
-pub mod rgba_rescale;
 mod rgba_to_nv12;
 mod rgba_to_yuv;
 
@@ -35,8 +34,6 @@ pub struct TextureFormat {
 
     pub rgba_to_yuv: RgbaToYuvConverter,
     pub rgba_to_nv12: RgbaToNv12Converter,
-    pub rgba_rescale_linear: RgbaRescaler,
-    pub rgba_rescale_srgb: RgbaRescaler,
 
     pub single_texture_layout: wgpu::BindGroupLayout,
     pub planar_yuv_layout: wgpu::BindGroupLayout,
@@ -81,16 +78,6 @@ impl TextureFormat {
 
         let rgba_to_yuv = RgbaToYuvConverter::new(device, &single_texture_layout);
         let rgba_to_nv12 = RgbaToNv12Converter::new(device, &single_texture_layout);
-        let rgba_rescale_linear = RgbaRescaler::new(
-            device,
-            &single_texture_layout,
-            wgpu::TextureFormat::Rgba8Unorm,
-        );
-        let rgba_rescale_srgb = RgbaRescaler::new(
-            device,
-            &single_texture_layout,
-            wgpu::TextureFormat::Rgba8UnormSrgb,
-        );
 
         Self {
             planar_yuv_to_rgba_linear,
@@ -102,8 +89,6 @@ impl TextureFormat {
 
             rgba_to_yuv,
             rgba_to_nv12,
-            rgba_rescale_linear,
-            rgba_rescale_srgb,
 
             single_texture_layout,
             planar_yuv_layout,

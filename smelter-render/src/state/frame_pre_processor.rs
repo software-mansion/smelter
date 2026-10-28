@@ -9,19 +9,22 @@ use crate::{
     Frame, RenderingMode, Resolution,
     wgpu::{
         WgpuCtx,
-        texture::{RgbaLinearTexture, RgbaSrgbTexture, TextureExt, utils::pad_to_256},
+        texture::{TextureExt, utils::pad_to_256},
     },
 };
 
-use super::{input_texture::InputTexture, node_texture::NodeTexture};
+use super::{
+    input_texture::InputTexture,
+    node_texture::{NodeTexture, NodeTextureState},
+};
 
 /// Stand-alone single-frame processor. Takes one `Frame` and runs it through
 /// a fixed pipeline:
 ///
 ///   1. upload: `Frame` (source format) -> `input_texture`
 ///   2. convert: `input_texture` -> `node_texture` (RGBA at source resolution)
-///   3. rescale (optional, only when a target resolution is requested):
-///      `node_texture` -> `rescale_texture` (RGBA at target resolution)
+///   3. resample (optional, only when a target resolution is requested):
+///      `node_texture` -> `resampled_texture` (RGBA at target resolution)
 ///   4. output - one of:
 ///        - `process_to_texture`: clone the final RGBA texture and return it
 ///        - `process_to_bytes`: copy the final RGBA texture to
@@ -36,11 +39,10 @@ pub struct FramePreProcessor {
     input_texture: InputTexture,
     /// RGBA texture at the source frame's resolution.
     node_texture: NodeTexture,
-    /// RGBA texture at the caller-requested resolution. Only populated when
-    /// rescaling is needed. Storage format matches `node_texture` (linear for
-    /// `CpuOptimized`, sRGB for `GpuOptimized`/`WebGl`) so the two branches
-    /// of `process_to_*` return bytes with the same encoding.
-    rescale_texture: Option<RescaleTexture>,
+    /// RGBA texture at the caller-requested resolution. Only populated when resampling is needed.
+    /// Same kind of texture as `node_texture`, so the two branches of `process_to_*` return bytes
+    /// with the same encoding.
+    resampled_texture: NodeTexture,
     /// Staging buffer used by `process_to_bytes` to read the final texture
     /// back to CPU memory.
     download_buffer: Option<(wgpu::Buffer, Resolution)>,
@@ -52,7 +54,7 @@ impl FramePreProcessor {
             wgpu_ctx,
             input_texture: InputTexture::new(),
             node_texture: NodeTexture::new(),
-            rescale_texture: None,
+            resampled_texture: NodeTexture::new(),
             download_buffer: None,
         }
     }
@@ -75,8 +77,8 @@ impl FramePreProcessor {
 
         let texture = match resolution {
             Some(resolution) => {
-                self.rescale_node_texture(resolution);
-                self.rescale_texture.as_ref().unwrap().texture()
+                self.resample_node_texture(resolution);
+                self.resampled_texture.state().unwrap().texture()
             }
             None => self.node_texture.state().unwrap().texture(),
         };
@@ -92,11 +94,11 @@ impl FramePreProcessor {
         self.upload_and_convert_to_node_texture(frame);
 
         if let Some(resolution) = resolution {
-            self.rescale_node_texture(resolution);
+            self.resample_node_texture(resolution);
             self.ensure_download_buffer(resolution);
 
-            let rescale_texture = self.rescale_texture.as_ref().unwrap().texture();
-            self.download(rescale_texture, resolution)
+            let resampled_texture = self.resampled_texture.state().unwrap().texture();
+            self.download(resampled_texture, resolution)
         } else {
             let resolution = self.node_texture.resolution().unwrap();
             self.ensure_download_buffer(resolution);
@@ -114,21 +116,26 @@ impl FramePreProcessor {
             .convert_to_node_texture(&self.wgpu_ctx, &mut self.node_texture);
     }
 
-    fn rescale_node_texture(&mut self, resolution: Resolution) {
-        let node_state = self.node_texture.state().unwrap();
-        // Use the bind group that decodes sRGB on sample so bilinear filtering
-        // runs in linear space.
-        let src_bg = node_state.sampling_bind_group();
-
-        let needs_recreate = match &self.rescale_texture {
-            Some(tex) => Resolution::from(tex.size()) != resolution,
-            None => true,
+    fn resample_node_texture(&mut self, resolution: Resolution) {
+        let src = self.node_texture.state().unwrap().view();
+        let dst = self
+            .resampled_texture
+            .ensure_size(&self.wgpu_ctx, resolution);
+        let resampler = match dst {
+            NodeTextureState::CpuOptimized { .. } => &self.wgpu_ctx.resamplers.bilinear_linear,
+            NodeTextureState::GpuOptimized { .. } | NodeTextureState::WebGl { .. } => {
+                &self.wgpu_ctx.resamplers.bilinear_srgb
+            }
         };
-        if needs_recreate {
-            self.rescale_texture = Some(RescaleTexture::new(&self.wgpu_ctx, resolution));
-        }
-        let rescale_texture = self.rescale_texture.as_ref().unwrap();
-        rescale_texture.rescale(&self.wgpu_ctx, src_bg);
+
+        let mut encoder =
+            self.wgpu_ctx
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("frame pre-processor resample encoder"),
+                });
+        resampler.resample(&self.wgpu_ctx, src, dst.view(), &mut encoder);
+        self.wgpu_ctx.queue.submit(Some(encoder.finish()));
     }
 
     fn ensure_download_buffer(&mut self, resolution: Resolution) {
@@ -200,50 +207,5 @@ impl FramePreProcessor {
         buffer.unmap();
 
         writer.into_inner().into()
-    }
-}
-
-enum RescaleTexture {
-    Linear(RgbaLinearTexture),
-    Srgb(RgbaSrgbTexture),
-}
-
-impl RescaleTexture {
-    fn new(ctx: &WgpuCtx, resolution: Resolution) -> Self {
-        match ctx.mode {
-            RenderingMode::CpuOptimized => Self::Linear(RgbaLinearTexture::new(ctx, resolution)),
-            RenderingMode::GpuOptimized | RenderingMode::WebGl => {
-                Self::Srgb(RgbaSrgbTexture::new(ctx, resolution))
-            }
-        }
-    }
-
-    fn texture(&self) -> &wgpu::Texture {
-        match self {
-            Self::Linear(t) => t.texture(),
-            Self::Srgb(t) => t.texture(),
-        }
-    }
-
-    fn view(&self) -> &wgpu::TextureView {
-        match self {
-            Self::Linear(t) => t.view(),
-            Self::Srgb(t) => t.view(),
-        }
-    }
-
-    fn size(&self) -> wgpu::Extent3d {
-        self.texture().size()
-    }
-
-    /// Rescale `src_bg` into `self` using the rescaler that matches this
-    /// texture's format. `src_bg` must sample in linear space so filtering
-    /// is correct; the sRGB variant re-encodes on write.
-    fn rescale(&self, ctx: &WgpuCtx, src_bg: &wgpu::BindGroup) {
-        let rescaler = match self {
-            Self::Linear(_) => &ctx.format.rgba_rescale_linear,
-            Self::Srgb(_) => &ctx.format.rgba_rescale_srgb,
-        };
-        rescaler.convert(ctx, src_bg, self.view());
     }
 }

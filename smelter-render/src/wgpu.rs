@@ -1,6 +1,7 @@
 pub(crate) mod common_pipeline;
 mod ctx;
 pub(crate) mod format;
+pub(crate) mod resampler;
 pub(crate) mod texture;
 pub(crate) mod utils;
 

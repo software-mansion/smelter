@@ -1,15 +1,19 @@
 use crate::{
     Resolution,
-    state::node_texture::{NodeTexture, NodeTextureState},
-    wgpu::{
-        WgpuCtx, WgpuErrorScope,
-        common_pipeline::{self, CreateShaderError},
-    },
+    wgpu::{WgpuCtx, common_pipeline},
 };
 
-use super::Crop;
-
 const LABEL: Option<&str> = Some("Lanczos3 resampler");
+
+/// When rendering we cut this fragment from texture and stretch it on
+/// the expected position
+#[derive(Debug, Clone, Copy)]
+pub struct Crop {
+    pub top: f32,
+    pub left: f32,
+    pub width: f32,
+    pub height: f32,
+}
 
 /// Ratios up to this use the scaled kernel alone; beyond it a single box pass
 /// reduces the source first, keeping the tap count bounded and the box away from
@@ -24,10 +28,11 @@ const MAX_PREDECIMATE_LEVELS: u32 = 16;
 /// of passes covers any up/downscale without mip pyramids. Everything before the
 /// final pass runs in linear Rgba16Float, since a unorm intermediate would clamp
 /// the kernel's negative lobes (~17 dB PSNR loss on upscaled content).
-pub struct ResamplerShader {
+#[derive(Debug)]
+pub struct Lanczos3Resampler {
     pipeline: wgpu::RenderPipeline,
     pipeline_f16: wgpu::RenderPipeline,
-    downsample: wgpu::RenderPipeline,
+    box_reduce: wgpu::RenderPipeline,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -142,11 +147,12 @@ fn plan_passes(mappings: [AxisMapping; 2]) -> Option<Passes> {
     }
 }
 
+/// Intermediate textures reused across frames. Owned by each use site, since the resampler itself
+/// is shared.
 #[derive(Default)]
-pub(super) struct ResampledChild {
+pub struct Lanczos3TextureCache {
     reduced: Option<Intermediate>,
     intermediate: Option<Intermediate>,
-    output: NodeTexture,
 }
 
 /// Cached linear Rgba16Float scratch texture.
@@ -188,53 +194,119 @@ impl Intermediate {
     }
 }
 
-impl ResamplerShader {
-    pub fn new(wgpu_ctx: &WgpuCtx) -> Result<Self, CreateShaderError> {
-        let scope = WgpuErrorScope::push(&wgpu_ctx.device);
-
+impl Lanczos3Resampler {
+    pub fn new(
+        device: &wgpu::Device,
+        texture_layout: &wgpu::BindGroupLayout,
+        dst_format: wgpu::TextureFormat,
+    ) -> Self {
         let make_layout = |immediate_size| {
-            wgpu_ctx
-                .device
-                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: LABEL,
-                    bind_group_layouts: &[Some(&wgpu_ctx.format.single_texture_layout)],
-                    immediate_size,
-                })
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: LABEL,
+                bind_group_layouts: &[Some(texture_layout)],
+                immediate_size,
+            })
         };
 
-        let resample = wgpu_ctx
-            .device
-            .create_shader_module(wgpu::include_wgsl!("resample.wgsl"));
-        let resample_layout = make_layout(16);
+        let lanczos3 = device.create_shader_module(wgpu::include_wgsl!("lanczos3.wgsl"));
+        let lanczos3_layout = make_layout(16);
         let build = |format| {
             common_pipeline::create_render_pipeline(
                 "Lanczos3 resampler",
-                &wgpu_ctx.device,
-                &resample_layout,
-                &resample,
+                device,
+                &lanczos3_layout,
+                &lanczos3,
                 format,
             )
         };
-        let pipeline = build(wgpu_ctx.default_view_format());
+        let pipeline = build(dst_format);
         let pipeline_f16 = build(wgpu::TextureFormat::Rgba16Float);
 
-        let downsample_shader = wgpu_ctx
-            .device
-            .create_shader_module(wgpu::include_wgsl!("downsample.wgsl"));
-        let downsample = common_pipeline::create_render_pipeline(
+        let box_reduce_shader = device.create_shader_module(wgpu::include_wgsl!("box_reduce.wgsl"));
+        let box_reduce = common_pipeline::create_render_pipeline(
             "Lanczos3 resampler (box reduce)",
-            &wgpu_ctx.device,
+            device,
             &make_layout(8),
-            &downsample_shader,
+            &box_reduce_shader,
             wgpu::TextureFormat::Rgba16Float,
         );
 
-        scope.pop()?;
-        Ok(Self {
+        Self {
             pipeline,
             pipeline_f16,
-            downsample,
-        })
+            box_reduce,
+        }
+    }
+
+    /// `false` when `crop` maps 1:1 onto whole texels of `dst`, so the source can be sampled
+    /// directly.
+    pub fn needs_resample(crop: Crop, dst: Resolution) -> bool {
+        plan_passes(axis_mappings(crop, dst)).is_some()
+    }
+
+    /// Resamples `crop` of `src` into the whole of `dst`. `src` MUST be a view whose format
+    /// matches the source storage, so sRGB textures auto-decode on load and filtering runs in
+    /// linear space. `dst` must match the `dst_format` this resampler was built with.
+    pub fn resample(
+        &self,
+        ctx: &WgpuCtx,
+        src: &wgpu::TextureView,
+        crop: Crop,
+        dst: &wgpu::TextureView,
+        texture_cache: &mut Lanczos3TextureCache,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
+        let src_res = Resolution::from(src.texture().size());
+        let dst_res = Resolution::from(dst.texture().size());
+        let mappings = axis_mappings(crop, dst_res);
+        let levels = mappings.map(|m| m.predecimate_levels());
+        let factor = levels.map(|l| 1u32 << l);
+
+        // Box-reduce the ratio above the budget (a 2^k box == k cascaded 2:1 halvings, so one pass
+        // suffices), then the kernel takes the residual.
+        let (src, src_res) = if factor == [1, 1] {
+            texture_cache.reduced = None;
+            (src, src_res)
+        } else {
+            let reduced = Resolution {
+                width: src_res.width.div_ceil(factor[0] as usize),
+                height: src_res.height.div_ceil(factor[1] as usize),
+            };
+            let view = Intermediate::ensure(&mut texture_cache.reduced, ctx, reduced);
+            let bytes = bytemuck::bytes_of(&factor);
+            self.pass(ctx, &self.box_reduce, src, bytes, view, encoder);
+            (view, reduced)
+        };
+
+        let residual = std::array::from_fn(|axis| mappings[axis].on_reduced_source(levels[axis]));
+        let passes = plan_passes(residual)
+            .expect("box reduction leaves a residual scale, axes stay off the direct path");
+
+        // A second axis goes through the f16 intermediate before the last pass.
+        let (view, last) = match passes {
+            Passes::Single(pass) => {
+                texture_cache.intermediate = None;
+                (src, pass)
+            }
+            Passes::Separable { first, second } => {
+                let mid = Intermediate::ensure(
+                    &mut texture_cache.intermediate,
+                    ctx,
+                    first.mapping.output_size(src_res),
+                );
+                let immediates = first.to_immediates();
+                self.pass(ctx, &self.pipeline_f16, src, &immediates, mid, encoder);
+                (mid, second)
+            }
+        };
+        self.pass(
+            ctx,
+            &self.pipeline,
+            view,
+            &last.to_immediates(),
+            dst,
+            encoder,
+        );
     }
 
     fn pass(
@@ -280,103 +352,7 @@ impl ResamplerShader {
     }
 }
 
-impl ResampledChild {
-    pub(super) fn is_needed(crop: &Crop, dst: Resolution) -> bool {
-        plan_passes(axis_mappings(crop, dst)).is_some()
-    }
-
-    /// Crop left for the layout shader: the resampler consumes the entire
-    /// original crop and emits the exact `dst`-sized rect.
-    pub(super) fn output_crop(dst: Resolution) -> Crop {
-        Crop {
-            top: 0.0,
-            left: 0.0,
-            width: dst.width as f32,
-            height: dst.height as f32,
-        }
-    }
-
-    pub(super) fn output_state(&self) -> Option<&NodeTextureState> {
-        self.output.state()
-    }
-
-    pub(super) fn render(
-        &mut self,
-        wgpu_ctx: &WgpuCtx,
-        shader: &ResamplerShader,
-        source: &NodeTextureState,
-        crop: &Crop,
-        dst: Resolution,
-        encoder: &mut wgpu::CommandEncoder,
-    ) {
-        let mappings = axis_mappings(crop, dst);
-        let levels = mappings.map(|m| m.predecimate_levels());
-        let factor = levels.map(|l| 1u32 << l);
-
-        // Box-reduce the ratio above the budget (a 2^k box == k cascaded 2:1
-        // halvings, so one pass suffices), then the kernel takes the residual.
-        let (src_view, src_res) = if factor == [1, 1] {
-            self.reduced = None;
-            (source.view(), source.resolution())
-        } else {
-            let full = source.resolution();
-            let reduced = Resolution {
-                width: full.width.div_ceil(factor[0] as usize),
-                height: full.height.div_ceil(factor[1] as usize),
-            };
-            let view = Intermediate::ensure(&mut self.reduced, wgpu_ctx, reduced);
-            let bytes = bytemuck::bytes_of(&factor);
-            shader.pass(
-                wgpu_ctx,
-                &shader.downsample,
-                source.view(),
-                bytes,
-                view,
-                encoder,
-            );
-            (view, reduced)
-        };
-
-        let residual = std::array::from_fn(|axis| mappings[axis].on_reduced_source(levels[axis]));
-        let passes = plan_passes(residual)
-            .expect("box reduction leaves a residual scale, axes stay off the direct path");
-
-        // A second axis goes through the f16 intermediate before the last pass.
-        let (view, last) = match passes {
-            Passes::Single(pass) => {
-                self.intermediate = None;
-                (src_view, pass)
-            }
-            Passes::Separable { first, second } => {
-                let mid = Intermediate::ensure(
-                    &mut self.intermediate,
-                    wgpu_ctx,
-                    first.mapping.output_size(src_res),
-                );
-                shader.pass(
-                    wgpu_ctx,
-                    &shader.pipeline_f16,
-                    src_view,
-                    &first.to_immediates(),
-                    mid,
-                    encoder,
-                );
-                (mid, second)
-            }
-        };
-        let target = self.output.ensure_size(wgpu_ctx, dst).view();
-        shader.pass(
-            wgpu_ctx,
-            &shader.pipeline,
-            view,
-            &last.to_immediates(),
-            target,
-            encoder,
-        );
-    }
-}
-
-fn axis_mappings(crop: &Crop, dst: Resolution) -> [AxisMapping; 2] {
+fn axis_mappings(crop: Crop, dst: Resolution) -> [AxisMapping; 2] {
     [
         AxisMapping {
             axis: Axis::Horizontal,
@@ -412,7 +388,7 @@ mod tests {
             width: dst.0,
             height: dst.1,
         };
-        plan_passes(axis_mappings(&crop, dst))
+        plan_passes(axis_mappings(crop, dst))
     }
 
     #[test]

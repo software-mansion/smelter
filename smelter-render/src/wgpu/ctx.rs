@@ -8,6 +8,7 @@ use super::{
     CreateWgpuCtxError, WgpuErrorScope,
     common_pipeline::plane::Plane,
     format::TextureFormat,
+    resampler::Resamplers,
     texture::{RgbaLinearTexture, RgbaSrgbTexture},
     utils::TextureUtils,
 };
@@ -20,6 +21,7 @@ pub struct WgpuCtx {
 
     pub format: TextureFormat,
     pub utils: TextureUtils,
+    pub resamplers: Resamplers,
 
     pub uniform_bgl: wgpu::BindGroupLayout,
     pub plane: Plane,
@@ -79,6 +81,7 @@ impl WgpuCtx {
 
         let format = TextureFormat::new(&device);
         let utils = TextureUtils::new(&device, &format);
+        let resamplers = Resamplers::new(&device, &format);
 
         let uniform_bgl = uniform_bind_group_layout(&device);
 
@@ -99,6 +102,7 @@ impl WgpuCtx {
             shader_header,
             format,
             utils,
+            resamplers,
             uniform_bgl,
             plane,
             empty_rgba_linear_texture,
