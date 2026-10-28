@@ -67,7 +67,12 @@ impl TextRendererNode {
         }
     }
 
-    pub(crate) fn render(&mut self, renderer_ctx: &mut RenderCtx, target: &mut NodeTexture) {
+    pub(crate) fn render(
+        &mut self,
+        renderer_ctx: &mut RenderCtx,
+        target: &mut NodeTexture,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
         if self.was_rendered {
             return;
         }
@@ -129,10 +134,6 @@ impl TextRendererNode {
             )
             .unwrap();
 
-        let mut encoder = renderer_ctx
-            .wgpu_ctx
-            .create_command_encoder("Text renderer encoder");
-
         let target_state = target.ensure_size(renderer_ctx.wgpu_ctx, self.resolution);
         let view = &target_state.view();
         {
@@ -156,7 +157,6 @@ impl TextRendererNode {
             text_renderer.render(&atlas, &viewport, &mut pass).unwrap();
         }
 
-        renderer_ctx.wgpu_ctx.queue.submit(Some(encoder.finish()));
         self.was_rendered = true;
     }
 }

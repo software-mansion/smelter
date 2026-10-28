@@ -158,6 +158,7 @@ impl LayoutNode {
         sources: &[&NodeTexture],
         target: &mut NodeTexture,
         pts: Duration,
+        encoder: &mut wgpu::CommandEncoder,
     ) {
         let input_resolutions: Vec<Option<Resolution>> = sources
             .iter()
@@ -167,9 +168,7 @@ impl LayoutNode {
         let layouts = self.layout_provider.layouts(pts, &input_resolutions);
         let mut layouts = layouts.flatten(&input_resolutions, output_resolution);
 
-        let mut encoder = ctx.wgpu_ctx.create_command_encoder("layout node");
-
-        self.resample_scaled_children(ctx, sources, &mut layouts, &mut encoder);
+        self.resample_scaled_children(ctx, sources, &mut layouts, encoder);
 
         let resolved_views: Vec<&wgpu::TextureView> = layouts
             .iter()
@@ -206,10 +205,8 @@ impl LayoutNode {
             layouts,
             &resolved_views,
             target,
-            &mut encoder,
+            encoder,
         );
-
-        ctx.wgpu_ctx.queue.submit(Some(encoder.finish()));
     }
 
     /// Resample scaled child nodes to their exact on-screen size, so the layout shader always

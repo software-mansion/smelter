@@ -35,21 +35,22 @@ impl InnerRenderNode {
         sources: &[&NodeTexture],
         target: &mut NodeTexture,
         pts: Duration,
+        encoder: &mut wgpu::CommandEncoder,
     ) {
         match self {
             InnerRenderNode::Shader(shader) => {
-                shader.render(ctx.wgpu_ctx, sources, target, pts);
+                shader.render(ctx.wgpu_ctx, sources, target, pts, encoder);
             }
-            InnerRenderNode::Web(renderer) => renderer.render(ctx, sources, target),
+            InnerRenderNode::Web(renderer) => renderer.render(ctx, sources, target, encoder),
             InnerRenderNode::Text(renderer) => {
-                renderer.render(ctx, target);
+                renderer.render(ctx, target, encoder);
             }
-            InnerRenderNode::Image(node) => node.render(ctx, target, pts),
+            InnerRenderNode::Image(node) => node.render(ctx, target, pts, encoder),
             InnerRenderNode::InputStreamRef(_) => {
                 // Nothing to do, textures on input nodes should be populated
                 // at the start of render loop
             }
-            InnerRenderNode::Layout(node) => node.render(ctx, sources, target, pts),
+            InnerRenderNode::Layout(node) => node.render(ctx, sources, target, pts, encoder),
         }
     }
 }

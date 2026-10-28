@@ -35,11 +35,12 @@ impl WebRendererNode {
         ctx: &mut RenderCtx,
         sources: &[&NodeTexture],
         target: &mut NodeTexture,
+        encoder: &mut wgpu::CommandEncoder,
     ) {
         self.ensure_buffers(ctx.wgpu_ctx, sources);
         if let Err(err) = self
             .renderer
-            .render(ctx, sources, &self.embedding_data, target)
+            .render(ctx, sources, &self.embedding_data, target, encoder)
         {
             error!(
                 "Failed to run web render: {}",

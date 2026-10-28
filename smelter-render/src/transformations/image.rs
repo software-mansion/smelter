@@ -176,7 +176,13 @@ impl ImageNode {
         }
     }
 
-    pub fn render(&mut self, ctx: &mut RenderCtx, target: &mut NodeTexture, pts: Duration) {
+    pub fn render(
+        &mut self,
+        ctx: &mut RenderCtx,
+        target: &mut NodeTexture,
+        pts: Duration,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
         let resolution = self.resolution();
         if validate_resolution(ctx.wgpu_ctx, resolution).is_err() {
             // Component size does not fit in a texture, render transparent pixel instead.
@@ -186,19 +192,17 @@ impl ImageNode {
         }
 
         let target = target.ensure_size(ctx.wgpu_ctx, resolution);
-        let mut encoder = ctx.wgpu_ctx.create_command_encoder("Image node");
         match self {
             ImageNode::Bitmap { asset, state, .. } => {
-                asset.render(ctx.wgpu_ctx, target, state, &mut encoder)
+                asset.render(ctx.wgpu_ctx, target, state, encoder)
             }
             ImageNode::Animated { asset, state, .. } => {
-                asset.render(ctx.wgpu_ctx, target, state, pts, &mut encoder)
+                asset.render(ctx.wgpu_ctx, target, state, pts, encoder)
             }
             ImageNode::Svg { asset, state, .. } => {
-                asset.render(ctx.wgpu_ctx, target, state, &mut encoder)
+                asset.render(ctx.wgpu_ctx, target, state, encoder)
             }
         }
-        ctx.wgpu_ctx.queue.submit(Some(encoder.finish()));
     }
 
     fn resolution(&self) -> Resolution {

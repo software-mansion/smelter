@@ -66,9 +66,11 @@ pub(super) fn read_outputs(
 }
 
 pub(super) fn run_transforms(ctx: &mut RenderCtx, scene: &mut RenderGraph, pts: Duration) {
+    let mut encoder = ctx.wgpu_ctx.create_command_encoder("Render graph");
     for root in scene.render_trees.values_mut() {
-        render_node(ctx, &scene.inputs, pts, root);
+        render_node(ctx, &scene.inputs, pts, root, &mut encoder);
     }
+    ctx.wgpu_ctx.queue.submit(Some(encoder.finish()));
 }
 
 pub(super) fn render_node(
@@ -76,9 +78,10 @@ pub(super) fn render_node(
     inputs: &HashMap<InputId, (NodeTexture, InputTexture)>,
     pts: Duration,
     node: &mut RenderNode,
+    encoder: &mut wgpu::CommandEncoder,
 ) {
     for child_node in node.children.iter_mut() {
-        render_node(ctx, inputs, pts, child_node);
+        render_node(ctx, inputs, pts, child_node, encoder);
     }
 
     let input_textures: Vec<_> = node
@@ -87,5 +90,5 @@ pub(super) fn render_node(
         .map(|node| node.output_texture(inputs))
         .collect();
     node.renderer
-        .render(ctx, &input_textures, &mut node.output, pts);
+        .render(ctx, &input_textures, &mut node.output, pts, encoder);
 }
