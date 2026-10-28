@@ -61,15 +61,19 @@ impl EmbeddingHelper {
     ) -> Result<(), EmbedError> {
         self.chromium_sender.ensure_shared_memory(sources)?;
 
-        // Sources are rendered by commands recorded into `encoder`, submit them before the
-        // textures are copied to CPU.
+        for (texture, buffer) in sources.iter().zip(&embedding_data.buffers) {
+            let Some(texture_state) = texture.state() else {
+                continue;
+            };
+            texture_state.texture().copy_to_buffer(encoder, buffer);
+        }
+
+        // Buffers can be mapped only after commands that write to them are submitted.
         let recorded = std::mem::replace(
             encoder,
             self.wgpu_ctx.create_command_encoder("Render graph"),
         );
         self.wgpu_ctx.queue.submit(Some(recorded.finish()));
-
-        self.copy_sources_to_buffers(sources, &embedding_data.buffers)?;
 
         let mut pending_downloads = Vec::new();
         for (source_idx, (texture, buffer)) in
@@ -93,26 +97,6 @@ impl EmbeddingHelper {
         self.chromium_sender
             .embed_sources(sources, embedding_data.children_ids.clone())
             .map_err(EmbedError::ChromiumSenderError)
-    }
-
-    fn copy_sources_to_buffers(
-        &self,
-        sources: &[&NodeTexture],
-        buffers: &[wgpu::Buffer],
-    ) -> Result<(), EmbedError> {
-        let mut encoder = self
-            .wgpu_ctx
-            .create_command_encoder("Web renderer embed encoder");
-
-        for (texture, buffer) in sources.iter().zip(buffers) {
-            let Some(texture_state) = texture.state() else {
-                continue;
-            };
-            texture_state.texture().copy_to_buffer(&mut encoder, buffer);
-        }
-        self.wgpu_ctx.queue.submit(Some(encoder.finish()));
-
-        Ok(())
     }
 
     fn copy_buffer_to_shmem(
