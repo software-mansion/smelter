@@ -22,9 +22,11 @@ pub(super) fn populate_inputs(
         input_textures.upload(ctx.wgpu_ctx, frame);
     }
 
+    let mut encoder = ctx.wgpu_ctx.create_command_encoder("Input conversion");
     for (node_texture, input_textures) in scene.inputs.values_mut() {
-        input_textures.convert_to_node_texture(ctx.wgpu_ctx, node_texture);
+        input_textures.convert_to_node_texture(ctx.wgpu_ctx, node_texture, &mut encoder);
     }
+    ctx.wgpu_ctx.queue.submit(Some(encoder.finish()));
 }
 
 pub(super) fn read_outputs(

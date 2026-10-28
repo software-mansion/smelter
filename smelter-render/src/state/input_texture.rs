@@ -200,18 +200,27 @@ impl InputTexture {
         }
     }
 
-    pub fn convert_to_node_texture(&mut self, ctx: &WgpuCtx, dest: &mut NodeTexture) {
+    pub fn convert_to_node_texture(
+        &mut self,
+        ctx: &WgpuCtx,
+        dest: &mut NodeTexture,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
         match &mut self.0 {
             Some(input_texture) => {
-                let dst_state = dest.ensure_size(ctx, input_texture.resolution());
+                let dst = dest.ensure_size(ctx, input_texture.resolution());
                 match input_texture {
-                    InputTextureState::PlanarYuv(state) => state.convert(ctx, dst_state),
-                    InputTextureState::InterleavedUyvy422(state) => state.convert(ctx, dst_state),
-                    InputTextureState::InterleavedYuyv422(state) => state.convert(ctx, dst_state),
-                    InputTextureState::Rgba8Unorm(state) => state.convert(ctx, dst_state),
-                    InputTextureState::Nv12(state) => state.convert(ctx, dst_state),
-                    InputTextureState::Bgra(state) => state.convert(ctx, dst_state),
-                    InputTextureState::Argb(state) => state.convert(ctx, dst_state),
+                    InputTextureState::PlanarYuv(state) => state.convert(ctx, dst, encoder),
+                    InputTextureState::InterleavedUyvy422(state) => {
+                        state.convert(ctx, dst, encoder)
+                    }
+                    InputTextureState::InterleavedYuyv422(state) => {
+                        state.convert(ctx, dst, encoder)
+                    }
+                    InputTextureState::Rgba8Unorm(state) => state.convert(ctx, dst, encoder),
+                    InputTextureState::Nv12(state) => state.convert(ctx, dst, encoder),
+                    InputTextureState::Bgra(state) => state.convert(ctx, dst, encoder),
+                    InputTextureState::Argb(state) => state.convert(ctx, dst, encoder),
                 }
             }
             None => dest.clear(),

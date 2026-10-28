@@ -62,34 +62,34 @@ impl Nv12ToRgbaConverter {
         Self { pipeline, sampler }
     }
 
-    pub fn convert(&self, ctx: &WgpuCtx, src_bg: &wgpu::BindGroup, dst_view: &wgpu::TextureView) {
-        let mut encoder = ctx.create_command_encoder("NV12 to RGBA color converter encoder");
+    pub fn convert(
+        &self,
+        ctx: &WgpuCtx,
+        src_bg: &wgpu::BindGroup,
+        dst_view: &wgpu::TextureView,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("NV12 to RGBA color converter render pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+                view: dst_view,
+                resolve_target: None,
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
 
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("NV12 to RGBA color converter render pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                    view: dst_view,
-                    resolve_target: None,
-                    depth_slice: None,
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
+        render_pass.set_pipeline(&self.pipeline);
+        render_pass.set_bind_group(0, src_bg, &[]);
+        render_pass.set_bind_group(1, &self.sampler.bind_group, &[]);
 
-            render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_bind_group(0, src_bg, &[]);
-            render_pass.set_bind_group(1, &self.sampler.bind_group, &[]);
-
-            ctx.plane.draw(&mut render_pass);
-        }
-
-        ctx.queue.submit(Some(encoder.finish()));
+        ctx.plane.draw(&mut render_pass);
     }
 }
