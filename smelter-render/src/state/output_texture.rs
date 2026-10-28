@@ -58,16 +58,17 @@ impl OutputTexture {
         }
     }
 
-    /// Converts `source` to the output format, or produces a black frame if there is no source.
-    /// Source with a different resolution is stretched to the output resolution.
+    /// Records conversion of `source` to the output format, or of a black frame if there is no
+    /// source. Source with a different resolution is stretched to the output resolution.
     pub fn read<'a>(
         &'a mut self,
         ctx: &RenderCtx,
         source: Option<&NodeTextureState>,
         pts: Duration,
-    ) -> PartialOutputFrame<'a, impl FnOnce() -> Result<Bytes, BufferAsyncError> + 'a> {
+        encoder: &mut wgpu::CommandEncoder,
+    ) -> RecordedOutputFrame<'a> {
         let resolution = self.resolution;
-        let source = source.map(|source| self.resampler.resample(ctx, source, resolution));
+        let source = source.map(|source| self.resampler.resample(ctx, source, resolution, encoder));
         let wgpu_ctx = ctx.wgpu_ctx;
         match &self.kind {
             OutputTextureKind::PlanarYuvTextures(yuv_output) => {
@@ -77,13 +78,13 @@ impl OutputTexture {
                         wgpu_ctx,
                         node.output_texture_bind_group(),
                         yuv_textures,
+                        encoder,
                     ),
-                    None => yuv_textures.fill_with_color(wgpu_ctx, RGBColor::BLACK),
+                    None => yuv_textures.fill_with_color(wgpu_ctx, RGBColor::BLACK, encoder),
                 }
-                PartialOutputFrame::PendingYuvDownload {
-                    pending_download: yuv_output.start_download(wgpu_ctx),
-                    variant: yuv_textures.variant(),
-                    resolution: yuv_output.resolution(),
+                yuv_output.copy_to_buffers(encoder);
+                RecordedOutputFrame::PendingYuvDownload {
+                    output: yuv_output,
                     pts,
                 }
             }
@@ -95,13 +96,18 @@ impl OutputTexture {
                             wgpu::TextureFormat::Rgba8Unorm,
                             wgpu::TextureFormat::Rgba8UnormSrgb,
                         ],
+                        encoder,
                     ),
-                    (Some(node), RenderingMode::CpuOptimized) => node
-                        .texture()
-                        .clone_texture(wgpu_ctx, &[wgpu::TextureFormat::Rgba8Unorm]),
-                    (Some(node), RenderingMode::WebGl) => node
-                        .texture()
-                        .clone_texture(wgpu_ctx, &[wgpu::TextureFormat::Rgba8UnormSrgb]),
+                    (Some(node), RenderingMode::CpuOptimized) => node.texture().clone_texture(
+                        wgpu_ctx,
+                        &[wgpu::TextureFormat::Rgba8Unorm],
+                        encoder,
+                    ),
+                    (Some(node), RenderingMode::WebGl) => node.texture().clone_texture(
+                        wgpu_ctx,
+                        &[wgpu::TextureFormat::Rgba8UnormSrgb],
+                        encoder,
+                    ),
                     (None, RenderingMode::GpuOptimized) => {
                         RgbaMultiViewTexture::new(wgpu_ctx, resolution).texture_owned()
                     }
@@ -112,7 +118,7 @@ impl OutputTexture {
                         RgbaSrgbTexture::new(wgpu_ctx, resolution).texture_owned()
                     }
                 };
-                PartialOutputFrame::CompleteFrame(Frame {
+                RecordedOutputFrame::CompleteFrame(Frame {
                     resolution: texture.size().into(),
                     data: FrameData::Rgba8UnormWgpuTexture(texture),
                     pts,
@@ -125,10 +131,11 @@ impl OutputTexture {
                         wgpu_ctx,
                         node.output_texture_bind_group(),
                         &texture,
+                        encoder,
                     ),
-                    None => texture.fill_with_color(wgpu_ctx, RGBColor::BLACK),
+                    None => texture.fill_with_color(wgpu_ctx, RGBColor::BLACK, encoder),
                 }
-                PartialOutputFrame::CompleteFrame(Frame {
+                RecordedOutputFrame::CompleteFrame(Frame {
                     resolution,
                     data: FrameData::Nv12WgpuTexture(texture.texture().clone()),
                     pts,
@@ -151,6 +158,7 @@ impl OutputResampler {
         ctx: &RenderCtx,
         source: &'a NodeTextureState,
         dst: Resolution,
+        encoder: &mut wgpu::CommandEncoder,
     ) -> &'a NodeTextureState {
         let source_resolution = source.resolution();
         if source_resolution == dst {
@@ -159,14 +167,13 @@ impl OutputResampler {
         }
         let resamplers = &ctx.wgpu_ctx.resamplers;
         let target = self.output.ensure_size(ctx.wgpu_ctx, dst);
-        let mut encoder = ctx.wgpu_ctx.create_command_encoder("Output resampler");
         match ctx.wgpu_ctx.mode {
             RenderingMode::CpuOptimized => {
                 resamplers.bilinear_linear.resample(
                     ctx.wgpu_ctx,
                     source.view(),
                     target.view(),
-                    &mut encoder,
+                    encoder,
                 );
             }
             RenderingMode::GpuOptimized | RenderingMode::WebGl => {
@@ -182,12 +189,37 @@ impl OutputResampler {
                     crop,
                     target.view(),
                     &mut self.texture_cache,
-                    &mut encoder,
+                    encoder,
                 );
             }
         }
-        ctx.wgpu_ctx.queue.submit(Some(encoder.finish()));
         target
+    }
+}
+
+/// Output frame with conversion commands recorded, but not submitted yet.
+pub enum RecordedOutputFrame<'a> {
+    PendingYuvDownload {
+        output: &'a PlanarYuvOutput,
+        pts: Duration,
+    },
+    CompleteFrame(Frame),
+}
+
+impl<'a> RecordedOutputFrame<'a> {
+    /// Commands recorded by `OutputTexture::read` need to be submitted before this method.
+    pub fn start_download(
+        self,
+    ) -> PartialOutputFrame<'a, impl FnOnce() -> Result<Bytes, BufferAsyncError> + 'a> {
+        match self {
+            Self::PendingYuvDownload { output, pts } => PartialOutputFrame::PendingYuvDownload {
+                pending_download: output.start_download(),
+                variant: output.yuv_textures().variant(),
+                resolution: output.resolution(),
+                pts,
+            },
+            Self::CompleteFrame(frame) => PartialOutputFrame::CompleteFrame(frame),
+        }
     }
 }
 
@@ -208,7 +240,8 @@ impl<'a, F> PartialOutputFrame<'a, F>
 where
     F: FnOnce() -> Result<Bytes, BufferAsyncError> + 'a,
 {
-    /// `device.poll` needs to be called after `OutputTexture::read`, but before this method.
+    /// `device.poll` needs to be called after `RecordedOutputFrame::start_download`, but before
+    /// this method.
     pub fn finish(self) -> Option<Frame> {
         match self {
             Self::PendingYuvDownload {
@@ -267,16 +300,18 @@ impl PlanarYuvOutput {
         self.resolution
     }
 
+    pub fn copy_to_buffers(&self, encoder: &mut wgpu::CommandEncoder) {
+        self.textures.copy_to_buffers(&self.buffers, encoder);
+    }
+
+    /// Commands recorded by `copy_to_buffers` need to be submitted before this method.
     pub fn start_download<'a>(
         &'a self,
-        ctx: &WgpuCtx,
     ) -> PlanarYuvPendingDownload<
         'a,
         impl FnOnce() -> Result<bytes::Bytes, BufferAsyncError> + 'a,
         BufferAsyncError,
     > {
-        self.textures.copy_to_buffers(ctx, &self.buffers);
-
         PlanarYuvPendingDownload::new(
             self.download_buffer(self.textures.plane_texture(0).size(), &self.buffers[0]),
             self.download_buffer(self.textures.plane_texture(1).size(), &self.buffers[1]),

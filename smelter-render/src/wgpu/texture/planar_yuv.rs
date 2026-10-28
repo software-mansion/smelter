@@ -170,15 +170,10 @@ impl PlanarYuvTextures {
         ]
     }
 
-    pub fn copy_to_buffers(&self, ctx: &WgpuCtx, buffers: &[Buffer; 3]) {
-        let mut encoder =
-            ctx.create_command_encoder("transfer result yuv texture to buffers encoder");
-
+    pub fn copy_to_buffers(&self, buffers: &[Buffer; 3], encoder: &mut wgpu::CommandEncoder) {
         for plane in [0, 1, 2] {
-            self.planes_textures[plane].copy_to_buffer(&mut encoder, &buffers[plane]);
+            self.planes_textures[plane].copy_to_buffer(encoder, &buffers[plane]);
         }
-
-        ctx.queue.submit(Some(encoder.finish()));
     }
 
     pub fn upload(&mut self, ctx: &WgpuCtx, planes: &YuvPlanes) {
@@ -187,16 +182,21 @@ impl PlanarYuvTextures {
         self.planes_textures[2].upload_data(&ctx.queue, &planes.v_plane, 1);
     }
 
-    pub fn fill_with_color(&self, ctx: &WgpuCtx, color: RGBColor) {
+    pub fn fill_with_color(
+        &self,
+        ctx: &WgpuCtx,
+        color: RGBColor,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
         let (y, u, v) = color.to_yuv();
         ctx.utils
             .r8_fill_with_value
-            .fill(ctx, self.plane_view(0), y);
+            .fill(ctx, self.plane_view(0), y, encoder);
         ctx.utils
             .r8_fill_with_value
-            .fill(ctx, self.plane_view(1), u);
+            .fill(ctx, self.plane_view(1), u, encoder);
         ctx.utils
             .r8_fill_with_value
-            .fill(ctx, self.plane_view(2), v);
+            .fill(ctx, self.plane_view(2), v, encoder);
     }
 }

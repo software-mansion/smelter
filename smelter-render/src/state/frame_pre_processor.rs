@@ -64,7 +64,8 @@ impl FramePreProcessor {
         frame: Frame,
         resolution: Option<Resolution>,
     ) -> wgpu::Texture {
-        self.upload_and_convert_to_node_texture(frame);
+        let mut encoder = self.wgpu_ctx.create_command_encoder("Frame pre-processor");
+        self.upload_and_convert_to_node_texture(frame, &mut encoder);
 
         let output_texture_views: &'static [wgpu::TextureFormat] = match self.wgpu_ctx.mode {
             RenderingMode::GpuOptimized => &[
@@ -77,13 +78,15 @@ impl FramePreProcessor {
 
         let texture = match resolution {
             Some(resolution) => {
-                self.resample_node_texture(resolution);
+                self.resample_node_texture(resolution, &mut encoder);
                 self.resampled_texture.state().unwrap().texture()
             }
             None => self.node_texture.state().unwrap().texture(),
         };
 
-        texture.clone_texture(&self.wgpu_ctx, output_texture_views)
+        let texture = texture.clone_texture(&self.wgpu_ctx, output_texture_views, &mut encoder);
+        self.wgpu_ctx.queue.submit(Some(encoder.finish()));
+        texture
     }
 
     pub fn process_to_bytes(
@@ -91,37 +94,39 @@ impl FramePreProcessor {
         frame: Frame,
         resolution: Option<Resolution>,
     ) -> bytes::Bytes {
-        self.upload_and_convert_to_node_texture(frame);
+        let mut encoder = self.wgpu_ctx.create_command_encoder("Frame pre-processor");
+        self.upload_and_convert_to_node_texture(frame, &mut encoder);
 
         if let Some(resolution) = resolution {
-            self.resample_node_texture(resolution);
+            self.resample_node_texture(resolution, &mut encoder);
             self.ensure_download_buffer(resolution);
 
             let resampled_texture = self.resampled_texture.state().unwrap().texture();
-            self.download(resampled_texture, resolution)
+            self.download(resampled_texture, resolution, encoder)
         } else {
             let resolution = self.node_texture.resolution().unwrap();
             self.ensure_download_buffer(resolution);
 
             let node_texture = self.node_texture.state().unwrap().texture();
-            self.download(node_texture, resolution)
+            self.download(node_texture, resolution, encoder)
         }
     }
 
-    fn upload_and_convert_to_node_texture(&mut self, frame: Frame) {
+    fn upload_and_convert_to_node_texture(
+        &mut self,
+        frame: Frame,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
         self.input_texture.upload(&self.wgpu_ctx, frame);
-        let mut encoder = self
-            .wgpu_ctx
-            .create_command_encoder("Frame pre-processor input conversion");
-        self.input_texture.convert_to_node_texture(
-            &self.wgpu_ctx,
-            &mut self.node_texture,
-            &mut encoder,
-        );
-        self.wgpu_ctx.queue.submit(Some(encoder.finish()));
+        self.input_texture
+            .convert_to_node_texture(&self.wgpu_ctx, &mut self.node_texture, encoder);
     }
 
-    fn resample_node_texture(&mut self, resolution: Resolution) {
+    fn resample_node_texture(
+        &mut self,
+        resolution: Resolution,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
         let src = self.node_texture.state().unwrap().view();
         let dst = self
             .resampled_texture
@@ -133,11 +138,7 @@ impl FramePreProcessor {
             }
         };
 
-        let mut encoder = self
-            .wgpu_ctx
-            .create_command_encoder("frame pre-processor resample encoder");
-        resampler.resample(&self.wgpu_ctx, src, dst.view(), &mut encoder);
-        self.wgpu_ctx.queue.submit(Some(encoder.finish()));
+        resampler.resample(&self.wgpu_ctx, src, dst.view(), encoder);
     }
 
     fn ensure_download_buffer(&mut self, resolution: Resolution) {
@@ -163,12 +164,14 @@ impl FramePreProcessor {
         }
     }
 
-    fn download(&self, texture: &wgpu::Texture, resolution: Resolution) -> bytes::Bytes {
+    fn download(
+        &self,
+        texture: &wgpu::Texture,
+        resolution: Resolution,
+        mut encoder: wgpu::CommandEncoder,
+    ) -> bytes::Bytes {
         let (buffer, _) = self.download_buffer.as_ref().unwrap();
 
-        let mut encoder = self
-            .wgpu_ctx
-            .create_command_encoder("RGBA download encoder");
         texture.copy_to_buffer(&mut encoder, buffer);
         self.wgpu_ctx.queue.submit(Some(encoder.finish()));
 
