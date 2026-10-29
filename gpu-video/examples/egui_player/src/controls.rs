@@ -39,8 +39,8 @@ impl Controls {
                                         "{:.2}s | frame {} | {}x{}",
                                         playback.time.as_secs_f64(),
                                         playback.frame_number,
-                                        current.frame.width(),
-                                        current.frame.height(),
+                                        current.data.width(),
+                                        current.data.height(),
                                     ),
                                 );
                             }

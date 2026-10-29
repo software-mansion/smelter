@@ -1,7 +1,4 @@
-use std::{
-    sync::mpsc::{self, Receiver},
-    time::Duration,
-};
+use std::sync::mpsc::Receiver;
 
 use egui_wgpu::wgpu;
 use gpu_video::{
@@ -10,11 +7,6 @@ use gpu_video::{
 };
 
 use crate::demuxer::Chunk;
-
-pub struct FrameWithPts {
-    pub frame: VideoTexture,
-    pub pts: Duration,
-}
 
 pub struct Decoder {
     decoder: WgpuTexturesDecoderH264,
@@ -50,11 +42,7 @@ impl Decoder {
         self.decoder.flush().unwrap();
     }
 
-    pub fn try_frame(&self) -> Option<FrameWithPts> {
-        let frame = self.frame_receiver.try_recv().ok()?;
-        Some(FrameWithPts {
-            frame: frame.data,
-            pts: Duration::from_micros(frame.metadata.pts.unwrap()),
-        })
+    pub fn try_frame(&self) -> Option<OutputFrame<VideoTexture>> {
+        self.frame_receiver.try_recv().ok()
     }
 }

@@ -6,24 +6,24 @@ use std::{
 
 use eframe::egui;
 use egui_wgpu::{WgpuConfiguration, WgpuSetupExisting, wgpu};
-use gpu_video::{VideoAdapterExt, parameters::VideoDeviceDescriptor};
+use gpu_video::{OutputFrame, VideoAdapterExt, VideoTexture, parameters::VideoDeviceDescriptor};
 
 use controls::Controls;
-use decoder::{Decoder, FrameWithPts};
+use decoder::Decoder;
 use demuxer::Mp4Demuxer;
-use video_renderer::{VideoCallback, VideoRenderer};
+use video_view::VideoView;
 
 mod controls;
 mod decoder;
 mod demuxer;
-mod video_renderer;
+mod video_view;
 
 struct Playback {
     demuxer: Mp4Demuxer,
     decoder: Decoder,
     eof: bool,
-    current_frame: Option<FrameWithPts>,
-    frame_buffer: VecDeque<FrameWithPts>,
+    current_frame: Option<OutputFrame<VideoTexture>>,
+    frame_buffer: VecDeque<OutputFrame<VideoTexture>>,
     frame_number: u64,
     time: Duration,
 }
@@ -43,7 +43,7 @@ impl Playback {
         }
     }
 
-    fn advance(&mut self, elapsed: Duration) {
+    fn advance(&mut self, elapsed: Duration) -> bool {
         self.time += elapsed;
 
         while self.frame_buffer.len() < Self::FRAME_BUFFER_SIZE {
@@ -53,13 +53,18 @@ impl Playback {
             self.frame_buffer.push_back(frame);
         }
 
-        if let Some(next_frame) = self.frame_buffer.pop_front_if(|f| f.pts <= self.time) {
-            self.frame_number += 1;
-            self.current_frame = Some(next_frame);
-        }
+        let Some(next_frame) = self
+            .frame_buffer
+            .pop_front_if(|f| Duration::from_micros(f.metadata.pts.unwrap()) <= self.time)
+        else {
+            return false;
+        };
+        self.frame_number += 1;
+        self.current_frame = Some(next_frame);
+        true
     }
 
-    fn next_frame(&mut self) -> Option<FrameWithPts> {
+    fn next_frame(&mut self) -> Option<OutputFrame<VideoTexture>> {
         loop {
             if let Some(frame) = self.decoder.try_frame() {
                 return Some(frame);
@@ -81,8 +86,8 @@ impl Playback {
 }
 
 struct App {
-    device: wgpu::Device,
-    queue: wgpu::Queue,
+    render_state: egui_wgpu::RenderState,
+    video_view: VideoView,
     controls: Controls,
     playback: Option<Playback>,
     last_tick: Instant,
@@ -90,17 +95,11 @@ struct App {
 
 impl App {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let render_state = cc.wgpu_render_state.as_ref().unwrap();
-        let video_renderer = VideoRenderer::new(&render_state.device, render_state.target_format);
-        render_state
-            .renderer
-            .write()
-            .callback_resources
-            .insert(video_renderer);
+        let render_state = cc.wgpu_render_state.clone().unwrap();
 
         Self {
-            device: render_state.device.clone(),
-            queue: render_state.queue.clone(),
+            video_view: VideoView::new(&render_state.device),
+            render_state,
             controls: Controls { paused: false },
             playback: None,
             last_tick: Instant::now(),
@@ -109,7 +108,7 @@ impl App {
 
     fn open_file(&mut self, path: PathBuf) {
         let demuxer = Mp4Demuxer::new(&path);
-        let decoder = Decoder::new(&self.device, &self.queue);
+        let decoder = Decoder::new(&self.render_state.device, &self.render_state.queue);
         self.playback = Some(Playback::new(demuxer, decoder));
         self.last_tick = Instant::now();
     }
@@ -121,8 +120,10 @@ impl App {
 
         if let Some(playback) = &mut self.playback
             && !self.controls.paused
+            && playback.advance(elapsed)
         {
-            playback.advance(elapsed);
+            let frame = playback.current_frame.as_ref().unwrap();
+            self.video_view.update(&self.render_state, frame);
         }
     }
 }
@@ -134,29 +135,7 @@ impl eframe::App for App {
         egui::CentralPanel::no_frame()
             .frame(egui::Frame::new().fill(egui::Color32::BLACK))
             .show(ui, |ui| {
-                if let Some(current_frame) = self
-                    .playback
-                    .as_ref()
-                    .and_then(|p| p.current_frame.as_ref())
-                {
-                    let frame = &current_frame.frame;
-                    let available = ui.max_rect();
-                    let scale = f32::min(
-                        available.width() / frame.width() as f32,
-                        available.height() / frame.height() as f32,
-                    );
-                    let rect = egui::Rect::from_center_size(
-                        available.center(),
-                        egui::vec2(frame.width() as f32, frame.height() as f32) * scale,
-                    );
-
-                    ui.painter().add(egui_wgpu::Callback::new_paint_callback(
-                        rect,
-                        VideoCallback {
-                            frame: frame.clone(),
-                        },
-                    ));
-                }
+                self.video_view.ui(ui);
 
                 if let Some(path) = self.controls.ui(ui, self.playback.as_ref()) {
                     self.open_file(path);
