@@ -15,6 +15,7 @@ members = [
     # Libraries
     "decklink",
     "gpu-video",
+    "gpu-video/examples/egui_player",
     "libcef",
     "rtmp",
 
