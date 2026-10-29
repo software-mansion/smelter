@@ -48,7 +48,11 @@ impl RtmpConnectionOptions {
 
         let mut path_segments = url.path().trim_start_matches('/').splitn(2, '/');
         let app = path_segments.next().unwrap_or("").to_string();
-        let stream_key = path_segments.next().unwrap_or("").to_string();
+        let path_key = path_segments.next().unwrap_or("");
+        let stream_key = match url.query() {
+            Some(query) => format!("{path_key}?{query}"),
+            None => path_key.to_string(),
+        };
 
         Ok(RtmpConnectionOptions {
             host: host.to_string(),
@@ -132,4 +136,28 @@ pub enum RtmpConnectionUrlError {
 
     #[error("Failed to resolve host: {0}")]
     HostLookupFailed(String, io::Error),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stream_key_keeps_query_string() {
+        let options = RtmpConnectionOptions::from_url(
+            "rtmps://live.example.com:443/rtmp/123456?s_bl=1&s_vt=ig&a=Ab6I",
+        )
+        .unwrap();
+
+        assert_eq!(options.app, "rtmp");
+        assert_eq!(options.stream_key, "123456?s_bl=1&s_vt=ig&a=Ab6I");
+    }
+
+    #[test]
+    fn stream_key_without_query_string_is_unchanged() {
+        let options =
+            RtmpConnectionOptions::from_url("rtmp://live.example.com/app/FB-123-0-Abc").unwrap();
+
+        assert_eq!(options.stream_key, "FB-123-0-Abc");
+    }
 }
