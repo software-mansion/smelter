@@ -5,9 +5,9 @@ fn main() {
     use gpu_video::{
         EncodedInputChunk, VideoInstance,
         parameters::{
-            AnyEncoderParameters, RateControl, ScalingAlgorithm, TranscoderOutputParameters,
-            TranscoderParameters, VideoAdapterDescriptor, VideoDeviceDescriptor,
-            VideoInstanceDescriptor,
+            AnyEncoderParameters, BitstreamFormatH264, RateControl, ScalingAlgorithm,
+            TranscoderInputParameters, TranscoderOutputParameters, TranscoderParameters,
+            VideoAdapterDescriptor, VideoDeviceDescriptor, VideoInstanceDescriptor,
         },
     };
 
@@ -82,7 +82,10 @@ fn main() {
     let mut transcoder = video_device
         .create_transcoder(
             TranscoderParameters {
-                input_framerate: 30.into(),
+                input_parameters: TranscoderInputParameters {
+                    framerate: 30.into(),
+                    bitstream_format: BitstreamFormatH264::AnnexB,
+                },
                 output_parameters: vec![
                     TranscoderOutputParameters {
                         output_width,

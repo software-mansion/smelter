@@ -66,6 +66,7 @@ impl VulkanTranscoder {
             Arc::new(device.decoding_device()?),
             DecoderParameters {
                 corrupted_state_handling: Default::default(),
+                bitstream_format: config.input_parameters.bitstream_format,
                 usage_flags: DecoderUsage::Transcoding,
                 max_in_flight_submissions: max_in_flight,
             },
@@ -228,7 +229,7 @@ fn encoder_params_from_config(
                     params,
                     c.output_width,
                     c.output_height,
-                    config.input_framerate,
+                    config.input_parameters.framerate,
                     config.max_in_flight_submissions,
                 )
                 .map(AnyFullEncoderParameters::H264),
@@ -238,7 +239,7 @@ fn encoder_params_from_config(
                     params,
                     c.output_width,
                     c.output_height,
-                    config.input_framerate,
+                    config.input_parameters.framerate,
                     config.max_in_flight_submissions,
                 )
                 .map(AnyFullEncoderParameters::H265),

@@ -205,7 +205,7 @@ impl Transcoder {
                 Backend::new(
                     &device,
                     p,
-                    params.input_framerate,
+                    params.input_parameters.framerate,
                     max_in_flight_submissions,
                     Box::new(move |chunk| {
                         let Ok(mut callback) = on_chunk_callback.lock() else {
@@ -234,6 +234,7 @@ impl Transcoder {
         let decoder = VTDecoderH264::new_pixel_buffers(
             DecoderParameters {
                 corrupted_state_handling: Default::default(),
+                bitstream_format: params.input_parameters.bitstream_format,
                 usage_flags: DecoderUsage::Transcoding,
                 max_in_flight_submissions,
             },

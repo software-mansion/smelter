@@ -27,7 +27,7 @@ use crate::{
     frame_sorter::{DecodeResult, FrameSorter},
     parser::{
         decoder_instructions::DecoderInstruction,
-        h264::{AccessUnit, H264Parser},
+        h264::{AccessUnit, BitstreamFormatH264, H264Parser, ParserOptionsH264},
         reference_manager::DecodeInformation,
     },
 };
@@ -90,7 +90,10 @@ impl<T: Send + 'static> VTDecoderH264<T> {
         metal_compatible_output: bool,
     ) -> Self {
         let event_processor = H264EventProcessor::new(
-            H264Parser::new_avcc_output(),
+            H264Parser::new(ParserOptionsH264 {
+                input_format: parameters.bitstream_format,
+                output_format: BitstreamFormatH264::Avcc,
+            }),
             parameters.corrupted_state_handling,
         );
         let max_in_flight = parameters.max_in_flight_submissions as u64;

@@ -6,12 +6,14 @@ pub mod parameters {
         VideoParameters,
     };
     pub use crate::instance::VideoInstanceDescriptor;
+    pub use crate::parser::h264::{BitstreamFormatH264, ParserOptionsH264};
 
     pub type EncoderOutputParametersH264 = crate::device::EncoderOutputParameters<H264Profile>;
 
     #[cfg(feature = "transcoder")]
     pub use crate::transcoder::{
-        AnyEncoderParameters, TranscoderOutputParameters, TranscoderParameters,
+        AnyEncoderParameters, TranscoderInputParameters, TranscoderOutputParameters,
+        TranscoderParameters,
     };
 
     #[cfg(feature = "wgpu")]
