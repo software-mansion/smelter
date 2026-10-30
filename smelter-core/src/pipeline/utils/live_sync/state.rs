@@ -26,8 +26,9 @@ const DISCONTINUITY_THRESHOLD: Duration = Duration::from_secs(10);
 const MIN_QUEUE_HEADROOM: Duration = Duration::from_millis(100);
 
 /// The whole mutable state of an input, cross-track and per-track, kept behind one mutex;
-/// [`LiveSync`] and [`LiveSyncTrack`] are thin handles to it. Decisions
-/// ([`start_track_decision`], [`correct_mode_decision`]) read it and are applied here.
+/// [`LiveSync`](super::LiveSync) and [`LiveSyncTrack`](super::track::LiveSyncTrack) are thin
+/// handles to it. Decisions ([`start_track_decision`], [`correct_mode_decision`]) read it and are
+/// applied here.
 pub(super) struct SharedState<B: LiveSyncBuffer> {
     pub options: LiveSyncOptions,
     /// Instant that output timestamps are measured from.
