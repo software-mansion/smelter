@@ -1,7 +1,4 @@
-use std::{
-    num::NonZero,
-    sync::{Arc, mpsc},
-};
+use std::{num::NonZero, sync::Arc};
 
 use gpu_video::{
     InputFrame, VideoDeviceExt, WgpuTexturesEncoderH264,
@@ -20,9 +17,8 @@ use super::{VideoEncoder, VideoEncoderConfig};
 
 pub struct VulkanH264Encoder {
     encoder: WgpuTexturesEncoderH264,
-    chunk_receiver: mpsc::Receiver<gpu_video::EncodedOutputChunk<Vec<u8>>>,
+    chunk_receiver: crossbeam_channel::Receiver<EncodedOutputChunk>,
     wgpu_ctx: Arc<WgpuCtx>,
-    bitstream_format: H264BitstreamFormat,
 }
 
 impl VideoEncoder for VulkanH264Encoder {
@@ -108,12 +104,16 @@ impl VideoEncoder for VulkanH264Encoder {
             encoder_params.output_parameters.inline_stream_params = Some(false);
         }
 
-        let (chunk_sender, chunk_receiver) = mpsc::channel();
+        let (chunk_sender, chunk_receiver) = crossbeam_channel::unbounded();
+        let bitstream_format = options.bitstream_format;
         let encoder = device.create_wgpu_textures_encoder_h264(
             &ctx.wgpu_ctx.queue,
             encoder_params,
             move |chunk| {
-                if chunk_sender.send(chunk).is_err() {
+                if chunk_sender
+                    .send(output_chunk(chunk, bitstream_format))
+                    .is_err()
+                {
                     error!("Vulkan H264 encoder dropped, discarding encoded chunk.");
                 }
             },
@@ -130,7 +130,6 @@ impl VideoEncoder for VulkanH264Encoder {
                 encoder,
                 chunk_receiver,
                 wgpu_ctx: ctx.wgpu_ctx.clone(),
-                bitstream_format: options.bitstream_format,
             },
             VideoEncoderConfig {
                 resolution: options.resolution,
@@ -143,14 +142,14 @@ impl VideoEncoder for VulkanH264Encoder {
     fn encode(&mut self, frame: Frame, force_keyframe: bool) -> Vec<EncodedOutputChunk> {
         let FrameData::Nv12WgpuTexture(texture) = frame.data else {
             error!("Unsupported pixel format {:?}. Dropping frame.", frame.data);
-            return self.collect_chunks();
+            return Vec::new();
         };
 
         let input_texture = match self.encoder.input_texture() {
             Ok(texture) => texture,
             Err(err) => {
                 error!("Failed to get encoder input texture: {err}. Dropping frame.");
-                return self.collect_chunks();
+                return Vec::new();
             }
         };
 
@@ -164,7 +163,7 @@ impl VideoEncoder for VulkanH264Encoder {
 
         let Some(destination) = input_texture.texture().nv12_texture() else {
             error!("Encoder input texture is not an NV12 texture. Dropping frame.");
-            return self.collect_chunks();
+            return Vec::new();
         };
         command_encoder.copy_texture_to_texture(
             texture.as_image_copy(),
@@ -183,36 +182,35 @@ impl VideoEncoder for VulkanH264Encoder {
         if let Err(err) = result {
             error!("Encoder error: {err}.");
         }
-
-        self.collect_chunks()
+        Vec::new()
     }
 
     fn flush(&mut self) -> Vec<EncodedOutputChunk> {
         if let Err(err) = self.encoder.flush() {
             error!("Failed to flush encoder: {err}.");
         }
-        self.collect_chunks()
+        self.chunk_receiver.try_iter().collect()
+    }
+
+    fn chunk_receiver(&self) -> Option<&crossbeam_channel::Receiver<EncodedOutputChunk>> {
+        Some(&self.chunk_receiver)
     }
 }
 
-impl VulkanH264Encoder {
-    fn collect_chunks(&mut self) -> Vec<EncodedOutputChunk> {
-        self.chunk_receiver
-            .try_iter()
-            .map(|chunk| {
-                let data = if self.bitstream_format == H264BitstreamFormat::Avcc {
-                    annexb_to_avcc(&chunk.data)
-                } else {
-                    chunk.data.into()
-                };
-                EncodedOutputChunk {
-                    data,
-                    pts: Timestamp::from_micros(chunk.pts.unwrap_or(0) as i64),
-                    dts: None,
-                    is_keyframe: chunk.is_keyframe,
-                    kind: MediaKind::Video(VideoCodec::H264),
-                }
-            })
-            .collect()
+fn output_chunk(
+    chunk: gpu_video::EncodedOutputChunk<Vec<u8>>,
+    bitstream_format: H264BitstreamFormat,
+) -> EncodedOutputChunk {
+    let data = if bitstream_format == H264BitstreamFormat::Avcc {
+        annexb_to_avcc(&chunk.data)
+    } else {
+        chunk.data.into()
+    };
+    EncodedOutputChunk {
+        data,
+        pts: Timestamp::from_micros(chunk.pts.unwrap_or(0) as i64),
+        dts: None,
+        is_keyframe: chunk.is_keyframe,
+        kind: MediaKind::Video(VideoCodec::H264),
     }
 }
