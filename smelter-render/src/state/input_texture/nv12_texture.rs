@@ -92,7 +92,12 @@ impl NV12Input {
         }
     }
 
-    pub fn convert(&mut self, ctx: &WgpuCtx, dest: &NodeTextureState) {
+    pub fn convert(
+        &mut self,
+        ctx: &WgpuCtx,
+        dest: &NodeTextureState,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
         match dest {
             NodeTextureState::GpuOptimized { texture, .. } => {
                 // write to sRGB texture as if it was linear
@@ -100,12 +105,16 @@ impl NV12Input {
                     ctx,
                     &self.bind_group,
                     texture.linear_view(),
+                    encoder,
                 );
             }
             NodeTextureState::CpuOptimized { texture, .. } => {
-                ctx.format
-                    .nv12_to_rgba_linear
-                    .convert(ctx, &self.bind_group, texture.view());
+                ctx.format.nv12_to_rgba_linear.convert(
+                    ctx,
+                    &self.bind_group,
+                    texture.view(),
+                    encoder,
+                );
             }
             NodeTextureState::WebGl { texture, .. } => {
                 let Some(color_space_converter) = &mut self.color_space_converter else {
@@ -117,8 +126,9 @@ impl NV12Input {
                     ctx,
                     &self.bind_group,
                     color_space_converter.texture.view(),
+                    encoder,
                 );
-                color_space_converter.convert(ctx, texture.texture());
+                color_space_converter.convert(ctx, texture.texture(), encoder);
             }
         }
     }

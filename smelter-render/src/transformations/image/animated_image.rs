@@ -148,6 +148,7 @@ impl AnimatedAsset {
         target: &NodeTextureState,
         state: &mut AnimatedNodeState,
         pts: Duration,
+        encoder: &mut wgpu::CommandEncoder,
     ) {
         let animation_pts = Duration::from_nanos(
             ((pts.as_nanos() - state.start_pts.as_nanos()) % self.animation_duration.as_nanos())
@@ -163,12 +164,12 @@ impl AnimatedAsset {
             AnimationFrame::Srgb { bg, .. } => {
                 ctx.utils
                     .srgb_rgba_add_premult_alpha
-                    .render(ctx, bg, target.view());
+                    .render(ctx, bg, target.view(), encoder);
             }
             AnimationFrame::Linear { bg, .. } => {
                 ctx.utils
                     .linear_rgba_add_premult_alpha
-                    .render(ctx, bg, target.view());
+                    .render(ctx, bg, target.view(), encoder);
             }
         }
     }

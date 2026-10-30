@@ -51,18 +51,18 @@ impl RgbaToNv12Converter {
         }
     }
 
-    pub fn convert(&self, ctx: &WgpuCtx, src_bg: &wgpu::BindGroup, dst_texture: &NV12Texture) {
+    pub fn convert(
+        &self,
+        ctx: &WgpuCtx,
+        src_bg: &wgpu::BindGroup,
+        dst_texture: &NV12Texture,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
         let (dst_y_view, dst_uv_view) = dst_texture.views();
-
-        let mut encoder = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("RGBA to NV12 color converter encoder"),
-            });
 
         convert_plane(
             ctx,
-            &mut encoder,
+            encoder,
             &self.y_pipeline,
             &self.sampler.bind_group,
             src_bg,
@@ -70,14 +70,12 @@ impl RgbaToNv12Converter {
         );
         convert_plane(
             ctx,
-            &mut encoder,
+            encoder,
             &self.uv_pipeline,
             &self.sampler.bind_group,
             src_bg,
             dst_uv_view,
         );
-
-        ctx.queue.submit(Some(encoder.finish()));
     }
 }
 

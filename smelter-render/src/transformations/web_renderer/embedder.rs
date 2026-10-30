@@ -1,4 +1,5 @@
 use crate::state::RegisterCtx;
+use crate::state::RenderCtx;
 use crate::state::node_texture::NodeTexture;
 use crate::transformations::web_renderer::chromium_sender::ChromiumSender;
 use crate::wgpu::WgpuCtx;
@@ -35,12 +36,13 @@ impl EmbeddingHelper {
 
     pub fn prepare_embedding(
         &self,
+        ctx: &mut RenderCtx,
         sources: &[&NodeTexture],
         embedding_data: &EmbeddingData,
     ) -> Result<(), EmbedError> {
         match self.embedding_method {
             WebEmbeddingMethod::ChromiumEmbedding => {
-                self.chromium_embedding(sources, embedding_data)?
+                self.chromium_embedding(ctx, sources, embedding_data)?
             }
             WebEmbeddingMethod::NativeEmbeddingOverContent
             | WebEmbeddingMethod::NativeEmbeddingUnderContent => self
@@ -54,11 +56,23 @@ impl EmbeddingHelper {
     /// Send sources to chromium and render them on canvases via JS API
     fn chromium_embedding(
         &self,
+        ctx: &mut RenderCtx,
         sources: &[&NodeTexture],
         embedding_data: &EmbeddingData,
     ) -> Result<(), EmbedError> {
         self.chromium_sender.ensure_shared_memory(sources)?;
-        self.copy_sources_to_buffers(sources, &embedding_data.buffers)?;
+
+        for (texture, buffer) in sources.iter().zip(&embedding_data.buffers) {
+            let Some(texture_state) = texture.state() else {
+                continue;
+            };
+            texture_state
+                .texture()
+                .copy_to_buffer(&mut ctx.encoder, buffer);
+        }
+
+        // Buffers can be mapped only after commands that write to them are submitted.
+        ctx.submit_recorded_commands();
 
         let mut pending_downloads = Vec::new();
         for (source_idx, (texture, buffer)) in
@@ -82,27 +96,6 @@ impl EmbeddingHelper {
         self.chromium_sender
             .embed_sources(sources, embedding_data.children_ids.clone())
             .map_err(EmbedError::ChromiumSenderError)
-    }
-
-    fn copy_sources_to_buffers(
-        &self,
-        sources: &[&NodeTexture],
-        buffers: &[wgpu::Buffer],
-    ) -> Result<(), EmbedError> {
-        let mut encoder = self
-            .wgpu_ctx
-            .device
-            .create_command_encoder(&Default::default());
-
-        for (texture, buffer) in sources.iter().zip(buffers) {
-            let Some(texture_state) = texture.state() else {
-                continue;
-            };
-            texture_state.texture().copy_to_buffer(&mut encoder, buffer);
-        }
-        self.wgpu_ctx.queue.submit(Some(encoder.finish()));
-
-        Ok(())
     }
 
     fn copy_buffer_to_shmem(

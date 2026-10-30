@@ -78,6 +78,7 @@ impl ShaderPipeline {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn render(
         &self,
         wgpu_ctx: &WgpuCtx,
@@ -86,10 +87,10 @@ impl ShaderPipeline {
         target: &NodeTextureState,
         pts: Duration,
         clear_color: Option<wgpu::Color>,
+        encoder: &mut wgpu::CommandEncoder,
     ) {
         let input_textures_bg = self.input_textures_bg(wgpu_ctx, sources);
 
-        let mut encoder = wgpu_ctx.device.create_command_encoder(&Default::default());
         let clear_color = clear_color.unwrap_or(wgpu::Color::TRANSPARENT);
 
         let mut render_plane = |plane_id: i32, clear: bool| {
@@ -136,8 +137,6 @@ impl ShaderPipeline {
                 render_plane(plane_id as i32, false);
             }
         }
-
-        wgpu_ctx.queue.submit(Some(encoder.finish()));
     }
 
     pub fn validate_params(&self, params: &ShaderParam) -> Result<(), ParametersValidationError> {

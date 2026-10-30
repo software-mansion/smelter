@@ -35,7 +35,12 @@ impl BgraInput {
         self.upload_textures.upload(ctx, data);
     }
 
-    pub fn convert(&mut self, ctx: &WgpuCtx, dest: &NodeTextureState) {
+    pub fn convert(
+        &mut self,
+        ctx: &WgpuCtx,
+        dest: &NodeTextureState,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
         match dest {
             NodeTextureState::GpuOptimized { texture, .. } => {
                 // write to sRGB texture as if it was linear
@@ -43,12 +48,16 @@ impl BgraInput {
                     ctx,
                     &self.bgra_bind_group,
                     texture.linear_view(),
+                    encoder,
                 );
             }
             NodeTextureState::CpuOptimized { texture, .. } => {
-                ctx.format
-                    .bgra_to_rgba_linear
-                    .convert(ctx, &self.bgra_bind_group, texture.view());
+                ctx.format.bgra_to_rgba_linear.convert(
+                    ctx,
+                    &self.bgra_bind_group,
+                    texture.view(),
+                    encoder,
+                );
             }
             NodeTextureState::WebGl { texture, .. } => {
                 let Some(color_space_converter) = &mut self.color_space_converter else {
@@ -59,9 +68,10 @@ impl BgraInput {
                     ctx,
                     &self.bgra_bind_group,
                     color_space_converter.texture.view(),
+                    encoder,
                 );
                 // copy from rgb texture to srgb texture
-                color_space_converter.convert(ctx, texture.texture());
+                color_space_converter.convert(ctx, texture.texture(), encoder);
             }
         }
     }

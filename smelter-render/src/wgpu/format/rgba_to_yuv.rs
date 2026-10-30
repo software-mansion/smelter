@@ -64,13 +64,13 @@ impl RgbaToYuvConverter {
         Self { pipeline, sampler }
     }
 
-    pub fn convert(&self, ctx: &WgpuCtx, src_bg: &wgpu::BindGroup, dst: &PlanarYuvTextures) {
-        let mut encoder = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("RGBA to YUV color converter command encoder"),
-            });
-
+    pub fn convert(
+        &self,
+        ctx: &WgpuCtx,
+        src_bg: &wgpu::BindGroup,
+        dst: &PlanarYuvTextures,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
         for plane in [0, 1, 2] {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("YUV to RGBA color converter render pass"),
@@ -112,6 +112,5 @@ impl RgbaToYuvConverter {
             render_pass.set_bind_group(1, &self.sampler.bind_group, &[]);
             ctx.plane.draw(&mut render_pass);
         }
-        ctx.queue.submit(Some(encoder.finish()));
     }
 }

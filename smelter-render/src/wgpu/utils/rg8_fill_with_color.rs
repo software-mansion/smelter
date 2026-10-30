@@ -51,36 +51,32 @@ impl Rg8FillWithValue {
         Self { pipeline }
     }
 
-    pub fn fill(&self, ctx: &WgpuCtx, dst: &wgpu::TextureView, value: [f32; 2]) {
-        let mut encoder = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Fill RG8 view with value command encoder"),
-            });
+    pub fn fill(
+        &self,
+        ctx: &WgpuCtx,
+        dst: &wgpu::TextureView,
+        value: [f32; 2],
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Fill RG8 view with value render pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+                view: dst,
+                resolve_target: None,
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
 
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Fill RG8 view with value render pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                    view: dst,
-                    resolve_target: None,
-                    depth_slice: None,
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-
-            render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_immediates(0, bytemuck::bytes_of(&value));
-            ctx.plane.draw(&mut render_pass);
-        }
-
-        ctx.queue.submit(Some(encoder.finish()));
+        render_pass.set_pipeline(&self.pipeline);
+        render_pass.set_immediates(0, bytemuck::bytes_of(&value));
+        ctx.plane.draw(&mut render_pass);
     }
 }

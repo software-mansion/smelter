@@ -10,7 +10,7 @@ use crate::{
 use super::{input_texture::InputTexture, node_texture::NodeTexture};
 
 pub(super) fn populate_inputs(
-    ctx: &RenderCtx,
+    ctx: &mut RenderCtx,
     scene: &mut RenderGraph,
     mut frame_set: FrameSet<InputId>,
 ) {
@@ -22,15 +22,14 @@ pub(super) fn populate_inputs(
         input_textures.upload(ctx.wgpu_ctx, frame);
     }
 
-    ctx.wgpu_ctx.queue.submit([]);
-
     for (node_texture, input_textures) in scene.inputs.values_mut() {
-        input_textures.convert_to_node_texture(ctx.wgpu_ctx, node_texture);
+        input_textures.convert_to_node_texture(ctx.wgpu_ctx, node_texture, &mut ctx.encoder);
     }
+    ctx.submit_recorded_commands();
 }
 
 pub(super) fn read_outputs(
-    ctx: &RenderCtx,
+    ctx: &mut RenderCtx,
     render_graph: &mut RenderGraph,
     pts: Duration,
 ) -> HashMap<OutputId, Frame> {
@@ -39,16 +38,22 @@ pub(super) fn read_outputs(
         outputs,
         inputs,
     } = render_graph;
-    let partial_frames: Vec<_> = outputs
+    let recorded_frames: Vec<_> = outputs
         .iter_mut()
         .map(|(output_id, output)| {
             // `None` if the root is empty, or if a linked output does not render its own scene.
             let node_texture = render_trees
                 .get(&output.render_tree_id)
                 .and_then(|root| root.output_texture(inputs).state());
-            let partial_frame = output.output_texture.read(ctx, node_texture, pts);
-            (output_id, partial_frame)
+            let recorded_frame = output.output_texture.read(ctx, node_texture, pts);
+            (output_id, recorded_frame)
         })
+        .collect();
+    ctx.submit_recorded_commands();
+
+    let partial_frames: Vec<_> = recorded_frames
+        .into_iter()
+        .map(|(output_id, recorded_frame)| (output_id, recorded_frame.start_download()))
         .collect();
 
     while let Err(wgpu::PollError::Timeout) = ctx
@@ -69,6 +74,7 @@ pub(super) fn run_transforms(ctx: &mut RenderCtx, scene: &mut RenderGraph, pts: 
     for root in scene.render_trees.values_mut() {
         render_node(ctx, &scene.inputs, pts, root);
     }
+    ctx.submit_recorded_commands();
 }
 
 pub(super) fn render_node(

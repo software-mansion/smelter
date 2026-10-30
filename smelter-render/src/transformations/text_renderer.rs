@@ -11,10 +11,7 @@ use glyphon::{
     fontdb::{Database, Source},
 };
 use tracing::warn;
-use wgpu::{
-    CommandEncoderDescriptor, LoadOp, MultisampleState, Operations, RenderPassColorAttachment,
-    RenderPassDescriptor,
-};
+use wgpu::{LoadOp, MultisampleState, Operations, RenderPassColorAttachment, RenderPassDescriptor};
 
 use crate::{
     Resolution,
@@ -132,38 +129,31 @@ impl TextRendererNode {
             )
             .unwrap();
 
-        let mut encoder =
-            renderer_ctx
-                .wgpu_ctx
-                .device
-                .create_command_encoder(&CommandEncoderDescriptor {
-                    label: Some("Text renderer encoder"),
-                });
-
         let target_state = target.ensure_size(renderer_ctx.wgpu_ctx, self.resolution);
         let view = &target_state.view();
         {
-            let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view,
-                    resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Clear(self.background_color),
-                        store: wgpu::StoreOp::Store,
-                    },
-                    depth_slice: None,
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
+            let mut pass = renderer_ctx
+                .encoder
+                .begin_render_pass(&RenderPassDescriptor {
+                    label: None,
+                    color_attachments: &[Some(RenderPassColorAttachment {
+                        view,
+                        resolve_target: None,
+                        ops: Operations {
+                            load: LoadOp::Clear(self.background_color),
+                            store: wgpu::StoreOp::Store,
+                        },
+                        depth_slice: None,
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
 
             text_renderer.render(&atlas, &viewport, &mut pass).unwrap();
         }
 
-        renderer_ctx.wgpu_ctx.queue.submit(Some(encoder.finish()));
         self.was_rendered = true;
     }
 }

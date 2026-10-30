@@ -38,7 +38,7 @@ impl InnerRenderNode {
     ) {
         match self {
             InnerRenderNode::Shader(shader) => {
-                shader.render(ctx.wgpu_ctx, sources, target, pts);
+                shader.render(ctx, sources, target, pts);
             }
             InnerRenderNode::Web(renderer) => renderer.render(ctx, sources, target),
             InnerRenderNode::Text(renderer) => {

@@ -70,20 +70,21 @@ impl ShaderNode {
 
     pub fn render(
         &self,
-        wgpu_ctx: &WgpuCtx,
+        ctx: &mut RenderCtx,
         sources: &[&NodeTexture],
         target: &mut NodeTexture,
         pts: Duration,
     ) {
-        let target = target.ensure_size(wgpu_ctx, self.resolution);
+        let target = target.ensure_size(ctx.wgpu_ctx, self.resolution);
 
         self.shader.pipeline.render(
-            wgpu_ctx,
+            ctx.wgpu_ctx,
             &self.params_bind_group,
             sources,
             target,
             pts,
             self.shader.clear_color,
+            &mut ctx.encoder,
         )
     }
 }

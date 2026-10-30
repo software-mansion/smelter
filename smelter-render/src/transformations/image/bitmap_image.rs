@@ -74,6 +74,7 @@ impl BitmapAsset {
         ctx: &WgpuCtx,
         target: &NodeTextureState,
         state: &mut BitmapNodeState,
+        encoder: &mut wgpu::CommandEncoder,
     ) {
         if state.was_rendered {
             return;
@@ -83,12 +84,12 @@ impl BitmapAsset {
             BitmapAsset::Srgb { bg, .. } => {
                 ctx.utils
                     .srgb_rgba_add_premult_alpha
-                    .render(ctx, bg, target.view());
+                    .render(ctx, bg, target.view(), encoder);
             }
             BitmapAsset::Linear { bg, .. } => {
                 ctx.utils
                     .linear_rgba_add_premult_alpha
-                    .render(ctx, bg, target.view());
+                    .render(ctx, bg, target.view(), encoder);
             }
         }
         state.was_rendered = true;
