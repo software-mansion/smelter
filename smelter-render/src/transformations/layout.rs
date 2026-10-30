@@ -154,11 +154,10 @@ impl LayoutNode {
 
     pub fn render(
         &mut self,
-        ctx: &RenderCtx,
+        ctx: &mut RenderCtx,
         sources: &[&NodeTexture],
         target: &mut NodeTexture,
         pts: Duration,
-        encoder: &mut wgpu::CommandEncoder,
     ) {
         let input_resolutions: Vec<Option<Resolution>> = sources
             .iter()
@@ -168,7 +167,7 @@ impl LayoutNode {
         let layouts = self.layout_provider.layouts(pts, &input_resolutions);
         let mut layouts = layouts.flatten(&input_resolutions, output_resolution);
 
-        self.resample_scaled_children(ctx, sources, &mut layouts, encoder);
+        self.resample_scaled_children(ctx, sources, &mut layouts);
 
         let resolved_views: Vec<&wgpu::TextureView> = layouts
             .iter()
@@ -205,7 +204,7 @@ impl LayoutNode {
             layouts,
             &resolved_views,
             target,
-            encoder,
+            &mut ctx.encoder,
         );
     }
 
@@ -214,10 +213,9 @@ impl LayoutNode {
     /// CPU-optimized rendering skips this and scales bilinearly in the layout shader instead.
     fn resample_scaled_children(
         &mut self,
-        ctx: &RenderCtx,
+        ctx: &mut RenderCtx,
         sources: &[&NodeTexture],
         layouts: &mut [RenderLayout],
-        encoder: &mut wgpu::CommandEncoder,
     ) {
         if ctx.wgpu_ctx.mode == RenderingMode::CpuOptimized {
             return;
@@ -244,7 +242,7 @@ impl LayoutNode {
                 source,
                 *crop,
                 dst,
-                encoder,
+                &mut ctx.encoder,
             );
             *crop = ResampledChild::output_crop(dst);
             resampled.push(layout_index);

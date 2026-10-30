@@ -62,14 +62,14 @@ impl OutputTexture {
     /// source. Source with a different resolution is stretched to the output resolution.
     pub fn read<'a>(
         &'a mut self,
-        ctx: &RenderCtx,
+        ctx: &mut RenderCtx,
         source: Option<&NodeTextureState>,
         pts: Duration,
-        encoder: &mut wgpu::CommandEncoder,
     ) -> RecordedOutputFrame<'a> {
         let resolution = self.resolution;
-        let source = source.map(|source| self.resampler.resample(ctx, source, resolution, encoder));
+        let source = source.map(|source| self.resampler.resample(ctx, source, resolution));
         let wgpu_ctx = ctx.wgpu_ctx;
+        let encoder = &mut ctx.encoder;
         match &self.kind {
             OutputTextureKind::PlanarYuvTextures(yuv_output) => {
                 let yuv_textures = yuv_output.yuv_textures();
@@ -155,10 +155,9 @@ struct OutputResampler {
 impl OutputResampler {
     fn resample<'a>(
         &'a mut self,
-        ctx: &RenderCtx,
+        ctx: &mut RenderCtx,
         source: &'a NodeTextureState,
         dst: Resolution,
-        encoder: &mut wgpu::CommandEncoder,
     ) -> &'a NodeTextureState {
         let source_resolution = source.resolution();
         if source_resolution == dst {
@@ -173,7 +172,7 @@ impl OutputResampler {
                     ctx.wgpu_ctx,
                     source.view(),
                     target.view(),
-                    encoder,
+                    &mut ctx.encoder,
                 );
             }
             RenderingMode::GpuOptimized | RenderingMode::WebGl => {
@@ -189,7 +188,7 @@ impl OutputResampler {
                     crop,
                     target.view(),
                     &mut self.texture_cache,
-                    encoder,
+                    &mut ctx.encoder,
                 );
             }
         }

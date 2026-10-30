@@ -67,12 +67,7 @@ impl TextRendererNode {
         }
     }
 
-    pub(crate) fn render(
-        &mut self,
-        renderer_ctx: &mut RenderCtx,
-        target: &mut NodeTexture,
-        encoder: &mut wgpu::CommandEncoder,
-    ) {
+    pub(crate) fn render(&mut self, renderer_ctx: &mut RenderCtx, target: &mut NodeTexture) {
         if self.was_rendered {
             return;
         }
@@ -137,22 +132,24 @@ impl TextRendererNode {
         let target_state = target.ensure_size(renderer_ctx.wgpu_ctx, self.resolution);
         let view = &target_state.view();
         {
-            let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view,
-                    resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Clear(self.background_color),
-                        store: wgpu::StoreOp::Store,
-                    },
-                    depth_slice: None,
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
+            let mut pass = renderer_ctx
+                .encoder
+                .begin_render_pass(&RenderPassDescriptor {
+                    label: None,
+                    color_attachments: &[Some(RenderPassColorAttachment {
+                        view,
+                        resolve_target: None,
+                        ops: Operations {
+                            load: LoadOp::Clear(self.background_color),
+                            store: wgpu::StoreOp::Store,
+                        },
+                        depth_slice: None,
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
 
             text_renderer.render(&atlas, &viewport, &mut pass).unwrap();
         }

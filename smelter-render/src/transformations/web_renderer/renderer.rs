@@ -77,14 +77,13 @@ impl WebRenderer {
 
     pub fn render(
         &self,
-        ctx: &RenderCtx,
+        ctx: &mut RenderCtx,
         sources: &[&NodeTexture],
         embedding_data: &EmbeddingData,
         target: &mut NodeTexture,
-        encoder: &mut wgpu::CommandEncoder,
     ) -> Result<(), RenderWebsiteError> {
         self.embedding_helper
-            .prepare_embedding(sources, embedding_data, encoder)
+            .prepare_embedding(ctx, sources, embedding_data)
             .map_err(|err| RenderWebsiteError::EmbeddingFailed(self.spec.url.clone(), err))?;
 
         if let Some(frame) = self.retrieve_frame() {
@@ -92,8 +91,12 @@ impl WebRenderer {
             self.website_texture.upload(ctx.wgpu_ctx, &frame);
             let render_textures = self.prepare_textures(sources);
 
-            self.render_website_shader
-                .render(ctx.wgpu_ctx, &render_textures, target, encoder);
+            self.render_website_shader.render(
+                ctx.wgpu_ctx,
+                &render_textures,
+                target,
+                &mut ctx.encoder,
+            );
         }
 
         Ok(())

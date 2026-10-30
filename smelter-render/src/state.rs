@@ -69,6 +69,18 @@ pub(crate) struct RenderCtx<'a> {
     pub(crate) wgpu_ctx: &'a Arc<WgpuCtx>,
     pub(crate) text_renderer_ctx: &'a TextRendererCtx,
     pub(crate) renderers: &'a Renderers,
+    pub(crate) encoder: wgpu::CommandEncoder,
+}
+
+impl RenderCtx<'_> {
+    /// Submits recorded commands and replaces the encoder with a new one.
+    pub(crate) fn submit_recorded_commands(&mut self) {
+        let recorded = std::mem::replace(
+            &mut self.encoder,
+            self.wgpu_ctx.create_command_encoder("Render"),
+        );
+        self.wgpu_ctx.queue.submit(Some(recorded.finish()));
+    }
 }
 
 pub(crate) struct RegisterCtx {
@@ -219,6 +231,7 @@ impl InnerRenderer {
             wgpu_ctx: &self.wgpu_ctx,
             text_renderer_ctx: &self.text_renderer_ctx,
             renderers: &self.renderers,
+            encoder: self.wgpu_ctx.create_command_encoder("Render"),
         };
 
         let scope = WgpuErrorScope::push(&ctx.wgpu_ctx.device);
@@ -268,12 +281,17 @@ impl InnerRenderer {
                 OutputSpec::LinkedOutput(primary_output_id)
             }
         };
-        let ctx = RenderCtx {
+        let mut ctx = RenderCtx {
             wgpu_ctx: &self.wgpu_ctx,
             text_renderer_ctx: &self.text_renderer_ctx,
             renderers: &self.renderers,
+            encoder: self.wgpu_ctx.create_command_encoder("Scene update"),
         };
-        self.render_graph
-            .update_output(&ctx, output_id, resolution, output_format, update)
+        let result =
+            self.render_graph
+                .update_output(&ctx, output_id, resolution, output_format, update);
+        // Not required, scene update does not record any commands at the moment.
+        ctx.submit_recorded_commands();
+        result
     }
 }
