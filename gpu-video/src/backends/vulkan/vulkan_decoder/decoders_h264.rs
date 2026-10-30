@@ -50,7 +50,7 @@ impl VulkanDecoderH264 {
         Ok(Self {
             decoder,
             event_processor: H264EventProcessor::new(
-                H264Parser::default(),
+                H264Parser::new(parameters.bitstream_format),
                 parameters.corrupted_state_handling,
             ),
         })

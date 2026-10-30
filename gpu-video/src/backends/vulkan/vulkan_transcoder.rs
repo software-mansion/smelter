@@ -66,6 +66,7 @@ impl VulkanTranscoder {
             Arc::new(device.decoding_device()?),
             DecoderParameters {
                 corrupted_state_handling: Default::default(),
+                bitstream_format: Default::default(),
                 usage_flags: DecoderUsage::Transcoding,
                 max_in_flight_submissions: max_in_flight,
             },

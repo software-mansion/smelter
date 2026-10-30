@@ -3,12 +3,54 @@ use std::sync::LazyLock;
 use bytes::{Buf, BufMut, BytesMut};
 use memchr::memmem::Finder;
 
+use super::h264::BitstreamFormat;
+
 const START_CODE: [u8; 3] = [0, 0, 1];
 const OUTPUT_START_CODE: [u8; 4] = [0, 0, 0, 1];
 const BOUNDARY_PATTERN_LEN: usize = START_CODE.len();
+const AVCC_LENGTH_PREFIX_LEN: usize = 4;
+
+#[derive(Debug)]
+pub(crate) enum NALUSplitter {
+    AnnexB(AnnexBSplitter),
+    Avcc(AvccSplitter),
+}
+
+impl Default for NALUSplitter {
+    fn default() -> Self {
+        Self::new(BitstreamFormat::default())
+    }
+}
+
+impl NALUSplitter {
+    pub(crate) fn new(bitstream_format: BitstreamFormat) -> Self {
+        match bitstream_format {
+            BitstreamFormat::AnnexB => Self::AnnexB(AnnexBSplitter::default()),
+            BitstreamFormat::Avcc => Self::Avcc(AvccSplitter::default()),
+        }
+    }
+
+    pub(crate) fn push(
+        &mut self,
+        chunk: &[u8],
+        chunk_pts: Option<u64>,
+    ) -> Vec<(Vec<u8>, Option<u64>)> {
+        match self {
+            Self::AnnexB(splitter) => splitter.push(chunk, chunk_pts),
+            Self::Avcc(splitter) => splitter.push(chunk, chunk_pts),
+        }
+    }
+
+    pub(crate) fn flush(&mut self) -> Vec<(Vec<u8>, Option<u64>)> {
+        match self {
+            Self::AnnexB(splitter) => splitter.flush(),
+            Self::Avcc(splitter) => splitter.flush(),
+        }
+    }
+}
 
 #[derive(Debug, Default)]
-enum State {
+enum AnnexBState {
     #[default]
     DiscardingUntilStartCode,
     AtStartCodeEnd,
@@ -19,21 +61,17 @@ enum State {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct NALUSplitter {
+pub(crate) struct AnnexBSplitter {
     buffer: BytesMut,
-    state: State,
+    state: AnnexBState,
 }
 
-impl NALUSplitter {
-    pub(crate) fn push(
-        &mut self,
-        chunk: &[u8],
-        chunk_pts: Option<u64>,
-    ) -> Vec<(Vec<u8>, Option<u64>)> {
-        if let State::AtStartCodeEnd = self.state
+impl AnnexBSplitter {
+    fn push(&mut self, chunk: &[u8], chunk_pts: Option<u64>) -> Vec<(Vec<u8>, Option<u64>)> {
+        if let AnnexBState::AtStartCodeEnd = self.state
             && !chunk.is_empty()
         {
-            self.state = State::InNalu {
+            self.state = AnnexBState::InNalu {
                 payload_start_pts: chunk_pts,
                 resume_search_at: 0,
             };
@@ -44,13 +82,13 @@ impl NALUSplitter {
 
         loop {
             match self.state {
-                State::DiscardingUntilStartCode => {
+                AnnexBState::DiscardingUntilStartCode => {
                     if !self.skip_past_start_code(chunk_pts) {
                         break;
                     }
                 }
-                State::AtStartCodeEnd => break,
-                State::InNalu {
+                AnnexBState::AtStartCodeEnd => break,
+                AnnexBState::InNalu {
                     payload_start_pts,
                     resume_search_at,
                 } => {
@@ -64,9 +102,9 @@ impl NALUSplitter {
 
         let fully_searched_len = self.buffer.len().saturating_sub(BOUNDARY_PATTERN_LEN - 1);
         match &mut self.state {
-            State::DiscardingUntilStartCode => self.buffer.advance(fully_searched_len),
-            State::AtStartCodeEnd => {}
-            State::InNalu {
+            AnnexBState::DiscardingUntilStartCode => self.buffer.advance(fully_searched_len),
+            AnnexBState::AtStartCodeEnd => {}
+            AnnexBState::InNalu {
                 resume_search_at, ..
             } => *resume_search_at = fully_searched_len,
         }
@@ -74,9 +112,9 @@ impl NALUSplitter {
         result
     }
 
-    pub(crate) fn flush(&mut self) -> Vec<(Vec<u8>, Option<u64>)> {
+    fn flush(&mut self) -> Vec<(Vec<u8>, Option<u64>)> {
         let mut result = Vec::new();
-        if let State::InNalu {
+        if let AnnexBState::InNalu {
             payload_start_pts, ..
         } = self.state
         {
@@ -84,7 +122,7 @@ impl NALUSplitter {
         }
 
         self.buffer.clear();
-        self.state = State::DiscardingUntilStartCode;
+        self.state = AnnexBState::DiscardingUntilStartCode;
 
         result
     }
@@ -96,9 +134,9 @@ impl NALUSplitter {
 
         self.buffer.advance(start_code_position + START_CODE.len());
         self.state = if self.buffer.is_empty() {
-            State::AtStartCodeEnd
+            AnnexBState::AtStartCodeEnd
         } else {
-            State::InNalu {
+            AnnexBState::InNalu {
                 payload_start_pts: chunk_pts,
                 resume_search_at: 0,
             }
@@ -109,8 +147,82 @@ impl NALUSplitter {
     fn split_off_nalu(&mut self, resume_search_at: usize) -> Option<BytesMut> {
         let nalu_len =
             resume_search_at + find_start_code_or_zero_padding(&self.buffer[resume_search_at..])?;
-        self.state = State::DiscardingUntilStartCode;
+        self.state = AnnexBState::DiscardingUntilStartCode;
         Some(self.buffer.split_to(nalu_len))
+    }
+}
+
+#[derive(Debug, Default)]
+enum AvccState {
+    #[default]
+    ReadingLengthPrefix,
+    AtLengthPrefixEnd {
+        len: usize,
+    },
+    InNalu {
+        len: usize,
+        payload_start_pts: Option<u64>,
+    },
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct AvccSplitter {
+    buffer: BytesMut,
+    state: AvccState,
+}
+
+impl AvccSplitter {
+    fn push(&mut self, chunk: &[u8], chunk_pts: Option<u64>) -> Vec<(Vec<u8>, Option<u64>)> {
+        if let AvccState::AtLengthPrefixEnd { len } = self.state
+            && !chunk.is_empty()
+        {
+            self.state = AvccState::InNalu {
+                len,
+                payload_start_pts: chunk_pts,
+            };
+        }
+
+        self.buffer.put(chunk);
+        let mut result = Vec::new();
+
+        loop {
+            match self.state {
+                AvccState::ReadingLengthPrefix => {
+                    if self.buffer.len() < AVCC_LENGTH_PREFIX_LEN {
+                        break;
+                    }
+                    let len = self.buffer.get_u32() as usize;
+                    self.state = if self.buffer.is_empty() {
+                        AvccState::AtLengthPrefixEnd { len }
+                    } else {
+                        AvccState::InNalu {
+                            len,
+                            payload_start_pts: chunk_pts,
+                        }
+                    };
+                }
+                AvccState::AtLengthPrefixEnd { .. } => break,
+                AvccState::InNalu {
+                    len,
+                    payload_start_pts,
+                } => {
+                    if self.buffer.len() < len {
+                        break;
+                    }
+                    let nalu = self.buffer.split_to(len);
+                    result.extend(to_output_nalu(&nalu, payload_start_pts));
+                    self.state = AvccState::ReadingLengthPrefix;
+                }
+            }
+        }
+
+        result
+    }
+
+    fn flush(&mut self) -> Vec<(Vec<u8>, Option<u64>)> {
+        self.buffer.clear();
+        self.state = AvccState::ReadingLengthPrefix;
+        Vec::new()
     }
 }
 

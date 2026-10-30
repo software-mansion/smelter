@@ -17,6 +17,17 @@ pub mod h264 {
     #[cfg(feature = "expose-parsers")]
     pub use h264_reader::nal as nal_types;
 
+    /// Format of the H.264 bitstream fed to the parser
+    #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum BitstreamFormat {
+        /// NAL units are separated by start codes (`0x000001` or `0x00000001`)
+        #[default]
+        AnnexB,
+
+        /// Each NAL unit is prefixed with its length as a 4-byte big-endian integer
+        Avcc,
+    }
+
     #[derive(Debug, thiserror::Error)]
     pub enum H264ParserError {
         #[error("Error while parsing a NAL header: {0:?}")]
@@ -32,7 +43,7 @@ pub mod h264 {
         SliceParseError(h264_reader::nal::slice::SliceHeaderError),
     }
 
-    /// H264 parser for Annex B format
+    /// H264 parser for Annex B and AVCC formats
     #[derive(Default)]
     pub struct H264Parser {
         nal_parser: NalParser,
@@ -42,15 +53,23 @@ pub mod h264 {
     }
 
     impl H264Parser {
-        #[cfg_attr(all(vulkan, not(feature = "expose-parsers")), expect(unused))]
-        pub fn new_avcc_output() -> Self {
+        pub fn new(bitstream_format: BitstreamFormat) -> Self {
             Self {
+                nalu_splitter: NALUSplitter::new(bitstream_format),
+                ..Default::default()
+            }
+        }
+
+        #[cfg_attr(all(vulkan, not(feature = "expose-parsers")), expect(unused))]
+        pub fn new_avcc_output(bitstream_format: BitstreamFormat) -> Self {
+            Self {
+                nalu_splitter: NALUSplitter::new(bitstream_format),
                 convert_to_avcc: true,
                 ..Default::default()
             }
         }
 
-        /// Parses nalus in Annex B format.
+        /// Parses nalus in the format selected with [`BitstreamFormat`].
         /// Returns [`AccessUnit`]s representing whole frame
         pub fn parse(
             &mut self,

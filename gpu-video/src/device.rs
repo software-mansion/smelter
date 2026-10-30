@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
 use crate::parameters::{EncoderPreset, EncoderUsage, H264Profile, H265Profile, RateControl};
+use crate::parser::h264::BitstreamFormat;
 use crate::{
     BytesDecoderH264, BytesEncoderH264, BytesEncoderH265, EncodedOutputChunk, OutputFrame,
     RawFrameData, VideoDecoderError, VideoEncoderError,
@@ -64,6 +65,11 @@ pub struct DecoderParameters {
     /// **Defaults to [`CorruptedStateHandling::Strict`]**
     pub corrupted_state_handling: CorruptedStateHandling,
 
+    /// See [`BitstreamFormat`] for description of the supported formats.
+    ///
+    /// **Defaults to [`BitstreamFormat::AnnexB`]**
+    pub bitstream_format: BitstreamFormat,
+
     /// A hint indicating what kind of content the decoder is going to be used for.
     pub usage_flags: crate::parameters::DecoderUsage,
 
@@ -81,6 +87,7 @@ impl Default for DecoderParameters {
     fn default() -> Self {
         Self {
             corrupted_state_handling: Default::default(),
+            bitstream_format: Default::default(),
             usage_flags: Default::default(),
             max_in_flight_submissions: 3,
         }

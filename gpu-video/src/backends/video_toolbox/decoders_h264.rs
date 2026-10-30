@@ -90,7 +90,7 @@ impl<T: Send + 'static> VTDecoderH264<T> {
         metal_compatible_output: bool,
     ) -> Self {
         let event_processor = H264EventProcessor::new(
-            H264Parser::new_avcc_output(),
+            H264Parser::new_avcc_output(parameters.bitstream_format),
             parameters.corrupted_state_handling,
         );
         let max_in_flight = parameters.max_in_flight_submissions as u64;
