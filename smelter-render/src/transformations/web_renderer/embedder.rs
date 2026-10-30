@@ -1,4 +1,5 @@
 use crate::state::RegisterCtx;
+use crate::state::RenderCtx;
 use crate::state::node_texture::NodeTexture;
 use crate::transformations::web_renderer::chromium_sender::ChromiumSender;
 use crate::wgpu::WgpuCtx;
@@ -35,13 +36,13 @@ impl EmbeddingHelper {
 
     pub fn prepare_embedding(
         &self,
+        ctx: &mut RenderCtx,
         sources: &[&NodeTexture],
         embedding_data: &EmbeddingData,
-        encoder: &mut wgpu::CommandEncoder,
     ) -> Result<(), EmbedError> {
         match self.embedding_method {
             WebEmbeddingMethod::ChromiumEmbedding => {
-                self.chromium_embedding(sources, embedding_data, encoder)?
+                self.chromium_embedding(ctx, sources, embedding_data)?
             }
             WebEmbeddingMethod::NativeEmbeddingOverContent
             | WebEmbeddingMethod::NativeEmbeddingUnderContent => self
@@ -55,9 +56,9 @@ impl EmbeddingHelper {
     /// Send sources to chromium and render them on canvases via JS API
     fn chromium_embedding(
         &self,
+        ctx: &mut RenderCtx,
         sources: &[&NodeTexture],
         embedding_data: &EmbeddingData,
-        encoder: &mut wgpu::CommandEncoder,
     ) -> Result<(), EmbedError> {
         self.chromium_sender.ensure_shared_memory(sources)?;
 
@@ -65,15 +66,13 @@ impl EmbeddingHelper {
             let Some(texture_state) = texture.state() else {
                 continue;
             };
-            texture_state.texture().copy_to_buffer(encoder, buffer);
+            texture_state
+                .texture()
+                .copy_to_buffer(&mut ctx.encoder, buffer);
         }
 
         // Buffers can be mapped only after commands that write to them are submitted.
-        let recorded = std::mem::replace(
-            encoder,
-            self.wgpu_ctx.create_command_encoder("Render graph"),
-        );
-        self.wgpu_ctx.queue.submit(Some(recorded.finish()));
+        ctx.submit_recorded_commands();
 
         let mut pending_downloads = Vec::new();
         for (source_idx, (texture, buffer)) in

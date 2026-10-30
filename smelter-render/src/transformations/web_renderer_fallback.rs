@@ -60,7 +60,6 @@ impl WebRendererNode {
         _ctx: &mut RenderCtx,
         _sources: &[&NodeTexture],
         _target: &mut NodeTexture,
-        _encoder: &mut wgpu::CommandEncoder,
     ) {
         unreachable!()
     }
