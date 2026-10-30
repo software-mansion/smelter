@@ -78,8 +78,8 @@ impl BufferingStrategy {
     /// Whether the buffer `anchor` produces is within the range this strategy allows;
     /// when it is not, the anchor should be re-anchored at [`desired_anchor`](Self::desired_anchor).
     ///
-    /// A lower bound that is not stable (see [`PtsBound::stable`]) is not
-    /// judged.
+    /// A lower bound that is not stable (see
+    /// [`PtsBound::stable`](super::edge_estimator::PtsBound::stable)) is not judged.
     pub(super) fn buffer_in_range(
         &self,
         estimation: &EdgeEstimate,
