@@ -5,7 +5,8 @@ use integration_tests_macros::render_test;
 use smelter_render::{
     InputId, RendererId, RendererSpec,
     scene::{
-        Component, InputStreamComponent, ShaderComponent, ShaderParam, ShaderParamStructField, Size,
+        Component, InputStreamComponent, Position, RGBAColor, ShaderComponent, ShaderParam,
+        ShaderParamStructField, Size, ViewChildrenDirection, ViewComponent,
     },
     shader::ShaderSpec,
 };
@@ -25,6 +26,7 @@ pub const TESTS: &[RenderTest] = &[
     BASE_PARAMS_TEXTURE_COUNT_1_INPUT,
     BASE_PARAMS_TEXTURE_COUNT_2_INPUTS,
     USER_PARAMS_CIRCLE_LAYOUT,
+    LAYOUTS_SEPARATED_BY_SHADER,
 ];
 
 const SCENE_SIZE: Size = Size {
@@ -299,6 +301,71 @@ fn user_params_circle_layout() -> Result<()> {
         ])),
         size: DEFAULT_RESOLUTION.into(),
         children: input_streams(4),
+    }));
+    runner.snapshot(Duration::ZERO);
+    runner.finish()
+}
+
+fn two_color_view(
+    direction: ViewChildrenDirection,
+    first: RGBAColor,
+    second: RGBAColor,
+) -> Component {
+    let child = |color| {
+        Component::View(ViewComponent {
+            background_color: color,
+            ..Default::default()
+        })
+    };
+    Component::View(ViewComponent {
+        direction,
+        position: Position::Static {
+            width: Some(320.0),
+            height: Some(180.0),
+        },
+        children: vec![child(first), child(second)],
+        ..Default::default()
+    })
+}
+
+#[render_test(description = "
+    Three layout nodes rendered in a single frame. Nested views are merged into one layout node,
+    so the shader is what keeps them separate. Each node has different params and has to render
+    with its own values.
+    - Top left: red and green side by side.
+    - Top right: blue on top of yellow.
+    - Bottom: magenta strip from the root view.
+")]
+fn layouts_separated_by_shader() -> Result<()> {
+    const RED: RGBAColor = RGBAColor(255, 0, 0, 255);
+    const GREEN: RGBAColor = RGBAColor(0, 255, 0, 255);
+    const BLUE: RGBAColor = RGBAColor(0, 0, 255, 255);
+    const YELLOW: RGBAColor = RGBAColor(255, 255, 0, 255);
+    const MAGENTA: RGBAColor = RGBAColor(255, 0, 255, 255);
+
+    let mut runner = TestRunner::new(MODULE, TEST_NAME).with_renderers(vec![plane_id_shader()]);
+    runner.update_scene(Component::View(ViewComponent {
+        direction: ViewChildrenDirection::Column,
+        children: vec![
+            Component::Shader(ShaderComponent {
+                id: None,
+                shader_id: RendererId("base_params_plane_id".into()),
+                shader_param: None,
+                size: Size {
+                    width: 640.0,
+                    height: 270.0,
+                },
+                children: vec![
+                    two_color_view(ViewChildrenDirection::Row, RED, GREEN),
+                    two_color_view(ViewChildrenDirection::Column, BLUE, YELLOW),
+                ],
+            }),
+            Component::View(ViewComponent {
+                background_color: MAGENTA,
+                ..Default::default()
+            }),
+        ],
+        ..Default::default()
     }));
     runner.snapshot(Duration::ZERO);
     runner.finish()
