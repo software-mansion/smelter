@@ -325,7 +325,7 @@ impl Neg for Timestamp {
     }
 }
 
-/// Timestamp * impl Into<i64> -> Timestamp
+/// Timestamp * impl Into\<i64\> -> Timestamp
 impl<T: Into<i64>> Mul<T> for Timestamp {
     type Output = Timestamp;
 

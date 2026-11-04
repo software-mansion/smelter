@@ -61,6 +61,11 @@ jobs:
             - name: 📎 Run clippy (gpu-video, no-default-features)
               run: cargo clippy --package gpu-video --all-targets --no-default-features -- -D clippy::todo -D clippy::uninlined_format_args -D warnings
 
+            - name: 📚 Check rustdoc
+              run: cargo doc --workspace --lib --exclude integration-tests --exclude tools --no-deps --all-features --document-private-items
+              env:
+                  RUSTDOCFLAGS: -D warnings -A rustdoc::bare_urls
+
             - name: 📄 Generate JSON schema
               run: |
                   cargo run -p tools --bin generate_from_types -- --check

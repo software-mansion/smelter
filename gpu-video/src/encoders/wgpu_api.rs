@@ -81,7 +81,7 @@ impl WgpuTexturesEncoderH264 {
     /// [keyframe](https://en.wikipedia.org/wiki/Video_compression_picture_types#Intra-coded_(I)_frames/slices_(key_frames)).
     /// Otherwise, the encoder will decide which frames should be coded this way.
     ///
-    /// If [`EncoderOutputParameters::max_in_flight_submissions`](crate::parameters::EncoderOutputParameters::max_in_flight_submissions)
+    /// If [`EncoderParametersH264::max_in_flight_submissions`](crate::parameters::EncoderParametersH264::max_in_flight_submissions)
     /// encode submissions are already in flight, this blocks until all submissions above the limit finish.
     ///
     /// Calling this from within the provided callback can lead to a deadlock.
@@ -149,7 +149,7 @@ impl WgpuTexturesEncoderH265 {
     /// [keyframe](https://en.wikipedia.org/wiki/Video_compression_picture_types#Intra-coded_(I)_frames/slices_(key_frames)).
     /// Otherwise, the encoder will decide which frames should be coded this way.
     ///
-    /// If [`EncoderOutputParameters::max_in_flight_submissions`](crate::parameters::EncoderOutputParameters::max_in_flight_submissions)
+    /// If [`EncoderParametersH265::max_in_flight_submissions`](crate::parameters::EncoderParametersH265::max_in_flight_submissions)
     /// encode submissions are already in flight, this blocks until all submissions above the limit finish.
     ///
     /// Calling this from within the provided callback can lead to a deadlock.
