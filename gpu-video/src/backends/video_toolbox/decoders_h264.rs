@@ -27,7 +27,7 @@ use crate::{
     frame_sorter::{DecodeResult, FrameSorter},
     parser::{
         decoder_instructions::DecoderInstruction,
-        h264::{AccessUnit, BitstreamFormatH264, H264Parser, ParserOptionsH264},
+        h264::{AccessUnit, H264Parser, OutputNaluFormatH264, ParserOptionsH264},
         reference_manager::DecodeInformation,
     },
 };
@@ -92,7 +92,7 @@ impl<T: Send + 'static> VTDecoderH264<T> {
         let event_processor = H264EventProcessor::new(
             H264Parser::new(ParserOptionsH264 {
                 input_format: parameters.bitstream_format,
-                output_format: BitstreamFormatH264::Avcc,
+                output_format: OutputNaluFormatH264::Avcc,
             }),
             parameters.corrupted_state_handling,
         );

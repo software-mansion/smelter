@@ -6,7 +6,7 @@ pub mod parameters {
         VideoParameters,
     };
     pub use crate::instance::VideoInstanceDescriptor;
-    pub use crate::parser::h264::{BitstreamFormatH264, ParserOptionsH264};
+    pub use crate::parser::h264::{AvccPrefixLength, InputNaluFormatH264};
 
     pub type EncoderOutputParametersH264 = crate::device::EncoderOutputParameters<H264Profile>;
 

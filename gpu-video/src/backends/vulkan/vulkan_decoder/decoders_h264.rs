@@ -25,7 +25,7 @@ use crate::{
     frame_sorter::{DecodeResult, FrameSorter},
     parser::{
         decoder_instructions::DecoderInstruction,
-        h264::{AccessUnit, BitstreamFormatH264, H264Parser, ParserOptionsH264},
+        h264::{AccessUnit, H264Parser, OutputNaluFormatH264, ParserOptionsH264},
     },
 };
 
@@ -52,7 +52,7 @@ impl VulkanDecoderH264 {
             event_processor: H264EventProcessor::new(
                 H264Parser::new(ParserOptionsH264 {
                     input_format: parameters.bitstream_format,
-                    output_format: BitstreamFormatH264::AnnexB,
+                    output_format: OutputNaluFormatH264::AnnexB,
                 }),
                 parameters.corrupted_state_handling,
             ),

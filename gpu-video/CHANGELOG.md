@@ -70,7 +70,7 @@ By @noituri ([#2039](https://github.com/software-mansion/smelter/pull/2039))
 ### ✨ New features
 - Added VUI support to H.265 encoder ([#1995](https://github.com/software-mansion/smelter/pull/1995) by @noituri)
 - Improved encoder performance on Vulkan by using a better synchronisation approach ([#2269](https://github.com/software-mansion/smelter/pull/2269) by @noituri)
-- Added `DecoderParameters::bitstream_format` which allows decoding AVCC H.264 streams in addition to Annex B ([#1995](https://github.com/software-mansion/smelter/pull/1995) by @noituri)
+- Added `DecoderParameters::bitstream_format` for specifying input byte stream format (Annex B or AVCC) ([#2322](https://github.com/software-mansion/smelter/pull/2322) by @noituri)
 
 ### 🐛 Bug fixes
 - Stop isuing coding control reset every IDR on Vulkan. This increases the quality of encoding. ([#2297](https://github.com/software-mansion/smelter/pull/2297) by @jerzywilczek)

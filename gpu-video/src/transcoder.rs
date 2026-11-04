@@ -3,7 +3,7 @@ use std::num::NonZeroU32;
 use crate::{
     EncodedInputChunk, EncodedOutputChunk, VideoBackendError, VideoDecoderError, VideoEncoderError,
     device::{EncoderOutputParameters, Rational},
-    parameters::{BitstreamFormatH264, H264Profile, H265Profile, ScalingAlgorithm},
+    parameters::{H264Profile, H265Profile, InputNaluFormatH264, ScalingAlgorithm},
 };
 
 pub struct VideoTranscoder {
@@ -65,7 +65,7 @@ pub struct TranscoderParameters {
 #[derive(Debug, Clone, Copy)]
 pub struct TranscoderInputParameters {
     pub framerate: Rational,
-    pub bitstream_format: BitstreamFormatH264,
+    pub bitstream_format: InputNaluFormatH264,
 }
 
 /// Configuration for a single transcoder output.

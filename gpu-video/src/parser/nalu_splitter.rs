@@ -1,14 +1,11 @@
-use std::sync::LazyLock;
+mod annexb;
+mod avcc;
 
-use bytes::{Buf, BufMut, BytesMut};
-use memchr::memmem::Finder;
+use super::h264::InputNaluFormatH264;
+use annexb::AnnexBSplitter;
+use avcc::AvccSplitter;
 
-use super::h264::BitstreamFormatH264;
-
-const START_CODE: [u8; 3] = [0, 0, 1];
 const OUTPUT_START_CODE: [u8; 4] = [0, 0, 0, 1];
-const BOUNDARY_PATTERN_LEN: usize = START_CODE.len();
-const AVCC_LENGTH_PREFIX_LEN: usize = 4;
 
 #[derive(Debug)]
 pub(crate) enum NALUSplitter {
@@ -18,15 +15,17 @@ pub(crate) enum NALUSplitter {
 
 impl Default for NALUSplitter {
     fn default() -> Self {
-        Self::new(BitstreamFormatH264::default())
+        Self::new(InputNaluFormatH264::default())
     }
 }
 
 impl NALUSplitter {
-    pub(crate) fn new(bitstream_format: BitstreamFormatH264) -> Self {
+    pub(crate) fn new(bitstream_format: InputNaluFormatH264) -> Self {
         match bitstream_format {
-            BitstreamFormatH264::AnnexB => Self::AnnexB(AnnexBSplitter::default()),
-            BitstreamFormatH264::Avcc => Self::Avcc(AvccSplitter::default()),
+            InputNaluFormatH264::AnnexB => Self::AnnexB(AnnexBSplitter::default()),
+            InputNaluFormatH264::Avcc { prefix_length } => {
+                Self::Avcc(AvccSplitter::new(prefix_length))
+            }
         }
     }
 
@@ -47,197 +46,6 @@ impl NALUSplitter {
             Self::Avcc(splitter) => splitter.flush(),
         }
     }
-}
-
-#[derive(Debug, Default)]
-enum AnnexBState {
-    #[default]
-    DiscardingUntilStartCode,
-    AtStartCodeEnd,
-    InNalu {
-        payload_start_pts: Option<u64>,
-        resume_search_at: usize,
-    },
-}
-
-#[derive(Debug, Default)]
-pub(crate) struct AnnexBSplitter {
-    buffer: BytesMut,
-    state: AnnexBState,
-}
-
-impl AnnexBSplitter {
-    fn push(&mut self, chunk: &[u8], chunk_pts: Option<u64>) -> Vec<(Vec<u8>, Option<u64>)> {
-        if let AnnexBState::AtStartCodeEnd = self.state
-            && !chunk.is_empty()
-        {
-            self.state = AnnexBState::InNalu {
-                payload_start_pts: chunk_pts,
-                resume_search_at: 0,
-            };
-        }
-
-        self.buffer.put(chunk);
-        let mut result = Vec::new();
-
-        loop {
-            match self.state {
-                AnnexBState::DiscardingUntilStartCode => {
-                    if !self.skip_past_start_code(chunk_pts) {
-                        break;
-                    }
-                }
-                AnnexBState::AtStartCodeEnd => break,
-                AnnexBState::InNalu {
-                    payload_start_pts,
-                    resume_search_at,
-                } => {
-                    let Some(nalu) = self.split_off_nalu(resume_search_at) else {
-                        break;
-                    };
-                    result.extend(to_output_nalu(&nalu, payload_start_pts));
-                }
-            }
-        }
-
-        let fully_searched_len = self.buffer.len().saturating_sub(BOUNDARY_PATTERN_LEN - 1);
-        match &mut self.state {
-            AnnexBState::DiscardingUntilStartCode => self.buffer.advance(fully_searched_len),
-            AnnexBState::AtStartCodeEnd => {}
-            AnnexBState::InNalu {
-                resume_search_at, ..
-            } => *resume_search_at = fully_searched_len,
-        }
-
-        result
-    }
-
-    fn flush(&mut self) -> Vec<(Vec<u8>, Option<u64>)> {
-        let mut result = Vec::new();
-        if let AnnexBState::InNalu {
-            payload_start_pts, ..
-        } = self.state
-        {
-            result.extend(to_output_nalu(&self.buffer, payload_start_pts));
-        }
-
-        self.buffer.clear();
-        self.state = AnnexBState::DiscardingUntilStartCode;
-
-        result
-    }
-
-    fn skip_past_start_code(&mut self, chunk_pts: Option<u64>) -> bool {
-        let Some(start_code_position) = find_start_code(&self.buffer) else {
-            return false;
-        };
-
-        self.buffer.advance(start_code_position + START_CODE.len());
-        self.state = if self.buffer.is_empty() {
-            AnnexBState::AtStartCodeEnd
-        } else {
-            AnnexBState::InNalu {
-                payload_start_pts: chunk_pts,
-                resume_search_at: 0,
-            }
-        };
-        true
-    }
-
-    fn split_off_nalu(&mut self, resume_search_at: usize) -> Option<BytesMut> {
-        let nalu_len =
-            resume_search_at + find_start_code_or_zero_padding(&self.buffer[resume_search_at..])?;
-        self.state = AnnexBState::DiscardingUntilStartCode;
-        Some(self.buffer.split_to(nalu_len))
-    }
-}
-
-#[derive(Debug, Default)]
-enum AvccState {
-    #[default]
-    ReadingLengthPrefix,
-    AtLengthPrefixEnd {
-        len: usize,
-    },
-    InNalu {
-        len: usize,
-        payload_start_pts: Option<u64>,
-    },
-}
-
-#[derive(Debug, Default)]
-pub(crate) struct AvccSplitter {
-    buffer: BytesMut,
-    state: AvccState,
-}
-
-impl AvccSplitter {
-    fn push(&mut self, chunk: &[u8], chunk_pts: Option<u64>) -> Vec<(Vec<u8>, Option<u64>)> {
-        if let AvccState::AtLengthPrefixEnd { len } = self.state
-            && !chunk.is_empty()
-        {
-            self.state = AvccState::InNalu {
-                len,
-                payload_start_pts: chunk_pts,
-            };
-        }
-
-        self.buffer.put(chunk);
-        let mut result = Vec::new();
-
-        loop {
-            match self.state {
-                AvccState::ReadingLengthPrefix => {
-                    if self.buffer.len() < AVCC_LENGTH_PREFIX_LEN {
-                        break;
-                    }
-                    let len = self.buffer.get_u32() as usize;
-                    self.state = if self.buffer.is_empty() {
-                        AvccState::AtLengthPrefixEnd { len }
-                    } else {
-                        AvccState::InNalu {
-                            len,
-                            payload_start_pts: chunk_pts,
-                        }
-                    };
-                }
-                AvccState::AtLengthPrefixEnd { .. } => break,
-                AvccState::InNalu {
-                    len,
-                    payload_start_pts,
-                } => {
-                    if self.buffer.len() < len {
-                        break;
-                    }
-                    let nalu = self.buffer.split_to(len);
-                    result.extend(to_output_nalu(&nalu, payload_start_pts));
-                    self.state = AvccState::ReadingLengthPrefix;
-                }
-            }
-        }
-
-        result
-    }
-
-    fn flush(&mut self) -> Vec<(Vec<u8>, Option<u64>)> {
-        self.buffer.clear();
-        self.state = AvccState::ReadingLengthPrefix;
-        Vec::new()
-    }
-}
-
-fn find_start_code(buf: &[u8]) -> Option<usize> {
-    static FINDER: LazyLock<Finder> = LazyLock::new(|| Finder::new(&START_CODE));
-    FINDER.find(buf)
-}
-
-fn find_start_code_or_zero_padding(buf: &[u8]) -> Option<usize> {
-    static FINDER: LazyLock<Finder> = LazyLock::new(|| Finder::new(&[0, 0]));
-    // Matches don't overlap. A skipped match at `i + 1` needs `buf[i + 2] == 0`, so the match at
-    // `i` would be accepted.
-    FINDER
-        .find_iter(buf)
-        .find(|&i| matches!(buf.get(i + 2), Some(0 | 1)))
 }
 
 fn to_output_nalu(nalu: &[u8], pts: Option<u64>) -> Option<(Vec<u8>, Option<u64>)> {
