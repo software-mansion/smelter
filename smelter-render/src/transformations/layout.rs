@@ -198,14 +198,8 @@ impl LayoutNode {
             .collect();
 
         let target = target.ensure_size(ctx.wgpu_ctx, output_resolution);
-        self.shader.render(
-            ctx.wgpu_ctx,
-            output_resolution,
-            layouts,
-            &resolved_views,
-            target,
-            &mut ctx.encoder,
-        );
+        self.shader
+            .render(ctx, output_resolution, layouts, &resolved_views, target);
     }
 
     /// Resample scaled child nodes to their exact on-screen size, so the layout shader always

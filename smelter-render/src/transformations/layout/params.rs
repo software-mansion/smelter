@@ -1,7 +1,7 @@
 use tracing::error;
 use wgpu::{
     BindGroupLayoutDescriptor, BufferUsages,
-    util::{BufferInitDescriptor, DeviceExt},
+    util::{BufferInitDescriptor, DeviceExt, StagingBelt},
 };
 
 use crate::{
@@ -166,11 +166,16 @@ impl ParamsBindGroups {
         }
     }
 
+    /// Records writes to the params buffers into `encoder`. Those buffers are shared between
+    /// layout nodes, so `queue.write_buffer` would apply the values of all nodes before any of
+    /// their render passes run.
     pub fn update(
         &self,
         ctx: &WgpuCtx,
         output_resolution: Resolution,
         layouts: Vec<RenderLayout>,
+        staging_belt: &mut StagingBelt,
+        encoder: &mut wgpu::CommandEncoder,
     ) -> Vec<LayoutInfo> {
         let max_layouts_count = self.max_layouts_count;
         if layouts.len() > max_layouts_count {
@@ -187,8 +192,12 @@ impl ParamsBindGroups {
         output_resolution_bytes[4..8]
             .copy_from_slice(&(output_resolution.height as f32).to_le_bytes());
 
-        ctx.queue
-            .write_buffer(&self.output_resolution_buffer, 0, &output_resolution_bytes);
+        write_params(
+            staging_belt,
+            encoder,
+            &self.output_resolution_buffer,
+            &output_resolution_bytes,
+        );
 
         let mut layout_infos = Vec::new();
 
@@ -305,32 +314,50 @@ impl ParamsBindGroups {
             masks_bytes.resize_with(MAX_MASKS_COUNT, || [0u8; 32]);
             match self.bind_groups_2.get(index) {
                 Some((_bg, buffer)) => {
-                    ctx.queue.write_buffer(buffer, 0, &masks_bytes.concat());
+                    write_params(staging_belt, encoder, buffer, &masks_bytes.concat());
                 }
                 None => {
                     error!("Not enought parent border radiuses bind groups preallocated");
                 }
             }
-
-            ctx.queue
-                .write_buffer(&self.bind_groups_2[index].1, 0, &masks_bytes.concat());
         }
         texture_params.resize_with(max_layouts_count, || [0u8; 80]);
         color_params.resize_with(max_layouts_count, || [0u8; 80]);
         box_shadow_params.resize_with(max_layouts_count, || [0u8; 64]);
 
-        ctx.queue
-            .write_buffer(&self.texture_params_buffer, 0, &texture_params.concat());
-        ctx.queue
-            .write_buffer(&self.color_params_buffer, 0, &color_params.concat());
-        ctx.queue.write_buffer(
+        write_params(
+            staging_belt,
+            encoder,
+            &self.texture_params_buffer,
+            &texture_params.concat(),
+        );
+        write_params(
+            staging_belt,
+            encoder,
+            &self.color_params_buffer,
+            &color_params.concat(),
+        );
+        write_params(
+            staging_belt,
+            encoder,
             &self.box_shadow_params_buffer,
-            0,
             &box_shadow_params.concat(),
         );
 
         layout_infos
     }
+}
+
+fn write_params(
+    staging_belt: &mut StagingBelt,
+    encoder: &mut wgpu::CommandEncoder,
+    buffer: &wgpu::Buffer,
+    data: &[u8],
+) {
+    let size = wgpu::BufferSize::new(data.len() as u64).unwrap();
+    staging_belt
+        .write_buffer(encoder, buffer, 0, size)
+        .copy_from_slice(data);
 }
 
 fn create_buffer(ctx: &WgpuCtx, size: usize) -> wgpu::Buffer {
