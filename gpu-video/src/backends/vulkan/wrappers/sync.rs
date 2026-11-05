@@ -68,6 +68,38 @@ impl Drop for TimelineSemaphore {
     }
 }
 
+#[cfg(feature = "wgpu")]
+pub(crate) struct WgpuQueueWaitSemaphore {
+    semaphore: Arc<TimelineSemaphore>,
+    wgpu_queue: wgpu::Queue,
+}
+
+#[cfg(feature = "wgpu")]
+impl WgpuQueueWaitSemaphore {
+    pub(crate) fn new(semaphore: Arc<TimelineSemaphore>, wgpu_queue: wgpu::Queue) -> Self {
+        Self {
+            semaphore,
+            wgpu_queue,
+        }
+    }
+
+    pub(crate) fn add_wait(&self, value: SemaphoreWaitValue, stage: vk::PipelineStageFlags) {
+        let hal_queue = unsafe { self.wgpu_queue.as_hal::<wgpu::hal::vulkan::Api>().unwrap() };
+        hal_queue.add_wait_semaphore(self.semaphore.semaphore, Some(value.0), stage);
+    }
+}
+
+#[cfg(feature = "wgpu")]
+impl Drop for WgpuQueueWaitSemaphore {
+    fn drop(&mut self) {
+        let Some(hal_queue) = (unsafe { self.wgpu_queue.as_hal::<wgpu::hal::vulkan::Api>() })
+        else {
+            return;
+        };
+        hal_queue.remove_wait_semaphore(self.semaphore.semaphore);
+    }
+}
+
 pub(crate) trait TrackerKind {
     type WaitState;
     type CommandBufferPools: CommandBufferPoolStorage;
@@ -118,11 +150,6 @@ impl<K: TrackerKind> Tracker<K> {
             command_buffer_pools,
             image_layout_tracker: Default::default(),
         })
-    }
-
-    #[cfg_attr(not(feature = "wgpu"), expect(dead_code))]
-    pub(crate) fn raw_semaphore(&self) -> vk::Semaphore {
-        self.semaphore_tracker.semaphore.semaphore
     }
 }
 
