@@ -10,7 +10,7 @@ use crate::{
 use super::{input_texture::InputTexture, node_texture::NodeTexture};
 
 pub(super) fn populate_inputs(
-    ctx: &RenderCtx,
+    ctx: &mut RenderCtx,
     scene: &mut RenderGraph,
     mut frame_set: FrameSet<InputId>,
 ) {
@@ -22,15 +22,14 @@ pub(super) fn populate_inputs(
         input_textures.upload(ctx.wgpu_ctx, frame);
     }
 
-    ctx.wgpu_ctx.queue.submit([]);
-
     for (node_texture, input_textures) in scene.inputs.values_mut() {
-        input_textures.convert_to_node_texture(ctx.wgpu_ctx, node_texture);
+        input_textures.convert_to_node_texture(ctx.wgpu_ctx, node_texture, &mut ctx.encoder);
     }
+    ctx.submit_recorded_commands();
 }
 
 pub(super) fn read_outputs(
-    ctx: &RenderCtx,
+    ctx: &mut RenderCtx,
     render_graph: &mut RenderGraph,
     pts: Duration,
 ) -> HashMap<OutputId, Frame> {
@@ -50,6 +49,7 @@ pub(super) fn read_outputs(
             (output_id, partial_frame)
         })
         .collect();
+    ctx.submit_recorded_commands();
 
     while let Err(wgpu::PollError::Timeout) = ctx
         .wgpu_ctx
@@ -69,6 +69,7 @@ pub(super) fn run_transforms(ctx: &mut RenderCtx, scene: &mut RenderGraph, pts: 
     for root in scene.render_trees.values_mut() {
         render_node(ctx, &scene.inputs, pts, root);
     }
+    ctx.submit_recorded_commands();
 }
 
 pub(super) fn render_node(

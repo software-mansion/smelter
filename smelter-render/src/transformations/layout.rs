@@ -154,7 +154,7 @@ impl LayoutNode {
 
     pub fn render(
         &mut self,
-        ctx: &RenderCtx,
+        ctx: &mut RenderCtx,
         sources: &[&NodeTexture],
         target: &mut NodeTexture,
         pts: Duration,
@@ -167,14 +167,7 @@ impl LayoutNode {
         let layouts = self.layout_provider.layouts(pts, &input_resolutions);
         let mut layouts = layouts.flatten(&input_resolutions, output_resolution);
 
-        let mut encoder =
-            ctx.wgpu_ctx
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("layout node"),
-                });
-
-        self.resample_scaled_children(ctx, sources, &mut layouts, &mut encoder);
+        self.resample_scaled_children(ctx, sources, &mut layouts);
 
         let resolved_views: Vec<&wgpu::TextureView> = layouts
             .iter()
@@ -205,16 +198,8 @@ impl LayoutNode {
             .collect();
 
         let target = target.ensure_size(ctx.wgpu_ctx, output_resolution);
-        self.shader.render(
-            ctx.wgpu_ctx,
-            output_resolution,
-            layouts,
-            &resolved_views,
-            target,
-            &mut encoder,
-        );
-
-        ctx.wgpu_ctx.queue.submit(Some(encoder.finish()));
+        self.shader
+            .render(ctx, output_resolution, layouts, &resolved_views, target);
     }
 
     /// Resample scaled child nodes to their exact on-screen size, so the layout shader always
@@ -222,10 +207,9 @@ impl LayoutNode {
     /// CPU-optimized rendering skips this and scales bilinearly in the layout shader instead.
     fn resample_scaled_children(
         &mut self,
-        ctx: &RenderCtx,
+        ctx: &mut RenderCtx,
         sources: &[&NodeTexture],
         layouts: &mut [RenderLayout],
-        encoder: &mut wgpu::CommandEncoder,
     ) {
         if ctx.wgpu_ctx.mode == RenderingMode::CpuOptimized {
             return;
@@ -252,7 +236,7 @@ impl LayoutNode {
                 source,
                 *crop,
                 dst,
-                encoder,
+                &mut ctx.encoder,
             );
             *crop = ResampledChild::output_crop(dst);
             resampled.push(layout_index);

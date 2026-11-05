@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use glyphon::fontdb;
 use tracing::trace;
+use wgpu::util::StagingBelt;
 
 use crate::{
     FrameSet, InputId, OutputFrameFormat, OutputId, RegistryType, RendererId, RenderingMode,
@@ -39,6 +40,8 @@ pub mod render_graph;
 mod render_loop;
 pub mod renderers;
 
+const STAGING_BELT_CHUNK_SIZE: u64 = 128 * 1024;
+
 pub struct RendererOptions {
     pub chromium_context: Option<Arc<ChromiumContext>>,
     pub framerate: Framerate,
@@ -61,6 +64,7 @@ struct InnerRenderer {
     scene: SceneState,
 
     renderers: Renderers,
+    staging_belt: StagingBelt,
 
     wgpu_ctx: Arc<WgpuCtx>,
 }
@@ -69,6 +73,21 @@ pub(crate) struct RenderCtx<'a> {
     pub(crate) wgpu_ctx: &'a Arc<WgpuCtx>,
     pub(crate) text_renderer_ctx: &'a TextRendererCtx,
     pub(crate) renderers: &'a Renderers,
+    pub(crate) staging_belt: &'a mut StagingBelt,
+    pub(crate) encoder: wgpu::CommandEncoder,
+}
+
+impl RenderCtx<'_> {
+    /// Submits recorded commands and replaces the encoder with a new one.
+    pub(crate) fn submit_recorded_commands(&mut self) {
+        let recorded = std::mem::replace(
+            &mut self.encoder,
+            self.wgpu_ctx.create_command_encoder("Render"),
+        );
+        self.staging_belt.finish();
+        self.wgpu_ctx.queue.submit(Some(recorded.finish()));
+        self.staging_belt.recall();
+    }
 }
 
 pub(crate) struct RegisterCtx {
@@ -198,6 +217,7 @@ impl InnerRenderer {
                 opts.load_system_fonts,
             )),
             render_graph: RenderGraph::empty(),
+            staging_belt: StagingBelt::new(wgpu_ctx.device.clone(), STAGING_BELT_CHUNK_SIZE),
             renderers: Renderers::new(wgpu_ctx, opts.max_layouts_count)?,
             scene: SceneState::new(),
             chromium_context: opts.chromium_context,
@@ -219,6 +239,8 @@ impl InnerRenderer {
             wgpu_ctx: &self.wgpu_ctx,
             text_renderer_ctx: &self.text_renderer_ctx,
             renderers: &self.renderers,
+            staging_belt: &mut self.staging_belt,
+            encoder: self.wgpu_ctx.create_command_encoder("Render"),
         };
 
         let scope = WgpuErrorScope::push(&ctx.wgpu_ctx.device);
@@ -268,12 +290,18 @@ impl InnerRenderer {
                 OutputSpec::LinkedOutput(primary_output_id)
             }
         };
-        let ctx = RenderCtx {
+        let mut ctx = RenderCtx {
             wgpu_ctx: &self.wgpu_ctx,
             text_renderer_ctx: &self.text_renderer_ctx,
             renderers: &self.renderers,
+            staging_belt: &mut self.staging_belt,
+            encoder: self.wgpu_ctx.create_command_encoder("Scene update"),
         };
-        self.render_graph
-            .update_output(&ctx, output_id, resolution, output_format, update)
+        let result =
+            self.render_graph
+                .update_output(&ctx, output_id, resolution, output_format, update);
+        // Not required, scene update does not record any commands at the moment.
+        ctx.submit_recorded_commands();
+        result
     }
 }

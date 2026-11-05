@@ -31,7 +31,13 @@ impl ReinterpretToSrgb {
         });
     }
 
-    pub fn convert(&mut self, ctx: &WgpuCtx, source: &wgpu::Texture, dest: &wgpu::Texture) {
+    pub fn convert(
+        &mut self,
+        ctx: &WgpuCtx,
+        source: &wgpu::Texture,
+        dest: &wgpu::Texture,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
         let size = source.size();
         if dest.size() != source.size() {
             error!("Destination and source sizes does not match when reinterpreting to sRGB.");
@@ -39,12 +45,6 @@ impl ReinterpretToSrgb {
         }
 
         self.ensure_size(ctx, size);
-
-        let mut encoder = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("copy static image asset to texture"),
-            });
 
         let buffer_desc = wgpu::TexelCopyBufferInfo {
             buffer: &self.buffer,
@@ -57,7 +57,5 @@ impl ReinterpretToSrgb {
 
         encoder.copy_texture_to_buffer(source.as_image_copy(), buffer_desc, size);
         encoder.copy_buffer_to_texture(buffer_desc, dest.as_image_copy(), size);
-
-        ctx.queue.submit(Some(encoder.finish()));
     }
 }

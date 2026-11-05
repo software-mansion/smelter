@@ -57,7 +57,13 @@ impl SvgAsset {
         })
     }
 
-    pub fn render(&self, ctx: &WgpuCtx, target: &NodeTextureState, state: &mut SvgNodeState) {
+    pub fn render(
+        &self,
+        ctx: &WgpuCtx,
+        target: &NodeTextureState,
+        state: &mut SvgNodeState,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
         if state.was_rendered {
             return;
         }
@@ -69,14 +75,14 @@ impl SvgAsset {
                 SvgRenderer::GpuOptimized(renderer),
                 NodeTextureState::GpuOptimized { texture, .. },
             ) => {
-                renderer.render(ctx, &self.tree.0, texture, resolution);
+                renderer.render(ctx, &self.tree.0, texture, resolution, encoder);
             }
             (SvgRenderer::CpuOptimized, NodeTextureState::CpuOptimized { texture, .. }) => {
                 // input is already in sRGB with pre-multiplied alpha
                 render_to_texture(ctx, &self.tree.0, texture.texture(), resolution);
             }
             (SvgRenderer::WebGl(renderer), NodeTextureState::WebGl { texture, .. }) => {
-                renderer.render(ctx, &self.tree.0, texture, resolution)
+                renderer.render(ctx, &self.tree.0, texture, resolution, encoder)
             }
             _ => {
                 error!("Wrong node texture type");
@@ -148,6 +154,7 @@ impl GpuSvgRenderer {
         tree: &resvg::Tree,
         target: &RgbaMultiViewTexture,
         resolution: Resolution,
+        encoder: &mut wgpu::CommandEncoder,
     ) {
         self.ensure_texture_size(ctx, resolution);
         render_to_texture(ctx, tree, self.original_texture.texture(), resolution);
@@ -157,6 +164,7 @@ impl GpuSvgRenderer {
             ctx,
             &self.original_texture_linear_bg,
             self.non_premultiplied_texture.linear_view(),
+            encoder,
         );
 
         // interpret source and destination as srgb when adding pre-multiplication
@@ -164,6 +172,7 @@ impl GpuSvgRenderer {
             ctx,
             &self.non_premultiplied_texture_srgb_bg,
             target.srgb_view(),
+            encoder,
         );
     }
 
@@ -222,6 +231,7 @@ impl WebGlSvgRenderer {
         tree: &resvg::Tree,
         target: &RgbaSrgbTexture,
         resolution: Resolution,
+        encoder: &mut wgpu::CommandEncoder,
     ) {
         self.ensure_texture_size(ctx, resolution);
         render_to_texture(ctx, tree, self.original_texture.texture(), resolution);
@@ -231,12 +241,14 @@ impl WebGlSvgRenderer {
             ctx,
             &self.original_texture_linear_bg,
             self.non_premultiplied_texture_linear.view(),
+            encoder,
         );
 
         self.reinterpret_to_srgb.convert(
             ctx,
             self.non_premultiplied_texture_linear.texture(),
             self.non_premultiplied_texture_srgb.texture(),
+            encoder,
         );
 
         // interpret source and destination as srgb when adding pre-multiplication
@@ -244,6 +256,7 @@ impl WebGlSvgRenderer {
             ctx,
             &self.non_premultiplied_texture_srgb_bg,
             target.view(),
+            encoder,
         );
     }
 
@@ -289,5 +302,4 @@ fn render_to_texture(
     tree.render(transform, &mut pixmap);
 
     texture.upload_data(&ctx.queue, pixmap.data_mut(), 4);
-    ctx.queue.submit([]);
 }

@@ -45,7 +45,12 @@ impl PlanarYuvInput {
         self.upload_textures.upload(ctx, &planes);
     }
 
-    pub fn convert(&mut self, ctx: &WgpuCtx, dest: &NodeTextureState) {
+    pub fn convert(
+        &mut self,
+        ctx: &WgpuCtx,
+        dest: &NodeTextureState,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
         match dest {
             NodeTextureState::GpuOptimized { texture, .. } => {
                 // write to sRGB texture as if it was linear
@@ -54,6 +59,7 @@ impl PlanarYuvInput {
                     self.upload_textures.variant(),
                     &self.yuv_bind_group,
                     texture.linear_view(),
+                    encoder,
                 );
             }
             NodeTextureState::CpuOptimized { texture, .. } => {
@@ -62,6 +68,7 @@ impl PlanarYuvInput {
                     self.upload_textures.variant(),
                     &self.yuv_bind_group,
                     texture.view(),
+                    encoder,
                 );
             }
             NodeTextureState::WebGl { texture, .. } => {
@@ -74,8 +81,9 @@ impl PlanarYuvInput {
                     self.upload_textures.variant(),
                     &self.yuv_bind_group,
                     color_space_converter.texture.view(),
+                    encoder,
                 );
-                color_space_converter.convert(ctx, texture.texture());
+                color_space_converter.convert(ctx, texture.texture(), encoder);
             }
         }
     }

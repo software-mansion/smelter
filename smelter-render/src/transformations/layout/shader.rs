@@ -2,7 +2,7 @@ use tracing::error;
 
 use crate::{
     Resolution,
-    state::node_texture::NodeTextureState,
+    state::{RenderCtx, node_texture::NodeTextureState},
     wgpu::{
         WgpuCtx, WgpuErrorScope,
         common_pipeline::{self, CreateShaderError, Sampler},
@@ -87,16 +87,20 @@ impl LayoutShader {
 
     pub fn render(
         &self,
-        wgpu_ctx: &WgpuCtx,
+        ctx: &mut RenderCtx,
         output_resolution: Resolution,
         layouts: Vec<RenderLayout>,
         texture_views: &[&wgpu::TextureView],
         target: &NodeTextureState,
-        encoder: &mut wgpu::CommandEncoder,
     ) {
-        let layout_infos = self
-            .params_bind_groups
-            .update(wgpu_ctx, output_resolution, layouts);
+        let wgpu_ctx = ctx.wgpu_ctx;
+        let layout_infos = self.params_bind_groups.update(
+            wgpu_ctx,
+            output_resolution,
+            layouts,
+            ctx.staging_belt,
+            &mut ctx.encoder,
+        );
 
         if layout_infos.len() != texture_views.len() {
             error!(
@@ -123,7 +127,7 @@ impl LayoutShader {
             .collect();
 
         {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut render_pass = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: LABEL,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     ops: wgpu::Operations {

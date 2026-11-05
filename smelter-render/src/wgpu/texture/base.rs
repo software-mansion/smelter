@@ -29,7 +29,12 @@ pub fn new_texture(
 }
 
 pub trait TextureExt {
-    fn clone_texture(&self, ctx: &WgpuCtx, view_formats: &[wgpu::TextureFormat]) -> wgpu::Texture;
+    fn clone_texture(
+        &self,
+        ctx: &WgpuCtx,
+        view_formats: &[wgpu::TextureFormat],
+        encoder: &mut wgpu::CommandEncoder,
+    ) -> wgpu::Texture;
 
     fn upload_data(&self, queue: &wgpu::Queue, data: &[u8], bytes_per_pixel: u32);
 
@@ -43,7 +48,12 @@ pub trait TextureExt {
 }
 
 impl TextureExt for wgpu::Texture {
-    fn clone_texture(&self, ctx: &WgpuCtx, view_formats: &[wgpu::TextureFormat]) -> wgpu::Texture {
+    fn clone_texture(
+        &self,
+        ctx: &WgpuCtx,
+        view_formats: &[wgpu::TextureFormat],
+        encoder: &mut wgpu::CommandEncoder,
+    ) -> wgpu::Texture {
         let destination = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size: self.size(),
@@ -54,7 +64,11 @@ impl TextureExt for wgpu::Texture {
             usage: self.usage(),
             view_formats,
         });
-        copy_texture_to_texture(ctx, self, &destination);
+        encoder.copy_texture_to_texture(
+            self.as_image_copy(),
+            destination.as_image_copy(),
+            self.size(),
+        );
         destination
     }
 
@@ -116,15 +130,4 @@ impl TextureExt for wgpu::Texture {
             size,
         );
     }
-}
-
-fn copy_texture_to_texture(ctx: &WgpuCtx, source: &wgpu::Texture, destination: &wgpu::Texture) {
-    let mut encoder = ctx.device.create_command_encoder(&Default::default());
-
-    encoder.copy_texture_to_texture(
-        source.as_image_copy(),
-        destination.as_image_copy(),
-        source.size(),
-    );
-    ctx.queue.submit(Some(encoder.finish()));
 }

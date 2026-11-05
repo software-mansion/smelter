@@ -53,9 +53,8 @@ impl WebRendererShader {
         wgpu_ctx: &WgpuCtx,
         textures: &[(Option<&wgpu::TextureView>, RenderInfo)],
         target: &NodeTextureState,
+        encoder: &mut wgpu::CommandEncoder,
     ) {
-        let mut encoder = wgpu_ctx.device.create_command_encoder(&Default::default());
-
         let mut render_plane =
             |(texture_view, render_info): &(Option<&wgpu::TextureView>, RenderInfo),
              clear: bool| {
@@ -107,7 +106,5 @@ impl WebRendererShader {
         for (id, render_texture) in textures.iter().enumerate() {
             render_plane(render_texture, id == 0);
         }
-
-        wgpu_ctx.queue.submit(Some(encoder.finish()));
     }
 }
