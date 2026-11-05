@@ -5,7 +5,7 @@ fn main() {
     use gpu_video::{
         EncodedInputChunk, VideoInstance,
         parameters::{
-            AnyEncoderParameters, InputNaluFormatH264, RateControl, ScalingAlgorithm,
+            AnyEncoderParameters, InputBytestreamFormatH264, RateControl, ScalingAlgorithm,
             TranscoderInputParameters, TranscoderOutputParameters, TranscoderParameters,
             VideoAdapterDescriptor, VideoDeviceDescriptor, VideoInstanceDescriptor,
         },
@@ -84,7 +84,7 @@ fn main() {
             TranscoderParameters {
                 input_parameters: TranscoderInputParameters {
                     framerate: 30.into(),
-                    bitstream_format: InputNaluFormatH264::AnnexB,
+                    bytestream_format: InputBytestreamFormatH264::AnnexB,
                 },
                 output_parameters: vec![
                     TranscoderOutputParameters {

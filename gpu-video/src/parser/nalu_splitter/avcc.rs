@@ -20,15 +20,15 @@ enum State {
 pub(crate) struct AvccSplitter {
     buffer: BytesMut,
     state: State,
-    prefix_len: usize,
+    prefix_byte_length: usize,
 }
 
 impl AvccSplitter {
-    pub(super) fn new(prefix_len: AvccPrefixLength) -> Self {
+    pub(super) fn new(prefix_length: AvccPrefixLength) -> Self {
         Self {
             buffer: Default::default(),
             state: Default::default(),
-            prefix_len: prefix_len.size(),
+            prefix_byte_length: prefix_length.prefix_byte_length(),
         }
     }
 
@@ -52,10 +52,10 @@ impl AvccSplitter {
         loop {
             match self.state {
                 State::ReadingLengthPrefix => {
-                    if self.buffer.len() < self.prefix_len {
+                    if self.buffer.len() < self.prefix_byte_length {
                         break;
                     }
-                    let len = self.buffer.get_uint(self.prefix_len) as usize;
+                    let len = self.buffer.get_uint(self.prefix_byte_length) as usize;
                     self.state = if self.buffer.is_empty() {
                         State::AtLengthPrefixEnd { len }
                     } else {

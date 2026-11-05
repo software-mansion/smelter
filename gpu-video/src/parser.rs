@@ -17,9 +17,9 @@ pub mod h264 {
     #[cfg(feature = "expose-parsers")]
     pub use h264_reader::nal as nal_types;
 
-    /// Format of the H.264 bitstream fed to the parser
+    /// Format of the H.264 bytestream fed to the parser
     #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-    pub enum InputNaluFormatH264 {
+    pub enum InputBytestreamFormatH264 {
         /// NAL units are separated by start codes (`0x000001` or `0x00000001`)
         #[default]
         AnnexB,
@@ -27,14 +27,14 @@ pub mod h264 {
         /// Each NAL unit is prefixed with its length as a 1, 2 or 4-byte big-endian integer.
         ///
         /// The prefix length is stored in the `lengthSizeMinusOne` field of the `AVCDecoderConfigurationRecord`
-        /// (the `avcC` box in MP4, `CodecPrivate` in Matroska, the FLV sequence header in RTMP).
+        /// (the `avcC` box in MP4, `CodecPrivate` in Matroska, the AVC sequence header in RTMP).
         /// In practice the prefix is almost always 4 bytes long.
         Avcc { prefix_length: AvccPrefixLength },
     }
 
-    /// Format of the H.264 NAL units produced by the parser
+    /// Format of the H.264 bytestream produced by the parser
     #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-    pub enum OutputNaluFormatH264 {
+    pub enum OutputBytestreamFormatH264 {
         /// Each NAL unit is prefixed with a `0x00000001` start code
         #[default]
         AnnexB,
@@ -43,7 +43,7 @@ pub mod h264 {
         Avcc,
     }
 
-    /// Size of the NAL unit length prefix in AVCC streams
+    /// Byte length of the NAL unit length prefix in AVCC streams
     #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
     pub enum AvccPrefixLength {
         Bytes1,
@@ -53,7 +53,7 @@ pub mod h264 {
     }
 
     impl AvccPrefixLength {
-        pub(crate) fn size(self) -> usize {
+        pub(crate) fn prefix_byte_length(self) -> usize {
             match self {
                 Self::Bytes1 => 1,
                 Self::Bytes2 => 2,
@@ -64,8 +64,8 @@ pub mod h264 {
 
     #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
     pub struct ParserOptionsH264 {
-        pub input_format: InputNaluFormatH264,
-        pub output_format: OutputNaluFormatH264,
+        pub input_format: InputBytestreamFormatH264,
+        pub output_format: OutputBytestreamFormatH264,
     }
 
     #[derive(Debug, thiserror::Error)]
@@ -87,7 +87,7 @@ pub mod h264 {
     pub struct H264Parser {
         nal_parser: NalParser,
         nalu_splitter: NALUSplitter,
-        output_format: OutputNaluFormatH264,
+        output_format: OutputBytestreamFormatH264,
         au_splitter: AUSplitter,
     }
 
@@ -163,10 +163,10 @@ pub mod h264 {
     fn parsed_nalu_to_struct(
         mut parsed_nalu: ParsedNalu,
         mut nalu_bytes: Vec<u8>,
-        output_format: OutputNaluFormatH264,
+        output_format: OutputBytestreamFormatH264,
         pts: Option<u64>,
     ) -> Nalu {
-        if output_format == OutputNaluFormatH264::Avcc {
+        if output_format == OutputBytestreamFormatH264::Avcc {
             to_avcc(&mut nalu_bytes);
             if let ParsedNalu::Slice(ref mut slice) = parsed_nalu {
                 to_avcc(&mut slice.rbsp_bytes);

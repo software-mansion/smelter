@@ -234,7 +234,7 @@ impl Transcoder {
         let decoder = VTDecoderH264::new_pixel_buffers(
             DecoderParameters {
                 corrupted_state_handling: Default::default(),
-                bitstream_format: params.input_parameters.bitstream_format,
+                bytestream_format: params.input_parameters.bytestream_format,
                 usage_flags: DecoderUsage::Transcoding,
                 max_in_flight_submissions,
             },

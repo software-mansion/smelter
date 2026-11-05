@@ -1,7 +1,7 @@
 mod annexb;
 mod avcc;
 
-use super::h264::InputNaluFormatH264;
+use super::h264::InputBytestreamFormatH264;
 use annexb::AnnexBSplitter;
 use avcc::AvccSplitter;
 
@@ -15,15 +15,15 @@ pub(crate) enum NALUSplitter {
 
 impl Default for NALUSplitter {
     fn default() -> Self {
-        Self::new(InputNaluFormatH264::default())
+        Self::new(InputBytestreamFormatH264::default())
     }
 }
 
 impl NALUSplitter {
-    pub(crate) fn new(bitstream_format: InputNaluFormatH264) -> Self {
-        match bitstream_format {
-            InputNaluFormatH264::AnnexB => Self::AnnexB(AnnexBSplitter::default()),
-            InputNaluFormatH264::Avcc { prefix_length } => {
+    pub(crate) fn new(bytestream_format: InputBytestreamFormatH264) -> Self {
+        match bytestream_format {
+            InputBytestreamFormatH264::AnnexB => Self::AnnexB(AnnexBSplitter::default()),
+            InputBytestreamFormatH264::Avcc { prefix_length } => {
                 Self::Avcc(AvccSplitter::new(prefix_length))
             }
         }
