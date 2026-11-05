@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use ash::vk;
-use wgpu::hal::{Queue, vulkan::Api as VkApi};
+use wgpu::hal::vulkan::Api as VkApi;
 
 use crate::{
     InputFrame, VideoTexture,
@@ -23,8 +23,6 @@ impl<'a, C: EncodeCodec> AsyncVulkanEncoder<'a, C> {
         wgpu_queue: &wgpu::Queue,
         video_texture: &VideoTexture,
     ) -> Result<(EncodeInputImage, SemaphoreWaitValue), VulkanEncoderError> {
-        let hal_queue = unsafe { wgpu_queue.as_hal::<VkApi>().unwrap() };
-
         let input_image = self
             .used_input_images
             .lock()
@@ -64,11 +62,11 @@ impl<'a, C: EncodeCodec> AsyncVulkanEncoder<'a, C> {
             .input_tracker
             .next_submit_info(EncoderTrackerWaitState::TransitionInputImage);
 
-        unsafe {
-            hal_queue
-                .submit(&[], &[], semaphore_submit_info.wgpu_signal_info())
-                .map_err(WgpuTextureEncoderError::from)?;
-        }
+        unsafe { wgpu_queue.as_hal::<VkApi>().unwrap() }.add_signal_semaphore(
+            semaphore_submit_info.semaphore(),
+            Some(semaphore_submit_info.signal_value().0),
+        );
+        wgpu_queue.submit([]);
 
         let wait_for = semaphore_submit_info.signal_value();
         semaphore_submit_info.mark_submitted();

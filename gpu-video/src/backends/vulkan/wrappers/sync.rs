@@ -156,9 +156,6 @@ impl<K: TrackerKind> Tracker<K> {
 pub(crate) struct SemaphoreSubmitInfo<'a, S> {
     pub(crate) signal: TrackerWait<S>,
     tracker: &'a mut SemaphoreTracker<S>,
-
-    #[cfg(feature = "wgpu")]
-    wgpu_fence: wgpu::hal::vulkan::Fence,
 }
 
 impl<'a, S> SemaphoreSubmitInfo<'a, S> {
@@ -175,8 +172,8 @@ impl<'a, S> SemaphoreSubmitInfo<'a, S> {
     }
 
     #[cfg(feature = "wgpu")]
-    pub(crate) fn wgpu_signal_info(&self) -> (&wgpu::hal::vulkan::Fence, u64) {
-        (&self.wgpu_fence, self.signal.value.0)
+    pub(crate) fn semaphore(&self) -> vk::Semaphore {
+        self.tracker.semaphore.semaphore
     }
 
     pub(crate) fn signal_info(
@@ -227,8 +224,6 @@ impl<S> SemaphoreTracker<S> {
 
         SemaphoreSubmitInfo {
             signal,
-            #[cfg(feature = "wgpu")]
-            wgpu_fence: wgpu::hal::vulkan::Fence::TimelineSemaphore(self.semaphore.semaphore),
             tracker: self,
         }
     }
