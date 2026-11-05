@@ -65,7 +65,7 @@ impl OutputTexture {
         ctx: &mut RenderCtx,
         source: Option<&NodeTextureState>,
         pts: Duration,
-    ) -> RecordedOutputFrame<'a> {
+    ) -> PartialOutputFrame<'a, impl FnOnce() -> Result<Bytes, BufferAsyncError> + use<'a>> {
         let resolution = self.resolution;
         let source = source.map(|source| self.resampler.resample(ctx, source, resolution));
         let wgpu_ctx = ctx.wgpu_ctx;
@@ -82,9 +82,10 @@ impl OutputTexture {
                     ),
                     None => yuv_textures.fill_with_color(wgpu_ctx, RGBColor::BLACK, encoder),
                 }
-                yuv_output.copy_to_buffers(encoder);
-                RecordedOutputFrame::PendingYuvDownload {
-                    output: yuv_output,
+                PartialOutputFrame::PendingYuvDownload {
+                    pending_download: yuv_output.start_download(encoder),
+                    variant: yuv_textures.variant(),
+                    resolution: yuv_output.resolution(),
                     pts,
                 }
             }
@@ -118,7 +119,7 @@ impl OutputTexture {
                         RgbaSrgbTexture::new(wgpu_ctx, resolution).texture_owned()
                     }
                 };
-                RecordedOutputFrame::CompleteFrame(Frame {
+                PartialOutputFrame::CompleteFrame(Frame {
                     resolution: texture.size().into(),
                     data: FrameData::Rgba8UnormWgpuTexture(texture),
                     pts,
@@ -135,7 +136,7 @@ impl OutputTexture {
                     ),
                     None => texture.fill_with_color(wgpu_ctx, RGBColor::BLACK, encoder),
                 }
-                RecordedOutputFrame::CompleteFrame(Frame {
+                PartialOutputFrame::CompleteFrame(Frame {
                     resolution,
                     data: FrameData::Nv12WgpuTexture(texture.texture().clone()),
                     pts,
@@ -196,32 +197,6 @@ impl OutputResampler {
     }
 }
 
-/// Output frame with conversion commands recorded, but not submitted yet.
-pub enum RecordedOutputFrame<'a> {
-    PendingYuvDownload {
-        output: &'a PlanarYuvOutput,
-        pts: Duration,
-    },
-    CompleteFrame(Frame),
-}
-
-impl<'a> RecordedOutputFrame<'a> {
-    /// Commands recorded by `OutputTexture::read` need to be submitted before this method.
-    pub fn start_download(
-        self,
-    ) -> PartialOutputFrame<'a, impl FnOnce() -> Result<Bytes, BufferAsyncError> + 'a> {
-        match self {
-            Self::PendingYuvDownload { output, pts } => PartialOutputFrame::PendingYuvDownload {
-                pending_download: output.start_download(),
-                variant: output.yuv_textures().variant(),
-                resolution: output.resolution(),
-                pts,
-            },
-            Self::CompleteFrame(frame) => PartialOutputFrame::CompleteFrame(frame),
-        }
-    }
-}
-
 pub enum PartialOutputFrame<'a, F>
 where
     F: FnOnce() -> Result<Bytes, BufferAsyncError> + 'a,
@@ -239,8 +214,8 @@ impl<'a, F> PartialOutputFrame<'a, F>
 where
     F: FnOnce() -> Result<Bytes, BufferAsyncError> + 'a,
 {
-    /// `device.poll` needs to be called after `RecordedOutputFrame::start_download`, but before
-    /// this method.
+    /// Commands recorded by `OutputTexture::read` need to be submitted, and `device.poll` called
+    /// after that submit, before this method.
     pub fn finish(self) -> Option<Frame> {
         match self {
             Self::PendingYuvDownload {
@@ -299,22 +274,33 @@ impl PlanarYuvOutput {
         self.resolution
     }
 
-    pub fn copy_to_buffers(&self, encoder: &mut wgpu::CommandEncoder) {
-        self.textures.copy_to_buffers(&self.buffers, encoder);
-    }
-
-    /// Commands recorded by `copy_to_buffers` need to be submitted before this method.
+    /// Records copy to the download buffers. They are mapped when `encoder` is submitted.
     pub fn start_download<'a>(
         &'a self,
+        encoder: &mut wgpu::CommandEncoder,
     ) -> PlanarYuvPendingDownload<
         'a,
-        impl FnOnce() -> Result<bytes::Bytes, BufferAsyncError> + 'a,
+        impl FnOnce() -> Result<bytes::Bytes, BufferAsyncError> + use<'a>,
         BufferAsyncError,
     > {
+        self.textures.copy_to_buffers(&self.buffers, encoder);
+
         PlanarYuvPendingDownload::new(
-            self.download_buffer(self.textures.plane_texture(0).size(), &self.buffers[0]),
-            self.download_buffer(self.textures.plane_texture(1).size(), &self.buffers[1]),
-            self.download_buffer(self.textures.plane_texture(2).size(), &self.buffers[2]),
+            self.download_buffer(
+                self.textures.plane_texture(0).size(),
+                &self.buffers[0],
+                encoder,
+            ),
+            self.download_buffer(
+                self.textures.plane_texture(1).size(),
+                &self.buffers[1],
+                encoder,
+            ),
+            self.download_buffer(
+                self.textures.plane_texture(2).size(),
+                &self.buffers[2],
+                encoder,
+            ),
         )
     }
 
@@ -322,16 +308,15 @@ impl PlanarYuvOutput {
         &'a self,
         size: wgpu::Extent3d,
         source: &'a Buffer,
-    ) -> impl FnOnce() -> Result<bytes::Bytes, BufferAsyncError> + 'a {
+        encoder: &mut wgpu::CommandEncoder,
+    ) -> impl FnOnce() -> Result<bytes::Bytes, BufferAsyncError> + use<'a> {
         let buffer = bytes::BytesMut::with_capacity((size.width * size.height) as usize);
         let (s, r) = bounded(1);
-        source
-            .slice(..)
-            .map_async(wgpu::MapMode::Read, move |result| {
-                if let Err(err) = s.send(result) {
-                    error!("channel send error: {err}")
-                }
-            });
+        encoder.map_buffer_on_submit(source, wgpu::MapMode::Read, .., move |result| {
+            if let Err(err) = s.send(result) {
+                error!("channel send error: {err}")
+            }
+        });
 
         move || {
             r.recv().unwrap()?;

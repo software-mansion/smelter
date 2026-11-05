@@ -38,23 +38,18 @@ pub(super) fn read_outputs(
         outputs,
         inputs,
     } = render_graph;
-    let recorded_frames: Vec<_> = outputs
+    let partial_frames: Vec<_> = outputs
         .iter_mut()
         .map(|(output_id, output)| {
             // `None` if the root is empty, or if a linked output does not render its own scene.
             let node_texture = render_trees
                 .get(&output.render_tree_id)
                 .and_then(|root| root.output_texture(inputs).state());
-            let recorded_frame = output.output_texture.read(ctx, node_texture, pts);
-            (output_id, recorded_frame)
+            let partial_frame = output.output_texture.read(ctx, node_texture, pts);
+            (output_id, partial_frame)
         })
         .collect();
     ctx.submit_recorded_commands();
-
-    let partial_frames: Vec<_> = recorded_frames
-        .into_iter()
-        .map(|(output_id, recorded_frame)| (output_id, recorded_frame.start_download()))
-        .collect();
 
     while let Err(wgpu::PollError::Timeout) = ctx
         .wgpu_ctx
