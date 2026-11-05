@@ -3,7 +3,7 @@ use std::num::NonZeroU32;
 use crate::{
     EncodedInputChunk, EncodedOutputChunk, VideoBackendError, VideoDecoderError, VideoEncoderError,
     device::{EncoderOutputParameters, Rational},
-    parameters::{H264Profile, H265Profile, ScalingAlgorithm},
+    parameters::{H264Profile, H265Profile, InputNaluFormatH264, ScalingAlgorithm},
 };
 
 pub struct VideoTranscoder {
@@ -51,7 +51,7 @@ pub enum AnyEncoderParameters {
 /// Configuration for a transcoder
 #[derive(Debug, Clone)]
 pub struct TranscoderParameters {
-    pub input_framerate: Rational,
+    pub input_parameters: TranscoderInputParameters,
     pub output_parameters: Vec<TranscoderOutputParameters>,
     /// Maximum number of decode submissions and, for each output, encode submissions that can be
     /// in flight. When a limit is reached, transcoding blocks until the oldest submission finishes.
@@ -59,6 +59,13 @@ pub struct TranscoderParameters {
     ///
     /// **Defaults to 3**
     pub max_in_flight_submissions: Option<u32>,
+}
+
+/// Configuration for a transcoder input.
+#[derive(Debug, Clone, Copy)]
+pub struct TranscoderInputParameters {
+    pub framerate: Rational,
+    pub bitstream_format: InputNaluFormatH264,
 }
 
 /// Configuration for a single transcoder output.

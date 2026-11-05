@@ -17,6 +17,57 @@ pub mod h264 {
     #[cfg(feature = "expose-parsers")]
     pub use h264_reader::nal as nal_types;
 
+    /// Format of the H.264 bitstream fed to the parser
+    #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum InputNaluFormatH264 {
+        /// NAL units are separated by start codes (`0x000001` or `0x00000001`)
+        #[default]
+        AnnexB,
+
+        /// Each NAL unit is prefixed with its length as a 1, 2 or 4-byte big-endian integer.
+        ///
+        /// The prefix length is stored in the `lengthSizeMinusOne` field of the `AVCDecoderConfigurationRecord`
+        /// (the `avcC` box in MP4, `CodecPrivate` in Matroska, the FLV sequence header in RTMP).
+        /// In practice the prefix is almost always 4 bytes long.
+        Avcc { prefix_length: AvccPrefixLength },
+    }
+
+    /// Format of the H.264 NAL units produced by the parser
+    #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum OutputNaluFormatH264 {
+        /// Each NAL unit is prefixed with a `0x00000001` start code
+        #[default]
+        AnnexB,
+
+        /// Each NAL unit is prefixed with its length as a 4-byte big-endian integer.
+        Avcc,
+    }
+
+    /// Size of the NAL unit length prefix in AVCC streams
+    #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum AvccPrefixLength {
+        Bytes1,
+        Bytes2,
+        #[default]
+        Bytes4,
+    }
+
+    impl AvccPrefixLength {
+        pub(crate) fn size(self) -> usize {
+            match self {
+                Self::Bytes1 => 1,
+                Self::Bytes2 => 2,
+                Self::Bytes4 => 4,
+            }
+        }
+    }
+
+    #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct ParserOptionsH264 {
+        pub input_format: InputNaluFormatH264,
+        pub output_format: OutputNaluFormatH264,
+    }
+
     #[derive(Debug, thiserror::Error)]
     pub enum H264ParserError {
         #[error("Error while parsing a NAL header: {0:?}")]
@@ -32,25 +83,24 @@ pub mod h264 {
         SliceParseError(h264_reader::nal::slice::SliceHeaderError),
     }
 
-    /// H264 parser for Annex B format
     #[derive(Default)]
     pub struct H264Parser {
         nal_parser: NalParser,
         nalu_splitter: NALUSplitter,
-        convert_to_avcc: bool,
+        output_format: OutputNaluFormatH264,
         au_splitter: AUSplitter,
     }
 
     impl H264Parser {
-        #[cfg_attr(all(vulkan, not(feature = "expose-parsers")), expect(unused))]
-        pub fn new_avcc_output() -> Self {
+        pub fn new(options: ParserOptionsH264) -> Self {
             Self {
-                convert_to_avcc: true,
+                nalu_splitter: NALUSplitter::new(options.input_format),
+                output_format: options.output_format,
                 ..Default::default()
             }
         }
 
-        /// Parses nalus in Annex B format.
+        /// Parses nalus in the format selected with [`ParserOptionsH264::input_format`].
         /// Returns [`AccessUnit`]s representing whole frame
         pub fn parse(
             &mut self,
@@ -60,7 +110,7 @@ pub mod h264 {
             let nalus = self.nalu_splitter.push(bytes, pts);
             let nalus = nalus.into_iter().map(|(nalu_bytes, pts)| {
                 self.nal_parser.parse_nalu(&nalu_bytes).map(|parsed_nalu| {
-                    parsed_nalu_to_struct(parsed_nalu, nalu_bytes, self.convert_to_avcc, pts)
+                    parsed_nalu_to_struct(parsed_nalu, nalu_bytes, self.output_format, pts)
                 })
             });
 
@@ -82,7 +132,7 @@ pub mod h264 {
             let nalus = self.nalu_splitter.flush();
             let nalus = nalus.into_iter().map(|(nalu_bytes, pts)| {
                 self.nal_parser.parse_nalu(&nalu_bytes).map(|parsed_nalu| {
-                    parsed_nalu_to_struct(parsed_nalu, nalu_bytes, self.convert_to_avcc, pts)
+                    parsed_nalu_to_struct(parsed_nalu, nalu_bytes, self.output_format, pts)
                 })
             });
 
@@ -113,10 +163,10 @@ pub mod h264 {
     fn parsed_nalu_to_struct(
         mut parsed_nalu: ParsedNalu,
         mut nalu_bytes: Vec<u8>,
-        convert_to_avcc: bool,
+        output_format: OutputNaluFormatH264,
         pts: Option<u64>,
     ) -> Nalu {
-        if convert_to_avcc {
+        if output_format == OutputNaluFormatH264::Avcc {
             to_avcc(&mut nalu_bytes);
             if let ParsedNalu::Slice(ref mut slice) = parsed_nalu {
                 to_avcc(&mut slice.rbsp_bytes);
