@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
 use crate::parameters::{EncoderPreset, EncoderUsage, H264Profile, H265Profile, RateControl};
-use crate::parser::h264::InputNaluFormatH264;
+use crate::parser::h264::InputBytestreamFormatH264;
 use crate::{
     BytesDecoderH264, BytesEncoderH264, BytesEncoderH265, EncodedOutputChunk, OutputFrame,
     RawFrameData, VideoDecoderError, VideoEncoderError,
@@ -65,10 +65,10 @@ pub struct DecoderParameters {
     /// **Defaults to [`CorruptedStateHandling::Strict`]**
     pub corrupted_state_handling: CorruptedStateHandling,
 
-    /// See [`InputNaluFormatH264`] for description of the supported formats.
+    /// See [`InputBytestreamFormatH264`] for description of the supported formats.
     ///
-    /// **Defaults to [`InputNaluFormatH264::AnnexB`]**
-    pub bitstream_format: InputNaluFormatH264,
+    /// **Defaults to [`InputBytestreamFormatH264::AnnexB`]**
+    pub bytestream_format: InputBytestreamFormatH264,
 
     /// A hint indicating what kind of content the decoder is going to be used for.
     pub usage_flags: crate::parameters::DecoderUsage,
@@ -87,7 +87,7 @@ impl Default for DecoderParameters {
     fn default() -> Self {
         Self {
             corrupted_state_handling: Default::default(),
-            bitstream_format: Default::default(),
+            bytestream_format: Default::default(),
             usage_flags: Default::default(),
             max_in_flight_submissions: 3,
         }
