@@ -1,6 +1,6 @@
 import type { Api, Outputs, _smelterInternals } from '@swmansion/smelter';
 import type { RegisterOutputRequest } from '../output';
-import { intoOutputEosCondition, intoVideoEncoderBitrate } from './common';
+import { intoVideoEncoderBitrate } from './common';
 
 export function intoRegisterWhepServerOutput(
   output: Outputs.RegisterWhepServerOutput,
@@ -25,7 +25,6 @@ export function intoOutputWhepVideoOptions(
 
   return {
     resolution: video.resolution,
-    send_eos_when: video.sendEosWhen && intoOutputEosCondition(video.sendEosWhen),
     encoder: video.encoder && intoWhepVideoEncoderOptions(video.encoder),
     initial,
   };
@@ -73,7 +72,6 @@ function intoOutputWhepAudioOptions(
   initial: Api.AudioScene
 ): Api.OutputWhepAudioOptions {
   return {
-    send_eos_when: audio.sendEosWhen && intoOutputEosCondition(audio.sendEosWhen),
     encoder: intoWhepAudioEncoderOptions(audio.encoder),
     channels: audio.channels,
     initial,

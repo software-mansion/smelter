@@ -31,7 +31,7 @@ use crate::{
         channel::{EncodedDataOutput, RawDataInput, RawDataOutput},
         input::{PipelineInput, new_external_input, register_pipeline_input},
         output::{
-            OutputSender, OutputState, PipelineOutput, new_external_output,
+            OutputSendPolicy, OutputState, PipelineOutputs, new_external_output,
             register_pipeline_output,
         },
         rtmp::spawn_rtmp_server,
@@ -50,7 +50,7 @@ use crate::prelude::*;
 /// code, use `spawn_blocking` or a regular thread instead.
 pub struct Pipeline {
     pub(super) inputs: HashMap<InputId, PipelineInput>,
-    pub(super) outputs: HashMap<OutputId, PipelineOutput>,
+    pub(super) outputs: PipelineOutputs,
     pub(super) queue: Arc<Queue>,
     pub(super) renderer: Renderer,
     pub(super) stats_monitor: StatsMonitor,
@@ -148,14 +148,6 @@ impl Pipeline {
         self.queue.remove_input(input_id);
         self.renderer.unregister_input(input_id);
         self.audio_mixer.unregister_input(input_id);
-        for output in self.outputs.values_mut() {
-            if let Some(cond) = output.audio_end_condition_mut() {
-                cond.on_input_unregistered(input_id);
-            }
-            if let Some(cond) = output.video_end_condition_mut() {
-                cond.on_input_unregistered(input_id);
-            }
-        }
         Ok(())
     }
 
@@ -315,14 +307,6 @@ impl Pipeline {
             .get_mut(&output_id)
             .ok_or_else(|| UpdateSceneError::OutputNotRegistered(output_id.clone()))?;
 
-        if let Some(cond) = output.video_end_condition()
-            && cond.did_output_end()
-        {
-            // Ignore updates after EOS
-            warn!("Received output update on a finished output");
-            return Ok(());
-        }
-
         let Some(video_output) = output.output.video() else {
             return Err(UpdateSceneError::AudioVideoNotMatching(output_id));
         };
@@ -355,14 +339,6 @@ impl Pipeline {
             .get_mut(output_id)
             .ok_or_else(|| UpdateSceneError::OutputNotRegistered(output_id.clone()))?;
 
-        if let Some(cond) = output.audio_end_condition()
-            && cond.did_output_end()
-        {
-            // Ignore updates after EOS
-            warn!("Received output update on a finished output");
-            return Ok(());
-        }
-
         info!(?output_id, "Update audio mixer {:?}", audio);
 
         if let OutputState::NotStarted {
@@ -390,12 +366,16 @@ impl Pipeline {
         let (video_sender, video_receiver) = bounded(2);
         let (audio_sender, audio_receiver) = bounded(100);
         guard.queue.start(video_sender, audio_sender);
+        let send_policy = OutputSendPolicy {
+            sync_point: guard.ctx.queue_ctx.sync_point,
+            never_drop: guard.queue.never_drop_output_frames(),
+        };
 
         let weak_pipeline = Arc::downgrade(pipeline);
-        thread::spawn(move || run_renderer_thread(weak_pipeline, video_receiver));
+        thread::spawn(move || run_renderer_thread(weak_pipeline, video_receiver, send_policy));
 
         let weak_pipeline = Arc::downgrade(pipeline);
-        thread::spawn(move || run_audio_mixer_thread(weak_pipeline, audio_receiver));
+        thread::spawn(move || run_audio_mixer_thread(weak_pipeline, audio_receiver, send_policy));
     }
 
     pub fn inputs(&self) -> impl Iterator<Item = (&InputId, InputInfo)> {
@@ -451,6 +431,7 @@ impl Drop for Pipeline {
 fn run_renderer_thread(
     pipeline: Weak<Mutex<Pipeline>>,
     frames_receiver: Receiver<QueueVideoOutput>,
+    send_policy: OutputSendPolicy,
 ) {
     let renderer = match pipeline.upgrade() {
         Some(pipeline) => pipeline.lock().unwrap().renderer.clone(),
@@ -460,57 +441,35 @@ fn run_renderer_thread(
         }
     };
 
+    let _span = span!(Level::INFO, "Renderer").entered();
     for input_frames in frames_receiver.iter() {
         let Some(pipeline) = pipeline.upgrade() else {
             break;
         };
-        for (input_id, event) in input_frames.frames.iter() {
-            if event.is_eos {
-                let mut guard = pipeline.lock().unwrap();
-                if let Some(input) = guard.inputs.get_mut(input_id) {
-                    info!(?input_id, "Received video EOS on input.");
-                    input.on_video_eos();
-                }
-                for output in guard.outputs.values_mut() {
-                    if let Some(cond) = output.video_end_condition_mut() {
-                        cond.on_input_eos(input_id);
-                    }
-                }
-            }
-        }
 
-        let output_frame_senders: HashMap<_, _> =
-            Pipeline::all_output_video_senders_iter(&pipeline)
-                .filter_map(|(output_id, sender)| match sender {
-                    OutputSender::ActiveSender(sender) => Some((output_id, sender)),
-                    OutputSender::FinishedSender => {
-                        renderer.unregister_output(&output_id);
-                        None
-                    }
-                })
-                .collect();
+        let senders = pipeline.lock().unwrap().outputs.video_senders();
+        drop(pipeline);
 
         let input_frames: FrameSet<InputId> = input_frames.into();
+
         trace!(?input_frames, "Rendering frames");
-        let output_frames = renderer.render(input_frames);
-        let Ok(output_frames) = output_frames else {
-            error!(
-                "Error while rendering: {}",
-                ErrorStack::new(&output_frames.unwrap_err()).into_string()
-            );
-            continue;
+        let output_frames = match renderer.render(input_frames) {
+            Ok(output_frames) => output_frames,
+            Err(err) => {
+                let err = ErrorStack::new(&err).into_string();
+                error!("Error while rendering: {err}");
+                continue;
+            }
         };
 
         for (output_id, frame) in output_frames.frames {
-            let Some(frame_sender) = output_frame_senders.get(&output_id) else {
-                warn!(?output_id, "Received new frame from renderer after EOS.");
+            let Some(sender) = senders.get(&output_id) else {
+                warn!(?output_id, "Received frame for unknown output.");
                 continue;
             };
 
-            if frame_sender
-                .send(PipelineEvent::Data(frame.into()))
-                .is_err()
-            {
+            let pts = frame.pts;
+            if send_policy.send(sender, frame.into(), pts.into()).is_err() {
                 warn!(?output_id, "Failed to send output frames. Channel closed.");
                 renderer.unregister_output(&output_id);
             }
@@ -522,6 +481,7 @@ fn run_renderer_thread(
 fn run_audio_mixer_thread(
     pipeline: Weak<Mutex<Pipeline>>,
     audio_receiver: Receiver<QueueAudioOutput>,
+    send_policy: OutputSendPolicy,
 ) {
     let audio_mixer = match pipeline.upgrade() {
         Some(pipeline) => pipeline.lock().unwrap().audio_mixer.clone(),
@@ -538,45 +498,21 @@ fn run_audio_mixer_thread(
             break;
         };
 
-        trace!("Handle potential EOS");
-        for (input_id, event) in samples.samples.iter() {
-            if event.is_eos {
-                let mut guard = pipeline.lock().unwrap();
-                if let Some(input) = guard.inputs.get_mut(input_id) {
-                    info!(?input_id, "Received audio EOS on input.");
-                    input.on_audio_eos();
-                }
-                for output in guard.outputs.values_mut() {
-                    if let Some(cond) = output.audio_end_condition_mut() {
-                        cond.on_input_eos(input_id);
-                    }
-                }
-            }
-        }
-
-        trace!("Prepare output senders");
-        let output_samples_senders: HashMap<_, _> =
-            Pipeline::all_output_audio_senders_iter(&pipeline)
-                .filter_map(|(output_id, sender)| match sender {
-                    OutputSender::ActiveSender(sender) => Some((output_id, sender)),
-                    OutputSender::FinishedSender => {
-                        audio_mixer.unregister_output(&output_id);
-                        None
-                    }
-                })
-                .collect();
+        let senders = pipeline.lock().unwrap().outputs.audio_senders();
+        drop(pipeline);
 
         trace!("Mix audio");
         let mixed_samples = audio_mixer.process_batch_set(samples.into());
 
         for (output_id, batch) in mixed_samples.0 {
             trace!(?output_id, ?batch, "Send batch");
-            let Some(samples_sender) = output_samples_senders.get(&output_id) else {
-                warn!(?output_id, "Received new mixed samples after EOS.");
+            let Some(sender) = senders.get(&output_id) else {
+                warn!(?output_id, "Received mixed samples for unknown output.");
                 continue;
             };
 
-            if samples_sender.send(PipelineEvent::Data(batch)).is_err() {
+            let pts = batch.start_pts;
+            if send_policy.send(sender, batch, pts).is_err() {
                 warn!(?output_id, "Failed to send mixed audio. Channel closed.");
                 audio_mixer.unregister_output(&output_id);
             }
@@ -679,7 +615,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
     };
 
     let pipeline = Pipeline {
-        outputs: HashMap::new(),
+        outputs: PipelineOutputs::default(),
         inputs: HashMap::new(),
         queue,
         renderer,

@@ -1,6 +1,6 @@
 import type { Api, Outputs, _smelterInternals } from '@swmansion/smelter';
 import type { RegisterOutputRequest } from '../output';
-import { intoOutputEosCondition, intoVideoEncoderBitrate } from './common';
+import { intoVideoEncoderBitrate } from './common';
 
 export function intoRegisterMoqClientOutput(
   output: Outputs.RegisterMoqClientOutput,
@@ -25,7 +25,6 @@ export function intoOutputMoqClientVideoOptions(
 ): Api.OutputMoqClientVideoOptions {
   return {
     resolution: video.resolution,
-    send_eos_when: video.sendEosWhen && intoOutputEosCondition(video.sendEosWhen),
     encoder: intoMoqClientVideoEncoderOptions(video.encoder),
     initial,
   };
@@ -73,7 +72,6 @@ function intoOutputMoqClientAudioOptions(
   initial: Api.AudioScene
 ): Api.OutputMoqClientAudioOptions {
   return {
-    send_eos_when: audio.sendEosWhen && intoOutputEosCondition(audio.sendEosWhen),
     channels: audio.channels,
     mixing_strategy: audio.mixingStrategy,
     encoder: intoMoqClientAudioEncoderOptions(audio.encoder),

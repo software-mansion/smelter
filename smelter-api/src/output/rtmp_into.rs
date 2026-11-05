@@ -18,13 +18,11 @@ impl TryFrom<RtmpOutput> for core::RegisterOutputOptions {
         let (video_encoder_options, output_video_options) = match video {
             Some(OutputRtmpClientVideoOptions {
                 resolution,
-                send_eos_when,
                 encoder,
                 initial,
             }) => {
                 let output_options = core::RegisterOutputVideoOptions {
                     initial: Scene::ComponentTree(initial.try_into()?),
-                    end_condition: send_eos_when.unwrap_or_default().try_into()?,
                 };
 
                 (
@@ -37,7 +35,6 @@ impl TryFrom<RtmpOutput> for core::RegisterOutputOptions {
         let (audio_encoder_options, output_audio_options) = match audio {
             Some(OutputRtmpClientAudioOptions {
                 mixing_strategy,
-                send_eos_when,
                 encoder,
                 channels,
                 initial,
@@ -45,7 +42,6 @@ impl TryFrom<RtmpOutput> for core::RegisterOutputOptions {
                 let channels = channels.unwrap_or(AudioChannels::Stereo);
                 let output_audio_options = core::RegisterOutputAudioOptions {
                     initial: initial.try_into()?,
-                    end_condition: send_eos_when.unwrap_or_default().try_into()?,
                     mixing_strategy: mixing_strategy
                         .unwrap_or(AudioMixingStrategy::SumClip)
                         .into(),

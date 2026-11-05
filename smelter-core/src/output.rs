@@ -70,7 +70,6 @@ impl ProtocolOutputOptions {
 #[derive(Debug, Clone, PartialEq)]
 pub struct RegisterOutputVideoOptions {
     pub initial: Scene,
-    pub end_condition: PipelineOutputEndCondition,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -78,7 +77,6 @@ pub struct RegisterOutputAudioOptions {
     pub initial: AudioMixerConfig,
     pub mixing_strategy: AudioMixingStrategy,
     pub channels: AudioChannels,
-    pub end_condition: PipelineOutputEndCondition,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -97,15 +95,6 @@ pub struct AudioMixerInputConfig {
 pub enum AudioMixingStrategy {
     SumClip,
     SumScale,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum PipelineOutputEndCondition {
-    AnyOf(Vec<InputId>),
-    AllOf(Vec<InputId>),
-    AnyInput,
-    AllInputs,
-    Never,
 }
 
 pub enum OutputInitInfo {

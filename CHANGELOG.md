@@ -5,6 +5,7 @@
 ### 💥 Breaking changes
 
 - Remove `preset` from `ffmpeg_h264` encoder options. Pass encoder specific options via `ffmpeg_options` instead, e.g. `"ffmpeg_options": { "preset": "ultrafast" }` by [@wkozyra95](https://github.com/wkozyra95)
+- Remove `send_eos_when` from output options by [@wkozyra95](https://github.com/wkozyra95)
 
 ### ✨ New features
 

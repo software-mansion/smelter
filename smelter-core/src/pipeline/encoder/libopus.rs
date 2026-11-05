@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use audioadapter::Adapter;
 use bytes::Bytes;
-use tracing::{error, info, trace};
+use tracing::{error, info, trace, warn};
 
 use crate::{
     pipeline::encoder::{AudioEncoder, AudioEncoderConfig, MAX_PTS_DEVIATION},
@@ -22,8 +22,8 @@ pub struct OpusEncoder {
     /// Encoder lookahead in samples per channel, the delay it adds to its output.
     lookahead: usize,
 
-    /// This logic relies on the fact that input samples will always be continuous.
-    /// `maybe_reset_on_discontinuity` is just a sanity check to make sure we can recover.
+    /// This logic relies on input samples being continuous between gaps from dropped batches.
+    /// `maybe_reset_on_discontinuity` recovers from those gaps.
     first_input_pts: Option<Timestamp>,
     encoded_samples: u64,
 }
@@ -112,7 +112,7 @@ impl AudioEncoder for OpusEncoder {
 }
 
 impl OpusEncoder {
-    // Audio mixer should always produce continuous stream, just a sanity check
+    // Batches are dropped when the output is not consuming them.
     fn maybe_reset_on_discontinuity(&mut self, start_pts: Timestamp) {
         let Some(first_input_pts) = self.first_input_pts else {
             return;
@@ -124,7 +124,7 @@ impl OpusEncoder {
         if diff_pts.abs_duration() <= MAX_PTS_DEVIATION {
             return;
         }
-        error!(?diff_pts, "Discontinuity in libopus encoder input.");
+        warn!(?diff_pts, "Discontinuity in libopus encoder input.");
         self.input_buffer.drain_samples(self.input_buffer.frames());
         self.first_input_pts = None;
         self.encoded_samples = 0;

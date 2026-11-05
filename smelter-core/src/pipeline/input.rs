@@ -21,13 +21,6 @@ use crate::prelude::*;
 pub struct PipelineInput {
     pub input: Input,
 
-    /// Some(received) - Whether EOS was received from queue on audio stream for that input.
-    /// None - No audio configured for that input.
-    pub(super) audio_eos_received: Option<bool>,
-    /// Some(received) - Whether EOS was received from queue on video stream for that input.
-    /// None - No video configured for that input.
-    pub(super) video_eos_received: Option<bool>,
-
     _stats_guard: InputStatsGuard,
 }
 
@@ -145,13 +138,8 @@ where
     let (input, input_result, queue_input) = build_input(pipeline_ctx, input_ref.clone())
         .map_err(|err| RegisterInputError::InputError(input_id.clone(), err))?;
 
-    // TODO: for now assume that
-    let (audio_eos_received, video_eos_received) = (Some(false), Some(false));
-
     let pipeline_input = PipelineInput {
         input,
-        audio_eos_received,
-        video_eos_received,
         _stats_guard: stats_guard,
     };
 
@@ -161,22 +149,6 @@ where
         return Err(RegisterInputError::AlreadyRegistered(input_id));
     };
 
-    if pipeline_input.audio_eos_received.is_some() {
-        for output in guard.outputs.values_mut() {
-            if let Some(cond) = output.audio_end_condition_mut() {
-                cond.on_input_registered(&input_id);
-            }
-        }
-    }
-
-    if pipeline_input.video_eos_received.is_some() {
-        for output in guard.outputs.values_mut() {
-            if let Some(cond) = output.video_end_condition_mut() {
-                cond.on_input_registered(&input_id);
-            }
-        }
-    }
-
     guard.inputs.insert(input_id.clone(), pipeline_input);
     guard.queue.add_input(&input_id, queue_input);
     guard
@@ -185,13 +157,4 @@ where
     guard.renderer.register_input(input_id);
 
     Ok(input_result)
-}
-
-impl PipelineInput {
-    pub(super) fn on_audio_eos(&mut self) {
-        self.audio_eos_received = self.audio_eos_received.map(|_| true);
-    }
-    pub(super) fn on_video_eos(&mut self) {
-        self.video_eos_received = self.video_eos_received.map(|_| true);
-    }
 }

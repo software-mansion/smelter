@@ -86,7 +86,6 @@ fn main() {
                 id: None,
                 input_id: input_id.clone(),
             })),
-            end_condition: PipelineOutputEndCondition::Never,
         }),
         audio: None, // TODO: add audio example
     };

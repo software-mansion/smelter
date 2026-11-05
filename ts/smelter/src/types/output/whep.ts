@@ -1,16 +1,11 @@
 import type * as Api from '../../api.js';
-import type { OutputEndCondition, VideoEncoderBitrate } from './common.js';
+import type { VideoEncoderBitrate } from './common.js';
 
 export type WhepVideoOptions = {
   /**
    * Output resolution in pixels.
    */
   resolution: Api.Resolution;
-  /**
-   * Defines when output stream should end if some of the input streams are finished. If output
-   * includes both audio and video streams, then EOS needs to be sent on both.
-   */
-  sendEosWhen?: OutputEndCondition | null;
   /**
    * Video encoder options.
    */
@@ -105,10 +100,6 @@ export type WhepAudioOptions = {
    * Specifies how audio should be mixed. Defaults to `"sum_clip"`.
    */
   mixingStrategy?: Api.AudioMixingStrategy | null;
-  /**
-   * Condition for termination of output stream based on the input streams states.
-   */
-  sendEosWhen?: OutputEndCondition | null;
   /**
    * Audio encoder options.
    */

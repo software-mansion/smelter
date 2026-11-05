@@ -10,6 +10,7 @@ use crate::{
     error::EncoderInitError,
     pipeline::{
         encoder::{AudioEncoder, AudioEncoderStream, resampler::ResampledForEncoderStream},
+        output::AUDIO_TRACK_CHANNEL_SIZE,
         rtp::payloader::{PayloaderOptions, PayloaderStream},
     },
     utils::{InitializableThread, ThreadMetadata},
@@ -55,7 +56,8 @@ where
 
         let stats_sender = ctx.stats_sender.clone();
         let ssrc = payloader_options.ssrc;
-        let (sample_batch_sender, sample_batch_receiver) = crossbeam_channel::bounded(5);
+        let (sample_batch_sender, sample_batch_receiver) =
+            crossbeam_channel::bounded(AUDIO_TRACK_CHANNEL_SIZE);
 
         let resampled_stream = ResampledForEncoderStream::new(
             sample_batch_receiver.into_iter(),

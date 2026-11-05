@@ -6,6 +6,7 @@ use tracing::warn;
 use crate::{
     pipeline::{
         encoder::{AudioEncoder, AudioEncoderStream, resampler::ResampledForEncoderStream},
+        output::AUDIO_TRACK_CHANNEL_SIZE,
         webrtc::whep_output::output::WhepOutputStatsSender,
     },
     utils::{InitializableThread, ThreadMetadata},
@@ -48,7 +49,8 @@ where
             stats_sender,
         } = options;
 
-        let (sample_batch_sender, sample_batch_receiver) = crossbeam_channel::bounded(5);
+        let (sample_batch_sender, sample_batch_receiver) =
+            crossbeam_channel::bounded(AUDIO_TRACK_CHANNEL_SIZE);
 
         let resampled_stream = ResampledForEncoderStream::new(
             sample_batch_receiver.into_iter(),
