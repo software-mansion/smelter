@@ -231,6 +231,25 @@ jobs:
         # needs: build_and_lint_linux
         runs-on: windows-gpu-2022
         steps:
+            # The runner image ships the T4 with an old Tesla driver in TCC mode, which exposes no
+            # Vulkan device. Microsoft's Azure-licensed GRID driver runs the card in WDDM and is recent
+            # enough for Vulkan Video. See learn.microsoft.com/azure/virtual-machines/windows/n-series-driver-setup
+            - name: 🛠 Install Azure GRID driver (T4 boots in TCC, Vulkan needs WDDM)
+              shell: powershell
+              run: |
+                  $ErrorActionPreference = "Stop"
+                  $model = (nvidia-smi --query-gpu=driver_model.current --format=csv,noheader) -join ""
+                  if ($model -match "TCC") {
+                      $exe = "$env:RUNNER_TEMP\grid.exe"
+                      curl.exe -fsSL -o $exe "https://download.microsoft.com/download/0f21fd13-2390-4c79-876a-87ae3dc724c6/596.86_grid_win10_win11_server2022_server2025_dch_64bit_international_azure_swl.exe"
+                      if ($LASTEXITCODE -ne 0) { throw "download failed" }
+                      Write-Host "downloaded $((Get-Item $exe).Length) bytes"
+                      $p = Start-Process -FilePath $exe -ArgumentList "-s", "-noreboot", "-clean", "-noeula" -Wait -PassThru
+                      Write-Host "installer exit code: $($p.ExitCode)"
+                      Start-Sleep -Seconds 15
+                  }
+                  nvidia-smi --query-gpu=driver_version,driver_model.current,driver_model.pending --format=csv
+
             # `shell: bash` steps (also used internally by the rust-toolchain and install-action
             # actions) must resolve to Git Bash, not the WSL launcher in System32.
             - name: 🛠 Put Git Bash on PATH
@@ -288,22 +307,6 @@ jobs:
               with:
                   shared-key: "windows-test"
                   save-if: ${{ github.ref == 'refs/heads/master' }}
-
-            # The runner image ships the T4 with an old Tesla driver in TCC mode, which exposes no
-            # Vulkan device. Microsoft's Azure-licensed GRID driver runs the card in WDDM and is recent
-            # enough for Vulkan Video. See learn.microsoft.com/azure/virtual-machines/windows/n-series-driver-setup
-            - name: 🛠 Install Azure GRID driver (T4 boots in TCC, Vulkan needs WDDM)
-              shell: powershell
-              run: |
-                  $ProgressPreference = "SilentlyContinue"
-                  $model = (nvidia-smi --query-gpu=driver_model.current --format=csv,noheader) -join ""
-                  if ($model -match "TCC") {
-                      $exe = "$env:RUNNER_TEMP\grid.exe"
-                      Invoke-WebRequest -Uri "https://download.microsoft.com/download/0f21fd13-2390-4c79-876a-87ae3dc724c6/596.86_grid_win10_win11_server2022_server2025_dch_64bit_international_azure_swl.exe" -OutFile $exe
-                      Start-Process -FilePath $exe -ArgumentList "-s", "-noreboot", "-clean", "-noeula" -Wait
-                      Start-Sleep -Seconds 15
-                  }
-                  nvidia-smi --query-gpu=driver_version,driver_model.current,driver_model.pending --format=csv
 
             - name: 🔍 GPU diagnostics
               continue-on-error: true
