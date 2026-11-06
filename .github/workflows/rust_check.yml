@@ -289,6 +289,14 @@ jobs:
                   shared-key: "windows-test"
                   save-if: ${{ github.ref == 'refs/heads/master' }}
 
+            - name: 🔍 GPU diagnostics
+              continue-on-error: true
+              env:
+                  LIBCLANG_PATH: ${{ env.LLVM_PATH }}\bin
+              run: |
+                  nvidia-smi
+                  cargo run -p gpu-video --example print_hw_capabilities
+
             - name: 🧪 Run gpu-video tests
               env:
                   LIBCLANG_PATH: ${{ env.LLVM_PATH }}\bin
