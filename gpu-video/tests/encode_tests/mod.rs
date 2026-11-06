@@ -5,7 +5,7 @@ use gpu_video::{
     parameters::{ColorRange, ColorSpace, EncoderPreset, RateControl},
 };
 
-use crate::gpu_video_tests::{
+use crate::{
     TestCase,
     harness::{
         encode_test_runner::{Codec, EncoderOptions, create_encoding_device},

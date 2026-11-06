@@ -2331,6 +2331,8 @@ dependencies = [
  "bytes",
  "cfg_aliases",
  "clap",
+ "crossbeam-channel",
+ "ffmpeg-next",
  "h264-reader",
  "libc",
  "memchr",

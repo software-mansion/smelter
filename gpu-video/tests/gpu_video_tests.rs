@@ -10,7 +10,6 @@ mod encode_tests;
 mod harness;
 
 // TODO: Parser tests?
-// TODO: Tests on windows
 // TODO: if test fails, dump it to file so that it's viewable
 
 struct Nv12Frame {
@@ -84,6 +83,12 @@ fn create_video_device(filter: impl Fn(&wgpu::Adapter) -> bool) -> (wgpu::Device
     adapter
         .request_device_with_video_support(&VideoDeviceDescriptor::default())
         .unwrap()
+}
+
+/// Directory in the snapshots submodule holding encoded bitstream dumps
+/// used as inputs for the gpu-video tests.
+fn gpu_video_dumps_dir_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../integration-tests/snapshots/gpu_video/dumps")
 }
 
 fn frame_data_diff(actual: &[u8], expected: &[u8]) -> f32 {
