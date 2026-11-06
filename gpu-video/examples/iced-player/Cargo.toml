@@ -1,0 +1,18 @@
+[package]
+name = "gpu-video-iced-player"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+gpu-video = { path = "../..", features = ["wgpu"] }
+iced_winit = { git = "https://github.com/iced-rs/iced", rev = "8ff48c42b0d5188223501ea1ccc506fd5beaf36a" }
+iced_wgpu = { git = "https://github.com/iced-rs/iced", rev = "8ff48c42b0d5188223501ea1ccc506fd5beaf36a" }
+iced_widget = { git = "https://github.com/iced-rs/iced", rev = "8ff48c42b0d5188223501ea1ccc506fd5beaf36a", features = ["wgpu"] }
+rfd = "0.17.2"
+mp4 = "0.14"
+pollster = { workspace = true }
+tracing-subscriber = "0.3.20"
+
+[lints]
+workspace = true

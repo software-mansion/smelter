@@ -16,6 +16,7 @@ members = [
     "decklink",
     "gpu-video",
     "gpu-video/examples/egui-player",
+    "gpu-video/examples/iced-player",
     "libcef",
     "rtmp",
 
