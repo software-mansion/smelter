@@ -12,6 +12,7 @@ concurrency:
 
 jobs:
     build_and_lint_linux:
+        if: false # TEMP: disabled while testing the windows job
         runs-on: ubuntu-24.04
         steps:
             - name: 🛠 Install system dependencies
@@ -71,6 +72,7 @@ jobs:
                   cargo run -p tools --bin generate_from_types -- --check
 
     build_macos:
+        if: false # TEMP: disabled while testing the windows job
         runs-on: macos-15
         steps:
             - name: 🛠 Install system dependencies
@@ -107,6 +109,7 @@ jobs:
               run: cargo clippy --package gpu-video --all-targets --no-default-features -- -D clippy::todo -D clippy::uninlined_format_args -D warnings
 
     test_macos:
+        if: false # TEMP: disabled while testing the windows job
         needs: build_macos
         runs-on: macos-15
         steps:
@@ -145,6 +148,7 @@ jobs:
                   cargo nextest run --package gpu-video --profile ci -E 'binary_id(gpu-video::gpu_video_tests)'
 
     test_linux:
+        if: false # TEMP: disabled while testing the windows job
         needs: build_and_lint_linux
         runs-on: gpu-gh-hosted-runner
         steps:
@@ -227,6 +231,14 @@ jobs:
         # needs: build_and_lint_linux
         runs-on: windows-gpu-2022
         steps:
+            # `shell: bash` steps (also used internally by the rust-toolchain and install-action
+            # actions) must resolve to Git Bash, not the WSL launcher in System32.
+            - name: 🛠 Put Git Bash on PATH
+              shell: powershell
+              run: |
+                  $gitBin = Join-Path (Split-Path (Split-Path (Get-Command git).Source)) "bin"
+                  $gitBin | Out-File -FilePath $env:GITHUB_PATH -Append
+
             - name: 🛠 Install LLVM (libclang for bindgen)
               uses: KyleMayes/install-llvm-action@v2
               with:
