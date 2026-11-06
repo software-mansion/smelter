@@ -85,6 +85,7 @@ By @noituri ([#2039](https://github.com/software-mansion/smelter/pull/2039))
 - Fix the RGBA to NV12 conversion shader to output limited range NV12 ([#2050](https://github.com/software-mansion/smelter/pull/2050) by @jerzywilczek)
 - Fix device feature collisions when gpu-video is used with wgpu ([#2255](https://github.com/software-mansion/smelter/pull/2255) by @noituri)
 - Fix decoder and encoder sometimes panicking on drop ([#2294](https://github.com/software-mansion/smelter/pull/2294) by @noituri)
+- Fix a crash on Vulkan when a wgpu textures decoder is dropped before wgpu submits work that waits on its decoded frames ([#2326](https://github.com/software-mansion/smelter/pull/2326) by @jerzywilczek)
 
 ## [v0.4.0](https://github.com/software-mansion/smelter/releases/tag/gpu-video%2Fv0.4.0)
 

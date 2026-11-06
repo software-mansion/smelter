@@ -36,6 +36,8 @@ pub struct VulkanDecoder<'a> {
     usage_info: vk::VideoDecodeUsageInfoKHR<'a>,
     image_modifiers: ImageModifiers,
     decode_query_pool_size: u32,
+    #[cfg(feature = "wgpu")]
+    wgpu_wait_semaphore: Option<Arc<WgpuQueueWaitSemaphore>>,
 }
 
 impl<'a> Drop for VulkanDecoder<'a> {
@@ -81,6 +83,8 @@ impl VulkanDecoder<'_> {
             usage_info,
             image_modifiers,
             decode_query_pool_size,
+            #[cfg(feature = "wgpu")]
+            wgpu_wait_semaphore: None,
         })
     }
 }
@@ -520,7 +524,6 @@ impl<'a> VulkanDecoder<'a> {
         use wgpu::hal::vulkan::Api as VkApi;
 
         let hal_device = unsafe { wgpu_device.as_hal::<VkApi>().unwrap() };
-        let hal_queue = unsafe { wgpu_queue.as_hal::<VkApi>().unwrap() };
 
         let copy_extent = vk::Extent3D {
             width: decode_output.metadata.cropped_width,
@@ -637,15 +640,19 @@ impl<'a> VulkanDecoder<'a> {
             DecoderTrackerWaitState::DownloadImageToBuffer,
         )?;
 
-        hal_queue.add_wait_semaphore(
-            self.tracker.raw_semaphore(),
-            Some(semaphore_wait_value.0),
-            vk::PipelineStageFlags::ALL_COMMANDS,
-        );
+        let wait_semaphore = self
+            .wgpu_wait_semaphore
+            .get_or_insert_with(|| {
+                Arc::new(WgpuQueueWaitSemaphore::new(
+                    self.tracker.semaphore_tracker.semaphore.clone(),
+                    wgpu_queue.clone(),
+                ))
+            })
+            .clone();
+        wait_semaphore.add_wait(semaphore_wait_value, vk::PipelineStageFlags::ALL_COMMANDS);
 
         let image = Arc::new(image);
         let image_clone = image.clone();
-        let semaphore = self.tracker.semaphore_tracker.semaphore.clone();
 
         let hal_texture = unsafe {
             hal_device.texture_from_raw(
@@ -668,7 +675,7 @@ impl<'a> VulkanDecoder<'a> {
                     mip_level_count: 1,
                 },
                 Some(Box::new(move || {
-                    drop(semaphore);
+                    drop(wait_semaphore);
                     drop(image_clone);
                 })),
                 wgpu::hal::vulkan::TextureMemory::External,
