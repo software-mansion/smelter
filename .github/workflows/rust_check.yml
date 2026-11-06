@@ -265,9 +265,10 @@ jobs:
                   toolchain: 1.98
 
             - name: 🔬 Install nextest
-              uses: taiki-e/install-action@v2
-              with:
-                  tool: cargo-nextest
+              shell: bash
+              run: |
+                  curl -LsSf https://get.nexte.st/latest/windows-tar | tar zxf - -C "${CARGO_HOME:-$HOME/.cargo}/bin"
+                  cargo nextest --version
 
             - name: 📥 Checkout repo
               uses: actions/checkout@v6
