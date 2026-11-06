@@ -51,8 +51,6 @@ fuzzy-matcher = "0.3.7"
 minifb = "0.28"
 font8x8 = "0.3"
 integration-tests-macros = { path = "macros" }
-gpu-video = { workspace = true, features = ["expose-parsers"] }
-pollster = { workspace = true }
 
 [lints]
 workspace = true

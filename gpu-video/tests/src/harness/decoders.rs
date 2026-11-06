@@ -15,7 +15,7 @@ use gpu_video::{
     parameters::{ColorRange, ColorSpace, DecoderParameters},
 };
 
-use crate::{gpu_video_tests::Nv12Frame, video_decoder::copy_plane_from_av};
+use crate::Nv12Frame;
 
 pub(super) trait Decoder {
     fn decoder_name(&self) -> &'static str;
@@ -383,4 +383,18 @@ fn read_buffer(
     });
     device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
     rx.recv().unwrap()
+}
+
+fn copy_plane_from_av(decoded: &frame::Video, plane: usize) -> bytes::Bytes {
+    let mut output_buffer = bytes::BytesMut::with_capacity(
+        decoded.plane_width(plane) as usize * decoded.plane_height(plane) as usize,
+    );
+
+    decoded
+        .data(plane)
+        .chunks(decoded.stride(plane))
+        .map(|chunk| &chunk[..decoded.plane_width(plane) as usize])
+        .for_each(|chunk| output_buffer.extend_from_slice(chunk));
+
+    output_buffer.freeze()
 }

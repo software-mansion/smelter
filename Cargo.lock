@@ -3078,6 +3078,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "gpu-video-tests"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "crossbeam-channel",
+ "ffmpeg-next",
+ "gpu-video",
+ "pollster 0.3.0",
+ "wgpu",
+]
+
+[[package]]
 name = "group"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3734,7 +3746,6 @@ dependencies = [
  "font8x8",
  "futures-util",
  "fuzzy-matcher",
- "gpu-video",
  "image 0.24.9",
  "inquire",
  "integration-tests-macros",
@@ -3742,7 +3753,6 @@ dependencies = [
  "libcef",
  "minifb",
  "opus",
- "pollster 0.3.0",
  "rand 0.9.3",
  "reqwest 0.12.12",
  "serde",
