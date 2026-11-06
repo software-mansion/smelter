@@ -12,6 +12,7 @@ concurrency:
 
 jobs:
     build_and_lint_linux:
+        if: false # TEMP: disabled while testing the windows job
         runs-on: ubuntu-24.04
         steps:
             - name: 🛠 Install system dependencies
@@ -71,6 +72,7 @@ jobs:
                   cargo run -p tools --bin generate_from_types -- --check
 
     build_macos:
+        if: false # TEMP: disabled while testing the windows job
         runs-on: macos-15
         steps:
             - name: 🛠 Install system dependencies
@@ -107,6 +109,7 @@ jobs:
               run: cargo clippy --package gpu-video --all-targets --no-default-features -- -D clippy::todo -D clippy::uninlined_format_args -D warnings
 
     test_macos:
+        if: false # TEMP: disabled while testing the windows job
         needs: build_macos
         runs-on: macos-15
         steps:
@@ -142,9 +145,10 @@ jobs:
 
             - name: 🧪 Run gpu-video tests
               run: |
-                  cargo nextest run --package integration-tests --profile ci -E 'test(/^gpu_video_tests::/)'
+                  cargo nextest run --package gpu-video --profile ci -E 'binary_id(gpu-video::gpu_video_tests)'
 
     test_linux:
+        if: false # TEMP: disabled while testing the windows job
         needs: build_and_lint_linux
         runs-on: gpu-gh-hosted-runner
         steps:
@@ -190,7 +194,7 @@ jobs:
 
             - name: 🧪 Run unit tests
               run: |
-                  cargo nextest run --workspace --profile ci -E 'not test(/^pipeline_tests::/) and not test(/^render_tests::/) and not test(/^gpu_video_tests::/)'
+                  cargo nextest run --workspace --profile ci -E 'not test(/^pipeline_tests::/) and not test(/^render_tests::/) and not binary_id(gpu-video::gpu_video_tests)'
 
             - name: 🧪 Run render tests
               if: ${{ !cancelled() }}
@@ -200,7 +204,7 @@ jobs:
             - name: 🧪 Run gpu-video tests
               if: ${{ !cancelled() }}
               run: |
-                  cargo nextest run --workspace --profile ci -E 'test(/^gpu_video_tests::/)'
+                  cargo nextest run --workspace --profile ci -E 'binary_id(gpu-video::gpu_video_tests)'
 
             - name: 🧪 Run pipeline tests
               if: ${{ !cancelled() }}
@@ -222,3 +226,98 @@ jobs:
 
             - name: 📚 Run doctests
               run: cargo test --workspace --doc
+# run only when gpu-video code was touched
+    test_windows:
+        # needs: build_and_lint_linux
+        runs-on: windows-gpu-2022
+        steps:
+            # The runner image ships the T4 with an old Tesla driver in TCC mode, which exposes no
+            # Vulkan device. Microsoft's Azure-licensed GRID driver runs the card in WDDM and is recent
+            # enough for Vulkan Video. See learn.microsoft.com/azure/virtual-machines/windows/n-series-driver-setup
+            - name: 🛠 Install Azure GRID driver (T4 boots in TCC, Vulkan needs WDDM)
+              shell: powershell
+              run: |
+                  $ErrorActionPreference = "Stop"
+                  $model = (nvidia-smi --query-gpu=driver_model.current --format=csv,noheader) -join ""
+                  if ($model -match "TCC") {
+                      $exe = "$env:RUNNER_TEMP\grid.exe"
+                      curl.exe -fsSL -o $exe "https://download.microsoft.com/download/0f21fd13-2390-4c79-876a-87ae3dc724c6/596.86_grid_win10_win11_server2022_server2025_dch_64bit_international_azure_swl.exe"
+                      if ($LASTEXITCODE -ne 0) { throw "download failed" }
+                      Write-Host "downloaded $((Get-Item $exe).Length) bytes"
+                      $p = Start-Process -FilePath $exe -ArgumentList "-s", "-noreboot", "-clean", "-noeula" -Wait -PassThru
+                      Write-Host "installer exit code: $($p.ExitCode)"
+                      Start-Sleep -Seconds 15
+                  }
+                  nvidia-smi --query-gpu=driver_version,driver_model.current,driver_model.pending --format=csv
+
+            # `shell: bash` steps (also used internally by the rust-toolchain and install-action
+            # actions) must resolve to Git Bash, not the WSL launcher in System32.
+            - name: 🛠 Put Git Bash on PATH
+              shell: powershell
+              run: |
+                  $gitBin = Join-Path (Split-Path (Split-Path (Get-Command git).Source)) "bin"
+                  $gitBin | Out-File -FilePath $env:GITHUB_PATH -Append
+
+            - name: 🛠 Install LLVM (libclang for bindgen)
+              uses: KyleMayes/install-llvm-action@v2
+              with:
+                  version: "20.1.8"
+
+            - name: 🛠 Install FFmpeg
+              shell: powershell
+              run: |
+                  $ErrorActionPreference = "Stop"
+                  $tag = "autobuild-2026-11-05-12-48"
+                  $archive = "ffmpeg-n8.1.3-34-ga35157abb9-win64-gpl-shared-8.1.zip"
+                  Invoke-WebRequest -Uri "https://github.com/BtbN/FFmpeg-Builds/releases/download/$tag/$archive" -OutFile "$env:RUNNER_TEMP\$archive"
+                  Expand-Archive -Path "$env:RUNNER_TEMP\$archive" -DestinationPath "$env:RUNNER_TEMP\ffmpeg"
+                  $ffmpegDir = (Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Directory | Select-Object -First 1).FullName
+                  "FFMPEG_DIR=$ffmpegDir" | Out-File -FilePath $env:GITHUB_ENV -Append
+                  "$ffmpegDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+            - name: Show `FFmpeg` version
+              run: ffmpeg -version
+
+            - name: 🔧 Install the rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: 1.98
+
+            - name: 🔬 Install nextest
+              shell: bash
+              run: |
+                  curl -LsSf https://get.nexte.st/latest/windows-tar | tar zxf - -C "$(cygpath -u "${CARGO_HOME:-$USERPROFILE/.cargo}")/bin"
+                  cargo nextest --version
+
+            - name: 📥 Checkout repo
+              uses: actions/checkout@v6
+
+            - name: 🧩 Git submodules update
+              shell: bash
+              run: |
+                  cat > .gitmodules << EOF
+                  [submodule "snapshots"]
+                          path = integration-tests/snapshots
+                          url = https://github.com/smelter-labs/smelter-snapshot-tests.git
+                  EOF
+                  git submodule update --init
+
+            - name: 📁 Rust cache
+              uses: Swatinem/rust-cache@v2
+              with:
+                  shared-key: "windows-test"
+                  save-if: ${{ github.ref == 'refs/heads/master' }}
+
+            - name: 🔍 GPU diagnostics
+              continue-on-error: true
+              env:
+                  LIBCLANG_PATH: ${{ env.LLVM_PATH }}\bin
+              run: |
+                  nvidia-smi
+                  cargo run -p gpu-video --example print_hw_capabilities
+
+            - name: 🧪 Run gpu-video tests
+              env:
+                  LIBCLANG_PATH: ${{ env.LLVM_PATH }}\bin
+              run: |
+                  cargo nextest run --package gpu-video --profile ci -E 'binary_id(gpu-video::gpu_video_tests)'

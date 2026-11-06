@@ -1,6 +1,6 @@
 use gpu_video::parameters::DecoderParameters;
 
-use crate::gpu_video_tests::{TestCase, harness::decode_test_runner::DecoderOptions};
+use crate::{TestCase, harness::decode_test_runner::DecoderOptions};
 
 /// Just 10s of big buck bunny.
 #[test]
