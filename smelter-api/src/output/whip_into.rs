@@ -25,7 +25,6 @@ impl TryFrom<WhipOutput> for core::RegisterOutputOptions {
 
                 let output_options = core::RegisterOutputVideoOptions {
                     initial: Scene::ComponentTree(options.initial.try_into()?),
-                    end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
                 };
 
                 let encoder_preferences = match options.encoder_preferences.as_deref() {
@@ -50,7 +49,6 @@ impl TryFrom<WhipOutput> for core::RegisterOutputOptions {
         let (output_audio_options, audio_whip_options) = match audio {
             Some(OutputWhipAudioOptions {
                 mixing_strategy,
-                send_eos_when,
                 channels,
                 encoder_preferences,
                 initial,
@@ -58,7 +56,6 @@ impl TryFrom<WhipOutput> for core::RegisterOutputOptions {
                 let channels = channels.unwrap_or(AudioChannels::Stereo);
                 let output_audio_options = core::RegisterOutputAudioOptions {
                     initial: initial.try_into()?,
-                    end_condition: send_eos_when.unwrap_or_default().try_into()?,
                     mixing_strategy: mixing_strategy
                         .unwrap_or(AudioMixingStrategy::SumClip)
                         .into(),

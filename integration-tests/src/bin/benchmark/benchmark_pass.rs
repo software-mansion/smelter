@@ -197,7 +197,6 @@ impl SingleBenchmarkPass {
             RegisterEncodedDataOutputOptions {
                 video: Some(RegisterOutputVideoOptions {
                     initial: Scene::ComponentTree(root),
-                    end_condition: PipelineOutputEndCondition::Never,
                 }),
                 audio: Some(audio_output_options(audio_mix)),
                 output_options: EncodedDataOutputOptions {
@@ -237,7 +236,6 @@ impl SingleBenchmarkPass {
             RegisterEncodedDataOutputOptions {
                 video: Some(RegisterOutputVideoOptions {
                     initial: Scene::ComponentTree(root),
-                    end_condition: PipelineOutputEndCondition::Never,
                 }),
                 audio: Some(audio_output_options(audio_mix)),
                 output_options: EncodedDataOutputOptions {
@@ -271,7 +269,6 @@ impl SingleBenchmarkPass {
             RegisterRawDataOutputOptions {
                 video: Some(RegisterOutputVideoOptions {
                     initial: Scene::ComponentTree(root),
-                    end_condition: PipelineOutputEndCondition::Never,
                 }),
                 audio: Some(audio_output_options(audio_mix)),
                 output_options: RawDataOutputOptions {
@@ -418,7 +415,6 @@ fn audio_output_options(mix: AudioMixerConfig) -> RegisterOutputAudioOptions {
         initial: mix,
         mixing_strategy: AudioMixingStrategy::SumClip,
         channels: AudioChannels::Stereo,
-        end_condition: PipelineOutputEndCondition::Never,
     }
 }
 

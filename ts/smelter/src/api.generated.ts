@@ -506,7 +506,6 @@ export type RegisterOutput =
        */
       start_at_ms?: number | null;
     };
-export type InputId = string;
 export type RtpVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
@@ -963,6 +962,7 @@ export type Component =
       box_shadow?: BoxShadow[] | null;
     };
 export type ComponentId = string;
+export type InputId = string;
 export type ViewDirection = "row" | "column";
 /**
  * Easing functions are used to interpolate between two values over time.
@@ -1943,10 +1943,6 @@ export interface OutputRtpVideoOptions {
    */
   resolution: Resolution;
   /**
-   * Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
-   */
-  send_eos_when?: OutputEndCondition | null;
-  /**
    * Video encoder options.
    */
   encoder: RtpVideoEncoderOptions;
@@ -1954,27 +1950,6 @@ export interface OutputRtpVideoOptions {
    * Root of a component tree/scene that should be rendered for the output. Use the `POST /api/output/{output_id}/update` request to update this value after registration.
    */
   initial: VideoScene;
-}
-/**
- * This type defines when end of an input stream should trigger end of the output stream. Only one of those fields can be set at the time. Unless specified otherwise the input stream is considered finished/ended when: - TCP connection was dropped/closed. - RTCP Goodbye packet (`BYE`) was received. - Mp4 track has ended. - Input was unregistered already (or never registered).
- */
-export interface OutputEndCondition {
-  /**
-   * Terminate output stream if any of the input streams from the list are finished.
-   */
-  any_of?: InputId[] | null;
-  /**
-   * Terminate output stream if all the input streams from the list are finished.
-   */
-  all_of?: InputId[] | null;
-  /**
-   * Terminate output stream if any of the input streams ends. This includes streams added after the output was registered. In particular, output stream will **not be** terminated if no inputs were ever connected.
-   */
-  any_input?: boolean | null;
-  /**
-   * Terminate output stream if all the input streams finish. In particular, output stream will **be** terminated if no inputs were ever connected.
-   */
-  all_inputs?: boolean | null;
 }
 export interface VideoScene {
   root: Component;
@@ -2007,10 +1982,6 @@ export interface OutputRtpAudioOptions {
    */
   mixing_strategy?: AudioMixingStrategy | null;
   /**
-   * Condition for termination of output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
-   */
-  send_eos_when?: OutputEndCondition | null;
-  /**
    * Audio encoder options.
    */
   encoder: RtpAudioEncoderOptions;
@@ -2039,10 +2010,6 @@ export interface OutputRtmpClientVideoOptions {
    */
   resolution: Resolution;
   /**
-   * Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
-   */
-  send_eos_when?: OutputEndCondition | null;
-  /**
    * Video encoder options.
    */
   encoder: RtmpClientVideoEncoderOptions;
@@ -2056,10 +2023,6 @@ export interface OutputRtmpClientAudioOptions {
    * Specifies how audio should be mixed. Defaults to `"sum_clip"`.
    */
   mixing_strategy?: AudioMixingStrategy | null;
-  /**
-   * Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
-   */
-  send_eos_when?: OutputEndCondition | null;
   /**
    * Audio encoder options.
    */
@@ -2079,10 +2042,6 @@ export interface OutputMoqClientVideoOptions {
    */
   resolution: Resolution;
   /**
-   * Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
-   */
-  send_eos_when?: OutputEndCondition | null;
-  /**
    * Video encoder options.
    */
   encoder: MoqClientVideoEncoderOptions;
@@ -2096,10 +2055,6 @@ export interface OutputMoqClientAudioOptions {
    * Specifies how audio should be mixed. Defaults to `"sum_clip"`.
    */
   mixing_strategy?: AudioMixingStrategy | null;
-  /**
-   * Condition for termination of output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
-   */
-  send_eos_when?: OutputEndCondition | null;
   /**
    * Audio encoder options.
    */
@@ -2119,10 +2074,6 @@ export interface OutputMp4VideoOptions {
    */
   resolution: Resolution;
   /**
-   * Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
-   */
-  send_eos_when?: OutputEndCondition | null;
-  /**
    * Video encoder options.
    */
   encoder: Mp4VideoEncoderOptions;
@@ -2136,10 +2087,6 @@ export interface OutputMp4AudioOptions {
    * Specifies how audio should be mixed. Defaults to `"sum_clip"`.
    */
   mixing_strategy?: AudioMixingStrategy | null;
-  /**
-   * Condition for termination of output stream based on the input streams states.
-   */
-  send_eos_when?: OutputEndCondition | null;
   /**
    * Audio encoder options.
    */
@@ -2159,10 +2106,6 @@ export interface OutputWhipVideoOptions {
    */
   resolution: Resolution;
   /**
-   * Defines when output stream should end if some of the input streams are finished. If output includes both audio and video streams, then EOS needs to be sent on both.
-   */
-  send_eos_when?: OutputEndCondition | null;
-  /**
    * Codec preferences list.
    */
   encoder_preferences?: WhipVideoEncoderOptions[] | null;
@@ -2176,10 +2119,6 @@ export interface OutputWhipAudioOptions {
    * Specifies how audio should be mixed. Defaults to `"sum_clip"`.
    */
   mixing_strategy?: AudioMixingStrategy | null;
-  /**
-   * Condition for termination of output stream based on the input streams states.
-   */
-  send_eos_when?: OutputEndCondition | null;
   /**
    * Specifies channels configuration.
    */
@@ -2199,10 +2138,6 @@ export interface OutputWhepVideoOptions {
    */
   resolution: Resolution;
   /**
-   * Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
-   */
-  send_eos_when?: OutputEndCondition | null;
-  /**
    * Video encoder options.
    */
   encoder: WhepVideoEncoderOptions;
@@ -2216,10 +2151,6 @@ export interface OutputWhepAudioOptions {
    * Specifies how audio should be mixed. Defaults to `"sum_clip"`.
    */
   mixing_strategy?: AudioMixingStrategy | null;
-  /**
-   * Condition for termination of output stream based on the input streams states.
-   */
-  send_eos_when?: OutputEndCondition | null;
   /**
    * Audio encoder options.
    */
@@ -2239,10 +2170,6 @@ export interface OutputHlsVideoOptions {
    */
   resolution: Resolution;
   /**
-   * Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
-   */
-  send_eos_when?: OutputEndCondition | null;
-  /**
    * Video encoder options.
    */
   encoder: HlsVideoEncoderOptions;
@@ -2256,10 +2183,6 @@ export interface OutputHlsAudioOptions {
    * Specifies how audio should be mixed. Defaults to `"sum_clip"`.
    */
   mixing_strategy?: AudioMixingStrategy | null;
-  /**
-   * Condition for termination of output stream based on the input streams states.
-   */
-  send_eos_when?: OutputEndCondition | null;
   /**
    * Audio encoder options.
    */

@@ -269,8 +269,8 @@ impl VideoQueueProcessor {
 
         frames_batch.required = frames_batch.required || queue.never_drop_output_frames;
 
-        // potentially infinitely blocking if output is not consumed
-        // and one of the stream is "required"
+        // Potentially infinitely blocking if `never_drop_output_frames` is set and output is
+        // not consumed.
         self.send_output_frames(queue, frames_batch);
 
         Some(())

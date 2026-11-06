@@ -2,8 +2,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::*;
-
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum PixelFormat {
@@ -25,29 +23,6 @@ pub enum VideoEncoderBitrate {
         /// Max bitrate measured in bits/second.
         max_bitrate: u64,
     },
-}
-
-/// This type defines when end of an input stream should trigger end of the output stream. Only one
-/// of those fields can be set at the time. Unless specified otherwise the input stream is
-/// considered finished/ended when:
-/// - TCP connection was dropped/closed.
-/// - RTCP Goodbye packet (`BYE`) was received.
-/// - Mp4 track has ended.
-/// - Input was unregistered already (or never registered).
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, Default)]
-#[serde(deny_unknown_fields)]
-pub struct OutputEndCondition {
-    /// Terminate output stream if any of the input streams from the list are finished.
-    pub any_of: Option<Vec<InputId>>,
-    /// Terminate output stream if all the input streams from the list are finished.
-    pub all_of: Option<Vec<InputId>>,
-    /// Terminate output stream if any of the input streams ends. This includes streams added after
-    /// the output was registered. In particular, output stream will **not be** terminated if no
-    /// inputs were ever connected.
-    pub any_input: Option<bool>,
-    /// Terminate output stream if all the input streams finish. In particular, output stream will
-    /// **be** terminated if no inputs were ever connected.
-    pub all_inputs: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema, ToSchema)]
