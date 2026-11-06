@@ -222,3 +222,56 @@ jobs:
 
             - name: 📚 Run doctests
               run: cargo test --workspace --doc
+
+    test_windows:
+        needs: build_and_lint_linux
+        runs-on: windows-gpu-2022
+        env:
+            LIBCLANG_PATH: C:\Program Files\LLVM\bin
+        steps:
+            - name: 🛠 Install FFmpeg
+              shell: pwsh
+              run: |
+                  $ErrorActionPreference = "Stop"
+                  $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip"
+                  Invoke-WebRequest -Uri $url -OutFile "$env:RUNNER_TEMP\ffmpeg.zip"
+                  Expand-Archive -Path "$env:RUNNER_TEMP\ffmpeg.zip" -DestinationPath "$env:RUNNER_TEMP\ffmpeg"
+                  $ffmpegDir = (Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Directory | Select-Object -First 1).FullName
+                  "FFMPEG_DIR=$ffmpegDir" | Out-File -FilePath $env:GITHUB_ENV -Append
+                  "$ffmpegDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+            - name: Show `FFmpeg` version
+              run: ffmpeg -version
+
+            - name: 🔧 Install the rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: 1.98
+
+            - name: 🔬 Install nextest
+              uses: taiki-e/install-action@v2
+              with:
+                  tool: cargo-nextest
+
+            - name: 📥 Checkout repo
+              uses: actions/checkout@v6
+
+            - name: 🧩 Git submodules update
+              shell: bash
+              run: |
+                  cat > .gitmodules << EOF
+                  [submodule "snapshots"]
+                          path = integration-tests/snapshots
+                          url = https://github.com/smelter-labs/smelter-snapshot-tests.git
+                  EOF
+                  git submodule update --init
+
+            - name: 📁 Rust cache
+              uses: Swatinem/rust-cache@v2
+              with:
+                  shared-key: "windows-test"
+                  save-if: ${{ github.ref == 'refs/heads/master' }}
+
+            - name: 🧪 Run gpu-video tests
+              run: |
+                  cargo nextest run --package integration-tests --no-default-features --profile ci -E 'test(/^gpu_video_tests::/)'
