@@ -144,10 +144,6 @@ wgpu = { version = "30.0.0", default-features = false, features = [
 winit = "0.30"
 bytemuck = { version = "1.19.0", features = ["derive"] }
 pollster = { workspace = true }
-eframe = "0.37.0"
-egui-wgpu = "0.37.0"
-rfd = "0.17.2"
-mp4 = "0.14"
 
 [build-dependencies]
 cfg_aliases = "0.2.1"
@@ -169,10 +165,6 @@ required-features = ["wgpu"]
 
 [[example]]
 name = "player"
-required-features = ["wgpu"]
-
-[[example]]
-name = "egui_player"
 required-features = ["wgpu"]
 
 [[example]]

@@ -3060,12 +3060,9 @@ dependencies = [
  "bytes",
  "cfg_aliases",
  "clap",
- "eframe",
- "egui-wgpu",
  "h264-reader",
  "libc",
  "memchr",
- "mp4 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "naga",
  "objc2 0.6.4",
  "objc2-core-foundation",
@@ -3075,7 +3072,6 @@ dependencies = [
  "objc2-metal-performance-shaders",
  "objc2-video-toolbox",
  "pollster 0.3.0",
- "rfd",
  "rustc-hash 2.1.1",
  "thiserror 2.0.21",
  "tracing",
@@ -3083,6 +3079,19 @@ dependencies = [
  "vk-mem",
  "wgpu",
  "winit",
+]
+
+[[package]]
+name = "gpu-video-egui-player"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui-wgpu",
+ "gpu-video",
+ "mp4 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pollster 0.3.0",
+ "rfd",
+ "tracing-subscriber",
 ]
 
 [[package]]

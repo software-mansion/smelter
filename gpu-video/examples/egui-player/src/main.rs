@@ -113,7 +113,7 @@ impl eframe::App for App {
     }
 }
 
-pub fn run() {
+fn main() {
     tracing_subscriber::fmt().init();
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());

@@ -6,7 +6,7 @@ use gpu_video::{
     parameters::{DecoderParameters, InputBytestreamFormatH264},
 };
 
-use crate::egui_player::demuxer::Mp4Demuxer;
+use crate::demuxer::Mp4Demuxer;
 
 pub struct Playback {
     demuxer: Mp4Demuxer,
