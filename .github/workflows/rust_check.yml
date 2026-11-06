@@ -267,7 +267,7 @@ jobs:
             - name: 🔬 Install nextest
               shell: bash
               run: |
-                  curl -LsSf https://get.nexte.st/latest/windows-tar | tar zxf - -C "${CARGO_HOME:-$HOME/.cargo}/bin"
+                  curl -LsSf https://get.nexte.st/latest/windows-tar | tar zxf - -C "$(cygpath -u "${CARGO_HOME:-$USERPROFILE/.cargo}")/bin"
                   cargo nextest --version
 
             - name: 📥 Checkout repo
