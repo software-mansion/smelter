@@ -224,7 +224,7 @@ jobs:
               run: cargo test --workspace --doc
 # run only when gpu-video code was touched
     test_windows:
-        needs: build_and_lint_linux
+        # needs: build_and_lint_linux
         runs-on: windows-gpu-2022
         steps:
             - name: 🛠 Install LLVM (libclang for bindgen)
