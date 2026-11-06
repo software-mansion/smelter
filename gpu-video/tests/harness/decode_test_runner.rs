@@ -4,11 +4,9 @@ use ffmpeg_next::codec::Id;
 use gpu_video::{VideoAdapterExt, parameters::DecoderParameters};
 
 use crate::{
-    gpu_video_tests::{
-        Nv12Frame, RunnableTestCase, TestCase, TestRun, TestRunStatus, frame_data_diff,
-        harness::decoders::{Decoder, FfmpegDecoder, GvBytesDecoder, GvWgpuTexturesDecoder},
-    },
-    paths::gpu_video_dumps_dir_path,
+    Nv12Frame, RunnableTestCase, TestCase, TestRun, TestRunStatus, frame_data_diff,
+    gpu_video_dumps_dir_path,
+    harness::decoders::{Decoder, FfmpegDecoder, GvBytesDecoder, GvWgpuTexturesDecoder},
 };
 
 impl RunnableTestCase for TestCase<DecoderOptions> {

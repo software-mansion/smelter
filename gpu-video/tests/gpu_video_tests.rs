@@ -86,6 +86,12 @@ fn create_video_device(filter: impl Fn(&wgpu::Adapter) -> bool) -> (wgpu::Device
         .unwrap()
 }
 
+/// Directory in the snapshots submodule holding encoded bitstream dumps
+/// used as inputs for the gpu-video tests.
+fn gpu_video_dumps_dir_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../integration-tests/snapshots/gpu_video/dumps")
+}
+
 fn frame_data_diff(actual: &[u8], expected: &[u8]) -> f32 {
     if actual.len() != expected.len() {
         return f32::MAX;

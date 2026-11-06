@@ -142,7 +142,7 @@ jobs:
 
             - name: 🧪 Run gpu-video tests
               run: |
-                  cargo nextest run --package integration-tests --profile ci -E 'test(/^gpu_video_tests::/)'
+                  cargo nextest run --package gpu-video --profile ci -E 'binary_id(gpu-video::gpu_video_tests)'
 
     test_linux:
         needs: build_and_lint_linux
@@ -190,7 +190,7 @@ jobs:
 
             - name: 🧪 Run unit tests
               run: |
-                  cargo nextest run --workspace --profile ci -E 'not test(/^pipeline_tests::/) and not test(/^render_tests::/) and not test(/^gpu_video_tests::/)'
+                  cargo nextest run --workspace --profile ci -E 'not test(/^pipeline_tests::/) and not test(/^render_tests::/) and not binary_id(gpu-video::gpu_video_tests)'
 
             - name: 🧪 Run render tests
               if: ${{ !cancelled() }}
@@ -200,7 +200,7 @@ jobs:
             - name: 🧪 Run gpu-video tests
               if: ${{ !cancelled() }}
               run: |
-                  cargo nextest run --workspace --profile ci -E 'test(/^gpu_video_tests::/)'
+                  cargo nextest run --workspace --profile ci -E 'binary_id(gpu-video::gpu_video_tests)'
 
             - name: 🧪 Run pipeline tests
               if: ${{ !cancelled() }}
@@ -222,23 +222,39 @@ jobs:
 
             - name: 📚 Run doctests
               run: cargo test --workspace --doc
-
+# run only when gpu-video code was touched
     test_windows:
         needs: build_and_lint_linux
         runs-on: windows-gpu-2022
-        env:
-            LIBCLANG_PATH: C:\Program Files\LLVM\bin
         steps:
-            - name: 🛠 Install FFmpeg
-              shell: pwsh
+            - name: 🛠 Install LLVM (libclang for bindgen)
+              shell: powershell
               run: |
                   $ErrorActionPreference = "Stop"
-                  $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip"
-                  Invoke-WebRequest -Uri $url -OutFile "$env:RUNNER_TEMP\ffmpeg.zip"
-                  Expand-Archive -Path "$env:RUNNER_TEMP\ffmpeg.zip" -DestinationPath "$env:RUNNER_TEMP\ffmpeg"
-                  $ffmpegDir = (Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Directory | Select-Object -First 1).FullName
-                  "FFMPEG_DIR=$ffmpegDir" | Out-File -FilePath $env:GITHUB_ENV -Append
-                  "$ffmpegDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+                  $version = "20.1.8"
+                  $dir = "$env:RUNNER_TOOL_CACHE\llvm\$version"
+                  if (-not (Test-Path "$dir\bin\libclang.dll")) {
+                      New-Item -ItemType Directory -Force -Path $dir | Out-Null
+                      $archive = "clang+llvm-$version-x86_64-pc-windows-msvc.tar.xz"
+                      Invoke-WebRequest -Uri "https://github.com/llvm/llvm-project/releases/download/llvmorg-$version/$archive" -OutFile "$env:RUNNER_TEMP\$archive"
+                      tar -xf "$env:RUNNER_TEMP\$archive" -C $dir --strip-components=1
+                  }
+                  "LIBCLANG_PATH=$dir\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+            - name: 🛠 Install FFmpeg
+              shell: powershell
+              run: |
+                  $ErrorActionPreference = "Stop"
+                  $version = "7.1"
+                  $dir = "$env:RUNNER_TOOL_CACHE\ffmpeg\$version"
+                  if (-not (Test-Path "$dir\bin\ffmpeg.exe")) {
+                      New-Item -ItemType Directory -Force -Path $dir | Out-Null
+                      $archive = "ffmpeg-n$version-latest-win64-gpl-shared-$version.zip"
+                      Invoke-WebRequest -Uri "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/$archive" -OutFile "$env:RUNNER_TEMP\$archive"
+                      tar -xf "$env:RUNNER_TEMP\$archive" -C $dir --strip-components=1
+                  }
+                  "FFMPEG_DIR=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
+                  "$dir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
 
             - name: Show `FFmpeg` version
               run: ffmpeg -version
@@ -274,4 +290,4 @@ jobs:
 
             - name: 🧪 Run gpu-video tests
               run: |
-                  cargo nextest run --package integration-tests --no-default-features --profile ci -E 'test(/^gpu_video_tests::/)'
+                  cargo nextest run --package gpu-video --profile ci -E 'binary_id(gpu-video::gpu_video_tests)'

@@ -5,7 +5,7 @@ use gpu_video::{
     parameters::{EncoderParametersH264, EncoderParametersH265},
 };
 
-use crate::gpu_video_tests::Nv12Frame;
+use crate::Nv12Frame;
 
 #[derive(Debug, Clone, Copy)]
 pub enum EncoderParameters {

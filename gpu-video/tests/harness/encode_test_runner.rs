@@ -10,15 +10,12 @@ use gpu_video::{
 };
 
 use crate::{
-    gpu_video_tests::{
-        Nv12Frame, RunnableTestCase, TestCase, TestRun, TestRunStatus, create_video_device,
-        frame_data_diff,
-        harness::{
-            decoders::{Decoder, FfmpegDecoder},
-            encoders::{Encoder, EncoderParameters, GvBytesEncoder, GvWgpuTexturesEncoder},
-        },
+    Nv12Frame, RunnableTestCase, TestCase, TestRun, TestRunStatus, create_video_device,
+    frame_data_diff, gpu_video_dumps_dir_path,
+    harness::{
+        decoders::{Decoder, FfmpegDecoder},
+        encoders::{Encoder, EncoderParameters, GvBytesEncoder, GvWgpuTexturesEncoder},
     },
-    paths::gpu_video_dumps_dir_path,
 };
 
 const FRAMERATE: u32 = 30;
@@ -114,7 +111,7 @@ impl EncoderOptions {
             || self.forced_keyframes.contains(&frame_idx)
             || self
                 .idr_period
-                .is_some_and(|period| frame_idx.is_multiple_of(period.get() as usize))
+                .is_some_and(|period| frame_idx % period.get() as usize == 0)
     }
 
     fn target_bitrate(&self) -> u64 {
