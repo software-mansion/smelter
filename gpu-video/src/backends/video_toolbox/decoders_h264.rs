@@ -72,11 +72,11 @@ impl VTDecoderH264<VideoTexture> {
         parameters: DecoderParameters,
         on_frame_callback: Box<dyn FnMut(OutputFrame<VideoTexture>) + Send>,
     ) -> Result<Self, super::error::VTInitError> {
-        use super::decoder::wgpu_api::{make_texture_cache, to_video_texture};
+        use super::decoder::wgpu_api::{make_textures, to_video_texture};
 
-        let cache = make_texture_cache(&wgpu_device)?;
+        let textures = make_textures(&wgpu_device)?;
         let convert = Box::new(move |buffer: &cf::CFRetained<cv::CVBuffer>| {
-            to_video_texture(&wgpu_device, &cache, buffer)
+            to_video_texture(&wgpu_device, &textures, buffer)
         });
         Ok(Self::new(parameters, convert, on_frame_callback, true))
     }
