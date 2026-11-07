@@ -36,7 +36,7 @@ use crate::{
 };
 
 #[cfg(metal_interop)]
-use super::metal_interop::{IOSurfaceTextures, TimelinePoint};
+use super::metal_interop::{IOSurfaceTexturesConverter, TimelinePoint};
 #[cfg(feature = "transcoder")]
 use super::metal_interop::{PlaneTextures, plane_textures_from_pixel_buffer};
 
@@ -388,7 +388,7 @@ pub(crate) struct VTEncoder<C: EncodeCodec> {
     #[cfg(feature = "wgpu")]
     wgpu: Option<wgpu_api::VTWgpuEncodeState>,
     #[cfg(metal_interop)]
-    input_textures: Option<IOSurfaceTextures>,
+    input_textures: Option<IOSurfaceTexturesConverter>,
     #[cfg(metal_interop)]
     listener: Option<Retained<mtl::MTLSharedEventListener>>,
 }
@@ -499,7 +499,7 @@ impl<C: EncodeCodec> VTEncoder<C> {
             on_chunk_callback,
         )?;
 
-        encoder.input_textures = Some(IOSurfaceTextures::new_from_mtl(
+        encoder.input_textures = Some(IOSurfaceTexturesConverter::new_from_mtl(
             device,
             mtl::MTLTextureUsage(
                 mtl::MTLTextureUsage::ShaderWrite.0 | mtl::MTLTextureUsage::RenderTarget.0,
