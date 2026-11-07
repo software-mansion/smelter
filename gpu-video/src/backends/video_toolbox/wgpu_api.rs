@@ -18,7 +18,7 @@ use crate::{
             encoder::{H264Codec, H265Codec, VTEncoder},
             error::VTInitError,
             metal_interop::{
-                IOSurfaceTextures, MetalTextureError, PlaneTextures, SendSyncCVBuffer,
+                IOSurfaceTexturesConverter, MetalTextureError, PlaneTextures, SendSyncCVBuffer,
                 plane_textures_from_pixel_buffer,
             },
         },
@@ -147,7 +147,7 @@ impl WgpuVideoDeviceBackend for VTDevice {
     }
 }
 
-impl IOSurfaceTextures {
+impl IOSurfaceTexturesConverter {
     pub(crate) fn new_from_wgpu(
         device: &wgpu::Device,
         usage: mtl::MTLTextureUsage,
@@ -165,7 +165,7 @@ impl IOSurfaceTextures {
 }
 
 pub(crate) fn video_texture_from_pixel_buffer(
-    textures: &IOSurfaceTextures,
+    textures: &IOSurfaceTexturesConverter,
     device: &wgpu::Device,
     buffer: &cf::CFRetained<cv::CVBuffer>,
     usage: wgpu::TextureUsages,
@@ -175,13 +175,13 @@ pub(crate) fn video_texture_from_pixel_buffer(
     let PlaneTextures {
         y,
         uv,
-        buffer: guard,
+        buffer_keepalive,
     } = plane_textures_from_pixel_buffer(textures, buffer)?;
 
     let y_texture = plane_wgpu_texture(
         device,
         y,
-        SendSyncCVBuffer(guard.0.clone()),
+        buffer_keepalive.clone(),
         plane_size(buffer, 0),
         wgpu::TextureFormat::R8Unorm,
         usage,
@@ -191,7 +191,7 @@ pub(crate) fn video_texture_from_pixel_buffer(
     let uv_texture = plane_wgpu_texture(
         device,
         uv,
-        guard,
+        buffer_keepalive,
         plane_size(buffer, 1),
         wgpu::TextureFormat::Rg8Unorm,
         usage,
@@ -214,7 +214,7 @@ fn plane_size(buffer: &cv::CVBuffer, plane_index: usize) -> wgpu::Extent3d {
 fn plane_wgpu_texture(
     device: &wgpu::Device,
     mtl_texture: Retained<ProtocolObject<dyn mtl::MTLTexture>>,
-    guard: SendSyncCVBuffer,
+    buffer_keepalive: SendSyncCVBuffer,
     size: wgpu::Extent3d,
     format: wgpu::TextureFormat,
     usage: wgpu::TextureUsages,
@@ -233,7 +233,7 @@ fn plane_wgpu_texture(
                 height: size.height,
                 depth: 1,
             },
-            Some(Box::new(move || drop(guard))),
+            Some(Box::new(move || drop(buffer_keepalive))),
         );
 
         device.create_texture_from_hal::<wgpu::hal::metal::Api>(

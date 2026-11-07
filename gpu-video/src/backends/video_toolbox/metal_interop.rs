@@ -8,15 +8,12 @@ use objc2_io_surface::IOSurfaceRef;
 use objc2_metal::MTLCommandBuffer as _;
 use objc2_metal::{self as mtl, MTLDevice as _, MTLSharedEvent as _};
 
-/// Makes Metal textures over the planes of pixel buffers' IOSurfaces. Unlike a
-/// `CVMetalTextureCache` texture, whose release updates the cache, a texture made here only holds
-/// its pixel buffer, so dropping it on any thread races with nothing.
-pub(crate) struct IOSurfaceTextures {
+pub(crate) struct IOSurfaceTexturesConverter {
     device: Retained<ProtocolObject<dyn mtl::MTLDevice>>,
     usage: mtl::MTLTextureUsage,
 }
 
-impl IOSurfaceTextures {
+impl IOSurfaceTexturesConverter {
     pub(crate) fn new_from_mtl(
         device: &ProtocolObject<dyn mtl::MTLDevice>,
         usage: mtl::MTLTextureUsage,
@@ -48,6 +45,7 @@ impl IOSurfaceTextures {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct SendSyncCVBuffer(pub(crate) cf::CFRetained<cv::CVBuffer>);
 unsafe impl Send for SendSyncCVBuffer {}
 unsafe impl Sync for SendSyncCVBuffer {}
@@ -64,14 +62,12 @@ pub enum MetalTextureError {
 pub(crate) struct PlaneTextures {
     pub(crate) y: Retained<ProtocolObject<dyn mtl::MTLTexture>>,
     pub(crate) uv: Retained<ProtocolObject<dyn mtl::MTLTexture>>,
-    /// Keeps the pixel buffer, which VideoToolbox reuses only once released, alive while the
-    /// MTLTextures are in use.
     #[cfg_attr(not(feature = "wgpu"), expect(dead_code))]
-    pub(crate) buffer: SendSyncCVBuffer,
+    pub(crate) buffer_keepalive: SendSyncCVBuffer,
 }
 
 pub(crate) fn plane_textures_from_pixel_buffer(
-    textures: &IOSurfaceTextures,
+    textures: &IOSurfaceTexturesConverter,
     buffer: &cf::CFRetained<cv::CVBuffer>,
 ) -> Result<PlaneTextures, MetalTextureError> {
     let surface =
@@ -79,7 +75,7 @@ pub(crate) fn plane_textures_from_pixel_buffer(
     Ok(PlaneTextures {
         y: textures.plane(&surface, buffer, mtl::MTLPixelFormat::R8Unorm, 0)?,
         uv: textures.plane(&surface, buffer, mtl::MTLPixelFormat::RG8Unorm, 1)?,
-        buffer: SendSyncCVBuffer(buffer.clone()),
+        buffer_keepalive: SendSyncCVBuffer(buffer.clone()),
     })
 }
 

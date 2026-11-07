@@ -12,8 +12,8 @@ use crate::{
         encoder::{H264Codec, H265Codec, MetalInputFrame},
         error::{VTEncoderError, VTTranscoderError},
         metal_interop::{
-            IOSurfaceTextures, PlaneTextures, SendSyncCVBuffer, SharedEventTimeline, TimelinePoint,
-            add_completed_handler, plane_textures_from_pixel_buffer,
+            IOSurfaceTexturesConverter, PlaneTextures, SendSyncCVBuffer, SharedEventTimeline,
+            TimelinePoint, add_completed_handler, plane_textures_from_pixel_buffer,
         },
     },
     device::{DecoderParameters, Rational, VideoParameters},
@@ -140,7 +140,7 @@ struct TexturesUsedByResize {
 }
 
 // Safety: the wrapped textures are never accessed through this wrapper, only dropped, and releasing
-// MTLTextures and CVMetalTextures only decrements thread-safe retain counts.
+// MTLTextures and CVPixelBuffers only decrements thread-safe retain counts.
 unsafe impl Send for TexturesUsedByResize {}
 
 #[derive(Clone)]
@@ -169,7 +169,7 @@ impl ResizeOutcome {
 }
 
 struct ResizeEncodePipeline {
-    decoder_textures: IOSurfaceTextures,
+    decoder_textures: IOSurfaceTexturesConverter,
     backends: Vec<Backend>,
     _device: Retained<ProtocolObject<dyn mtl::MTLDevice>>,
     queue: Retained<ProtocolObject<dyn mtl::MTLCommandQueue>>,
@@ -188,7 +188,7 @@ impl Transcoder {
             .newCommandQueue()
             .ok_or(VTTranscoderError::CommandQueueCreationFailed)?;
         let decoder_textures =
-            IOSurfaceTextures::new_from_mtl(&device, mtl::MTLTextureUsage::ShaderRead);
+            IOSurfaceTexturesConverter::new_from_mtl(&device, mtl::MTLTextureUsage::ShaderRead);
 
         let resize_finished_event = device
             .newSharedEvent()
