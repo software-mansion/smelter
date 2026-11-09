@@ -27,7 +27,7 @@ use crate::{
     frame_sorter::{DecodeResult, FrameSorter},
     parser::{
         decoder_instructions::DecoderInstruction,
-        h264::{AccessUnit, ParserH264, OutputBytestreamFormatH264, ParserOptionsH264},
+        h264::{AccessUnit, OutputBytestreamFormatH264, ParserH264, ParserOptionsH264},
         reference_manager::DecodeInformation,
     },
 };

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crossbeam_channel::Receiver;
 use gpu_video::{
-    H264DecoderEvent, OutputFrame, ReferenceManagementError, VideoDecoderError, VideoDeviceExt,
+    DecoderEventH264, OutputFrame, ReferenceManagementError, VideoDecoderError, VideoDeviceExt,
     VideoTexture, WgpuTexturesDecoderH264,
     parameters::{CorruptedStateHandling, DecoderParameters, DecoderUsage},
 };
@@ -63,14 +63,14 @@ impl VideoDecoderInstance for VulkanH264Decoder {
 
         let decoder_event = match &event {
             EncodedInputEvent::Chunk(chunk) => {
-                H264DecoderEvent::DecodeChunk(gpu_video::EncodedInputChunk {
+                DecoderEventH264::DecodeChunk(gpu_video::EncodedInputChunk {
                     data: chunk.data.as_ref(),
                     pts: Some(chunk.pts.as_nanos() as u64),
                 })
             }
-            EncodedInputEvent::LostData => H264DecoderEvent::SignalDataLoss,
-            EncodedInputEvent::AuDelimiter => H264DecoderEvent::SignalFrameEnd,
-            EncodedInputEvent::Discontinuity => H264DecoderEvent::Flush,
+            EncodedInputEvent::LostData => DecoderEventH264::SignalDataLoss,
+            EncodedInputEvent::AuDelimiter => DecoderEventH264::SignalFrameEnd,
+            EncodedInputEvent::Discontinuity => DecoderEventH264::Flush,
         };
 
         if let Err(err) = self.decoder.process_event(decoder_event) {

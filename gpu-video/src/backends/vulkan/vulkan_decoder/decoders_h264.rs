@@ -20,18 +20,18 @@ use crate::{
         waiter_thread::{SubmissionTracker, WaiterThreadHandle},
         wrappers::{Buffer, CommandBufferPoolStorage},
     },
-    decoders::{H264EventProcessor, VideoDecoderBackend, VideoDecoderError},
+    decoders::{EventProcessorH264, VideoDecoderBackend, VideoDecoderError},
     device::DecoderParameters,
     frame_sorter::{DecodeResult, FrameSorter},
     parser::{
         decoder_instructions::DecoderInstruction,
-        h264::{AccessUnit, H264Parser, OutputBytestreamFormatH264, ParserOptionsH264},
+        h264::{AccessUnit, OutputBytestreamFormatH264, ParserH264, ParserOptionsH264},
     },
 };
 
 pub(crate) struct VulkanDecoderH264 {
     decoder: VulkanDecoder<'static>,
-    event_processor: H264EventProcessor,
+    event_processor: EventProcessorH264,
 }
 
 impl VulkanDecoderH264 {
@@ -49,8 +49,8 @@ impl VulkanDecoderH264 {
 
         Ok(Self {
             decoder,
-            event_processor: H264EventProcessor::new(
-                H264Parser::new(ParserOptionsH264 {
+            event_processor: EventProcessorH264::new(
+                ParserH264::new(ParserOptionsH264 {
                     input_format: parameters.bytestream_format,
                     output_format: OutputBytestreamFormatH264::AnnexB,
                 }),

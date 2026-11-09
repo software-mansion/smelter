@@ -1,6 +1,6 @@
 use bytes::BytesMut;
 use gpu_video::parser::h264::{
-    AccessUnit, ParserH264, ParsedNalu,
+    AccessUnit, ParsedNalu, ParserH264,
     nal_types::slice::{
         DecRefPicMarking, MemoryManagementControlOperation, SliceFamily, SliceHeader,
     },

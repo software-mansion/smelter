@@ -138,7 +138,7 @@ pub use crate::encoders::{BytesEncoderH264, BytesEncoderH265, VideoEncoderError}
 #[cfg(feature = "wgpu")]
 pub use crate::encoders::{EncodeTexture, WgpuTexturesEncoderH264, WgpuTexturesEncoderH265};
 pub use crate::instance::VideoInstance;
-pub use crate::parser::{h264::ParserErrorH264 as ParserErrorH264, reference_manager::ReferenceManagementError};
+pub use crate::parser::{h264::ParserErrorH264, reference_manager::ReferenceManagementError};
 #[cfg(feature = "transcoder")]
 pub use crate::transcoder::{TranscodedChunk, VideoTranscoder, VideoTranscoderError};
 #[cfg(feature = "wgpu")]
@@ -459,7 +459,7 @@ pub struct EncodedInputChunk<'a> {
     pub pts: Option<u64>,
 }
 
-pub type H264DecoderEvent<'a> = DecoderEvent<'a, AccessUnit>;
+pub type DecoderEventH264<'a> = DecoderEvent<'a, AccessUnit>;
 
 /// Represents all events that can be sent to the decoder
 #[non_exhaustive]

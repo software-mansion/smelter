@@ -7,7 +7,7 @@ use ash::vk;
 use tracing::error;
 
 use crate::{
-    DecoderEvent, EncodedInputChunk, H264ParserError, OutputFrame, ReferenceManagementError,
+    DecoderEvent, EncodedInputChunk, OutputFrame, ParserErrorH264, ReferenceManagementError,
     TranscodedChunk, VideoBackendError, VideoTranscoderError,
     backends::vulkan::{
         AsyncVulkanEncoder, VulkanCommonError, VulkanDecoderError, VulkanDevice,
@@ -321,7 +321,7 @@ pub enum VulkanTranscoderError {
     ReferenceManagementError(#[from] ReferenceManagementError),
 
     #[error("H264 parser error: {0}")]
-    ParserError(#[from] H264ParserError),
+    ParserError(#[from] ParserErrorH264),
 
     #[error(transparent)]
     Common(#[from] VulkanCommonError),
