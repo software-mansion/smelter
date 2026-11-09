@@ -5,6 +5,8 @@ on:
         branches: [master]
     pull_request:
         types: [opened, synchronize]
+    schedule:
+        - cron: "0 1 * * 1"
 
 concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
@@ -35,10 +37,14 @@ jobs:
             - name: 📥 Checkout repo
               uses: actions/checkout@v6
 
+            - name: 📅 Compute cache week
+              id: cache_week
+              run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+
             - name: 📁 Rust cache
               uses: Swatinem/rust-cache@v2
               with:
-                  shared-key: "linux-build"
+                  shared-key: "linux-build-${{ steps.cache_week.outputs.week }}"
                   save-if: ${{ github.ref == 'refs/heads/master' }}
 
             - name: 🪢 Generate Chromium Embedded Framework bindings
@@ -85,10 +91,14 @@ jobs:
             - name: 📥 Checkout repo
               uses: actions/checkout@v6
 
+            - name: 📅 Compute cache week
+              id: cache_week
+              run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+
             - name: 📁 Rust cache
               uses: Swatinem/rust-cache@v2
               with:
-                  shared-key: "macos-build"
+                  shared-key: "macos-build-${{ steps.cache_week.outputs.week }}"
                   save-if: ${{ github.ref == 'refs/heads/master' }}
 
             - name: 🪢 Generate Chromium Embedded Framework bindings
@@ -116,7 +126,7 @@ jobs:
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
               with:
-                  toolchain: 1.96
+                  toolchain: 1.98
 
             - name: 🔬 Install nextest
               uses: taiki-e/install-action@v2
@@ -135,10 +145,15 @@ jobs:
                   EOF
                   git submodule update --init
 
+            - name: 📅 Compute cache week
+              id: cache_week
+              run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+
             - name: 📁 Rust cache
               uses: Swatinem/rust-cache@v2
               with:
-                  shared-key: "macos-build"
+                  shared-key: "macos-test-${{ steps.cache_week.outputs.week }}"
+                  save-if: ${{ github.ref == 'refs/heads/master' }}
 
             - name: 🧪 Run gpu-video tests
               run: |
@@ -182,10 +197,14 @@ jobs:
                   EOF
                   git submodule update --init
 
+            - name: 📅 Compute cache week
+              id: cache_week
+              run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+
             - name: 📁 Rust cache
               uses: Swatinem/rust-cache@v2
               with:
-                  shared-key: "linux-test"
+                  shared-key: "linux-test-${{ steps.cache_week.outputs.week }}"
                   save-if: ${{ github.ref == 'refs/heads/master' }}
 
             - name: 🧪 Run unit tests
