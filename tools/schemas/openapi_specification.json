@@ -4159,47 +4159,6 @@
           "lowest_latency"
         ]
       },
-      "OutputEndCondition": {
-        "type": "object",
-        "description": "This type defines when end of an input stream should trigger end of the output stream. Only one\nof those fields can be set at the time. Unless specified otherwise the input stream is\nconsidered finished/ended when:\n- TCP connection was dropped/closed.\n- RTCP Goodbye packet (`BYE`) was received.\n- Mp4 track has ended.\n- Input was unregistered already (or never registered).",
-        "properties": {
-          "any_of": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "$ref": "#/components/schemas/InputId"
-            },
-            "description": "Terminate output stream if any of the input streams from the list are finished."
-          },
-          "all_of": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "$ref": "#/components/schemas/InputId"
-            },
-            "description": "Terminate output stream if all the input streams from the list are finished."
-          },
-          "any_input": {
-            "type": [
-              "boolean",
-              "null"
-            ],
-            "description": "Terminate output stream if any of the input streams ends. This includes streams added after\nthe output was registered. In particular, output stream will **not be** terminated if no\ninputs were ever connected."
-          },
-          "all_inputs": {
-            "type": [
-              "boolean",
-              "null"
-            ],
-            "description": "Terminate output stream if all the input streams finish. In particular, output stream will\n**be** terminated if no inputs were ever connected."
-          }
-        },
-        "additionalProperties": false
-      },
       "OutputHlsAudioOptions": {
         "type": "object",
         "required": [
@@ -4215,17 +4174,6 @@
               {
                 "$ref": "#/components/schemas/AudioMixingStrategy",
                 "description": "Specifies how audio should be mixed. Defaults to `\"sum_clip\"`."
-              }
-            ]
-          },
-          "send_eos_when": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of output stream based on the input streams states."
               }
             ]
           },
@@ -4263,17 +4211,6 @@
             "$ref": "#/components/schemas/Resolution",
             "description": "Output resolution in pixels."
           },
-          "send_eos_when": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of the output stream based on the input streams states. If output\nincludes both audio and video streams, then EOS needs to be sent for every type."
-              }
-            ]
-          },
           "encoder": {
             "$ref": "#/components/schemas/HlsVideoEncoderOptions",
             "description": "Video encoder options."
@@ -4300,17 +4237,6 @@
               {
                 "$ref": "#/components/schemas/AudioMixingStrategy",
                 "description": "Specifies how audio should be mixed. Defaults to `\"sum_clip\"`."
-              }
-            ]
-          },
-          "send_eos_when": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of output stream based on the input streams states. If output\nincludes both audio and video streams, then EOS needs to be sent for every type."
               }
             ]
           },
@@ -4348,17 +4274,6 @@
             "$ref": "#/components/schemas/Resolution",
             "description": "Output resolution in pixels."
           },
-          "send_eos_when": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of the output stream based on the input streams states. If output\nincludes both audio and video streams, then EOS needs to be sent for every type."
-              }
-            ]
-          },
           "encoder": {
             "$ref": "#/components/schemas/MoqClientVideoEncoderOptions",
             "description": "Video encoder options."
@@ -4385,17 +4300,6 @@
               {
                 "$ref": "#/components/schemas/AudioMixingStrategy",
                 "description": "Specifies how audio should be mixed. Defaults to `\"sum_clip\"`."
-              }
-            ]
-          },
-          "send_eos_when": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of output stream based on the input streams states."
               }
             ]
           },
@@ -4433,17 +4337,6 @@
             "$ref": "#/components/schemas/Resolution",
             "description": "Output resolution in pixels."
           },
-          "send_eos_when": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of the output stream based on the input streams states. If output\nincludes both audio and video streams, then EOS needs to be sent for every type."
-              }
-            ]
-          },
           "encoder": {
             "$ref": "#/components/schemas/Mp4VideoEncoderOptions",
             "description": "Video encoder options."
@@ -4470,17 +4363,6 @@
               {
                 "$ref": "#/components/schemas/AudioMixingStrategy",
                 "description": "Specifies how audio should be mixed. Defaults to `\"sum_clip\"`."
-              }
-            ]
-          },
-          "send_eos_when": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of the output stream based on the input streams states. If output\nincludes both audio and video streams, then EOS needs to be sent for every type."
               }
             ]
           },
@@ -4518,17 +4400,6 @@
             "$ref": "#/components/schemas/Resolution",
             "description": "Output resolution in pixels."
           },
-          "send_eos_when": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of the output stream based on the input streams states. If output\nincludes both audio and video streams, then EOS needs to be sent for every type."
-              }
-            ]
-          },
           "encoder": {
             "$ref": "#/components/schemas/RtmpClientVideoEncoderOptions",
             "description": "Video encoder options."
@@ -4555,17 +4426,6 @@
               {
                 "$ref": "#/components/schemas/AudioMixingStrategy",
                 "description": "Specifies how audio should be mixed. Defaults to `\"sum_clip\"`."
-              }
-            ]
-          },
-          "send_eos_when": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of output stream based on the input streams states. If output\nincludes both audio and video streams, then EOS needs to be sent for every type."
               }
             ]
           },
@@ -4602,17 +4462,6 @@
           "resolution": {
             "$ref": "#/components/schemas/Resolution",
             "description": "Output resolution in pixels."
-          },
-          "send_eos_when": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of the output stream based on the input streams states. If output\nincludes both audio and video streams, then EOS needs to be sent for every type."
-              }
-            ]
           },
           "encoder": {
             "$ref": "#/components/schemas/RtpVideoEncoderOptions",
@@ -4825,17 +4674,6 @@
               }
             ]
           },
-          "send_eos_when": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of output stream based on the input streams states."
-              }
-            ]
-          },
           "encoder": {
             "$ref": "#/components/schemas/WhepAudioEncoderOptions",
             "description": "Audio encoder options."
@@ -4870,17 +4708,6 @@
             "$ref": "#/components/schemas/Resolution",
             "description": "Output resolution in pixels."
           },
-          "send_eos_when": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of the output stream based on the input streams states. If output\nincludes both audio and video streams, then EOS needs to be sent for every type."
-              }
-            ]
-          },
           "encoder": {
             "$ref": "#/components/schemas/WhepVideoEncoderOptions",
             "description": "Video encoder options."
@@ -4906,17 +4733,6 @@
               {
                 "$ref": "#/components/schemas/AudioMixingStrategy",
                 "description": "Specifies how audio should be mixed. Defaults to `\"sum_clip\"`."
-              }
-            ]
-          },
-          "send_eos_when": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Condition for termination of output stream based on the input streams states."
               }
             ]
           },
@@ -4958,17 +4774,6 @@
           "resolution": {
             "$ref": "#/components/schemas/Resolution",
             "description": "Output resolution in pixels."
-          },
-          "send_eos_when": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/OutputEndCondition",
-                "description": "Defines when output stream should end if some of the input streams are finished. If output\nincludes both audio and video streams, then EOS needs to be sent on both."
-              }
-            ]
           },
           "encoder_preferences": {
             "type": [

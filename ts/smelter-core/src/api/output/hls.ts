@@ -1,6 +1,6 @@
 import type { Api, Outputs, _smelterInternals } from '@swmansion/smelter';
 import type { RegisterOutputRequest } from '../output';
-import { intoOutputEosCondition, intoVideoEncoderBitrate } from './common';
+import { intoVideoEncoderBitrate } from './common';
 
 export function intoRegisterHlsOutput(
   output: Outputs.RegisterHlsOutput,
@@ -23,7 +23,6 @@ export function intoOutputHlsVideoOptions(
 ): Api.OutputHlsVideoOptions {
   return {
     resolution: video.resolution,
-    send_eos_when: video.sendEosWhen && intoOutputEosCondition(video.sendEosWhen),
     encoder: intoHlsVideoEncoderOptions(video.encoder),
     initial,
   };
@@ -56,7 +55,6 @@ function intoOutputHlsAudioOptions(
   initial: Api.AudioScene
 ): Api.OutputHlsAudioOptions {
   return {
-    send_eos_when: audio.sendEosWhen && intoOutputEosCondition(audio.sendEosWhen),
     channels: audio.channels,
     encoder: intoHlsAudioEncoderOptions(audio.encoder),
     initial,

@@ -34,9 +34,6 @@ pub struct HlsOutput {
 pub struct OutputHlsVideoOptions {
     /// Output resolution in pixels.
     pub resolution: Resolution,
-    /// Condition for termination of the output stream based on the input streams states. If output
-    /// includes both audio and video streams, then EOS needs to be sent for every type.
-    pub send_eos_when: Option<OutputEndCondition>,
     /// Video encoder options.
     pub encoder: HlsVideoEncoderOptions,
     /// Root of a component tree/scene that should be rendered for the output. Use the
@@ -84,8 +81,6 @@ pub enum HlsVideoEncoderOptions {
 pub struct OutputHlsAudioOptions {
     /// Specifies how audio should be mixed. Defaults to `"sum_clip"`.
     pub mixing_strategy: Option<AudioMixingStrategy>,
-    /// Condition for termination of output stream based on the input streams states.
-    pub send_eos_when: Option<OutputEndCondition>,
     /// Audio encoder options.
     pub encoder: HlsAudioEncoderOptions,
     /// Specifies channels configuration.

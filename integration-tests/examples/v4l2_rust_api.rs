@@ -124,7 +124,6 @@ mod main_module {
                     id: None,
                     input_id,
                 })),
-                end_condition: PipelineOutputEndCondition::Never,
             }),
             audio: None, // TODO: add audio example
         }

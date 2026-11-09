@@ -96,8 +96,7 @@ pub fn offline_processing() -> Result<()> {
                             }
                         }]
                     }
-                },
-                "send_eos_when": { "all_inputs": true }
+                }
             },
             "audio": {
                 "channels": "stereo",
@@ -109,8 +108,7 @@ pub fn offline_processing() -> Result<()> {
                 },
                 "initial": {
                     "inputs": [{ "input_id": "input_1" }]
-                },
-                "send_eos_when": { "all_inputs": true }
+                }
             }
         }),
     )?;

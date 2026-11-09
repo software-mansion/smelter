@@ -8,7 +8,7 @@ use std::{
 
 use bytes::Bytes;
 use fdk_aac_sys as fdk;
-use tracing::{error, info, trace};
+use tracing::{error, info, trace, warn};
 
 use crate::prelude::*;
 
@@ -25,8 +25,8 @@ pub struct FdkAacEncoder {
     samples_per_frame: u32,
     codec_delay: Duration,
 
-    /// This logic relies on the fact that input samples will always be continuous.
-    /// `maybe_reset_on_discontinuity` is just a sanity check to make sure we can recover.
+    /// This logic relies on input samples being continuous between gaps from dropped batches.
+    /// `maybe_reset_on_discontinuity` recovers from those gaps.
     first_input_pts: Option<Timestamp>,
     encoded_samples: u64,
     /// Samples (per channel) received since `first_input_pts`.
@@ -160,7 +160,7 @@ impl AudioEncoder for FdkAacEncoder {
 }
 
 impl FdkAacEncoder {
-    // Audio mixer should always produce continuous stream, just a sanity check
+    // Batches are dropped when the output is not consuming them.
     fn maybe_reset_on_discontinuity(&mut self, start_pts: Timestamp) {
         let Some(first_input_pts) = self.first_input_pts else {
             return;
@@ -171,7 +171,7 @@ impl FdkAacEncoder {
         if diff_pts.abs_duration() <= MAX_PTS_DEVIATION {
             return;
         }
-        error!(?diff_pts, "Discontinuity in FDK AAC encoder input.");
+        warn!(?diff_pts, "Discontinuity in FDK AAC encoder input.");
 
         // Samples still buffered inside FDK are shifted too, new samples get the correct pts.
         self.first_input_pts = Some(first_input_pts + diff_pts);

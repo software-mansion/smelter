@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use audioadapter::{Adapter, AdapterMut};
 use rubato::{FixedSync, Resampler};
-use tracing::{error, info, trace};
+use tracing::{error, info, trace, warn};
 
 use crate::{
     AudioChannels, AudioSamples, PipelineEvent, Timestamp, pipeline::encoder::MAX_PTS_DEVIATION,
@@ -68,8 +68,8 @@ impl<Source: Iterator<Item = PipelineEvent<OutputAudioSamples>>> Iterator
 }
 
 // This resampler assumes that:
-// - It will receive continuous streams of data, without any gaps. `maybe_reset_on_discontinuity`
-//   is just a sanity check to make sure we can recover.
+// - It will receive continuous streams of data, except for gaps when batches were dropped because
+//   the output was not consuming them. `maybe_reset_on_discontinuity` recovers from those.
 // - It can produce chunks of any size, no downstream components require specific sizes.
 struct OutputResampler {
     input_sample_rate: u32,
@@ -79,7 +79,7 @@ struct OutputResampler {
     resampler_output_buffer: ResamplerOutputBuffer,
     resampler: rubato::Fft<f64>,
 
-    /// Audio mixer guarantees continuity on output, so we only need to keep track
+    /// Audio mixer output is continuous between gaps, so we only need to keep track
     /// of produces samples and first pts.
     first_sample_pts: Option<Timestamp>,
     samples_produced: u64,
@@ -153,7 +153,7 @@ impl OutputResampler {
         result
     }
 
-    // Audio mixer should always produce continuous stream, just a sanity check
+    // Batches are dropped when the output is not consuming them.
     fn maybe_reset_on_discontinuity(&mut self, start_pts: Timestamp) {
         let Some(first_sample_pts) = self.first_sample_pts else {
             return;
@@ -164,7 +164,7 @@ impl OutputResampler {
         if diff_pts.abs_duration() <= MAX_PTS_DEVIATION {
             return;
         }
-        error!(?diff_pts, "Discontinuity in output resampler input.");
+        warn!(?diff_pts, "Discontinuity in output resampler input.");
         self.resampler.reset();
         self.resampler_input_buffer.clear();
         self.resampler_output_buffer.samples_to_drop = self.resampler.output_delay();

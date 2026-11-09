@@ -21,7 +21,6 @@ fn default_video() -> smelter_core::RegisterOutputVideoOptions {
         initial: smelter_render::scene::Scene::ComponentTree(
             smelter_render::scene::Component::View(smelter_render::scene::ViewComponent::default()),
         ),
-        end_condition: smelter_core::PipelineOutputEndCondition::Never,
     }
 }
 
@@ -30,7 +29,6 @@ fn default_audio() -> smelter_core::RegisterOutputAudioOptions {
         initial: smelter_core::AudioMixerConfig { inputs: vec![] },
         mixing_strategy: smelter_core::AudioMixingStrategy::SumClip,
         channels: smelter_core::AudioChannels::Stereo,
-        end_condition: smelter_core::PipelineOutputEndCondition::Never,
     }
 }
 
@@ -307,7 +305,6 @@ fn rtmp_video_and_audio() {
                 initial: smelter_core::AudioMixerConfig { inputs: vec![] },
                 mixing_strategy: smelter_core::AudioMixingStrategy::SumClip,
                 channels: smelter_core::AudioChannels::Stereo,
-                end_condition: smelter_core::PipelineOutputEndCondition::Never,
             }),
         },
     );
@@ -417,123 +414,6 @@ fn rtmp_vbr_bitrate() {
 }
 
 #[test]
-fn rtmp_send_eos_when_any_of() {
-    check_rtmp(
-        json!({
-            "output": {
-                "url": "rtmp://localhost:1935/live/stream",
-                "video": {
-                    "resolution": { "width": 1920, "height": 1080 },
-                    "send_eos_when": {
-                        "any_of": ["input_1", "input_2"]
-                    },
-                    "encoder": { "type": "ffmpeg_h264" },
-                    "initial": video_scene()
-                }
-            }
-        }),
-        CoreOutput {
-            output_options: smelter_core::ProtocolOutputOptions::Rtmp(
-                smelter_core::protocols::RtmpOutputOptions {
-                    connection: smelter_core::protocols::RtmpConnectionOptions {
-                        host: "localhost".into(),
-                        port: 1935,
-                        app: "live".into(),
-                        stream_key: "stream".into(),
-                        use_tls: false,
-                    },
-                    video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
-                        smelter_core::codecs::FfmpegH264EncoderOptions {
-                            encoder_name: None,
-                            bitrate: None,
-                            keyframe_interval: default_keyframe_interval(),
-                            resolution: smelter_render::Resolution {
-                                width: 1920,
-                                height: 1080,
-                            },
-                            pixel_format: smelter_core::codecs::OutputPixelFormat::YUV420P,
-                            raw_options: vec![],
-                            bitstream_format: smelter_core::codecs::H264BitstreamFormat::Avcc,
-                            low_latency: false,
-                        },
-                    )),
-                    audio: None,
-                },
-            ),
-            video: Some(smelter_core::RegisterOutputVideoOptions {
-                initial: smelter_render::scene::Scene::ComponentTree(
-                    smelter_render::scene::Component::View(
-                        smelter_render::scene::ViewComponent::default(),
-                    ),
-                ),
-                end_condition: smelter_core::PipelineOutputEndCondition::AnyOf(vec![
-                    smelter_render::InputId(Arc::from("input_1")),
-                    smelter_render::InputId(Arc::from("input_2")),
-                ]),
-            }),
-            audio: None,
-        },
-    );
-}
-
-#[test]
-fn rtmp_send_eos_when_all_inputs() {
-    check_rtmp(
-        json!({
-            "output": {
-                "url": "rtmp://localhost:1935/live/stream",
-                "video": {
-                    "resolution": { "width": 1920, "height": 1080 },
-                    "send_eos_when": {
-                        "all_inputs": true
-                    },
-                    "encoder": { "type": "ffmpeg_h264" },
-                    "initial": video_scene()
-                }
-            }
-        }),
-        CoreOutput {
-            output_options: smelter_core::ProtocolOutputOptions::Rtmp(
-                smelter_core::protocols::RtmpOutputOptions {
-                    connection: smelter_core::protocols::RtmpConnectionOptions {
-                        host: "localhost".into(),
-                        port: 1935,
-                        app: "live".into(),
-                        stream_key: "stream".into(),
-                        use_tls: false,
-                    },
-                    video: Some(smelter_core::codecs::VideoEncoderOptions::FfmpegH264(
-                        smelter_core::codecs::FfmpegH264EncoderOptions {
-                            encoder_name: None,
-                            bitrate: None,
-                            keyframe_interval: default_keyframe_interval(),
-                            resolution: smelter_render::Resolution {
-                                width: 1920,
-                                height: 1080,
-                            },
-                            pixel_format: smelter_core::codecs::OutputPixelFormat::YUV420P,
-                            raw_options: vec![],
-                            bitstream_format: smelter_core::codecs::H264BitstreamFormat::Avcc,
-                            low_latency: false,
-                        },
-                    )),
-                    audio: None,
-                },
-            ),
-            video: Some(smelter_core::RegisterOutputVideoOptions {
-                initial: smelter_render::scene::Scene::ComponentTree(
-                    smelter_render::scene::Component::View(
-                        smelter_render::scene::ViewComponent::default(),
-                    ),
-                ),
-                end_condition: smelter_core::PipelineOutputEndCondition::AllInputs,
-            }),
-            audio: None,
-        },
-    );
-}
-
-#[test]
 fn err_rtmp_no_video_no_audio() {
     check_rtmp_err(
         json!({
@@ -585,27 +465,6 @@ fn err_rtmp_negative_keyframe_interval() {
             }
         }),
         "Invalid keyframe_interval_ms. Value cannot be negative.",
-    );
-}
-
-#[test]
-fn err_rtmp_conflicting_end_conditions() {
-    check_rtmp_err(
-        json!({
-            "output": {
-                "url": "rtmp://localhost:1935/live/stream",
-                "video": {
-                    "resolution": { "width": 1920, "height": 1080 },
-                    "send_eos_when": {
-                        "any_of": ["input_1"],
-                        "all_inputs": true
-                    },
-                    "encoder": { "type": "ffmpeg_h264" },
-                    "initial": video_scene()
-                }
-            }
-        }),
-        "Only one of \"any_of, all_of, any_input or all_inputs\" is allowed.",
     );
 }
 
@@ -887,7 +746,6 @@ fn rtp_audio_opus() {
                 initial: smelter_core::AudioMixerConfig { inputs: vec![] },
                 mixing_strategy: smelter_core::AudioMixingStrategy::SumClip,
                 channels: smelter_core::AudioChannels::Mono,
-                end_condition: smelter_core::PipelineOutputEndCondition::Never,
             }),
         },
     );
@@ -1177,7 +1035,6 @@ fn mp4_video_and_audio_with_ffmpeg_options() {
                 initial: smelter_core::AudioMixerConfig { inputs: vec![] },
                 mixing_strategy: smelter_core::AudioMixingStrategy::SumScale,
                 channels: smelter_core::AudioChannels::Mono,
-                end_condition: smelter_core::PipelineOutputEndCondition::Never,
             }),
         },
     );

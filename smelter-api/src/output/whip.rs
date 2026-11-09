@@ -24,9 +24,6 @@ pub struct WhipOutput {
 pub struct OutputWhipVideoOptions {
     /// Output resolution in pixels.
     pub resolution: Resolution,
-    /// Defines when output stream should end if some of the input streams are finished. If output
-    /// includes both audio and video streams, then EOS needs to be sent on both.
-    pub send_eos_when: Option<OutputEndCondition>,
     /// Codec preferences list.
     pub encoder_preferences: Option<Vec<WhipVideoEncoderOptions>>,
     /// Root of a component tree/scene that should be rendered for the output.
@@ -104,8 +101,6 @@ pub enum WhipVideoEncoderOptions {
 pub struct OutputWhipAudioOptions {
     /// Specifies how audio should be mixed. Defaults to `"sum_clip"`.
     pub mixing_strategy: Option<AudioMixingStrategy>,
-    /// Condition for termination of output stream based on the input streams states.
-    pub send_eos_when: Option<OutputEndCondition>,
     /// Specifies channels configuration.
     pub channels: Option<AudioChannels>,
     /// Codec preferences list.

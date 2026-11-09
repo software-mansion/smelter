@@ -24,14 +24,12 @@ impl TryFrom<Mp4Output> for core::RegisterOutputOptions {
         let (video_encoder_options, output_video_options) = match video {
             Some(OutputMp4VideoOptions {
                 resolution,
-                send_eos_when,
                 encoder,
                 initial,
             }) => {
                 let encoder_options = encoder.to_pipeline_options(resolution)?;
                 let output_options = core::RegisterOutputVideoOptions {
                     initial: Scene::ComponentTree(initial.try_into()?),
-                    end_condition: send_eos_when.unwrap_or_default().try_into()?,
                 };
 
                 (Some(encoder_options), Some(output_options))
@@ -41,7 +39,6 @@ impl TryFrom<Mp4Output> for core::RegisterOutputOptions {
         let (audio_encoder_options, output_audio_options) = match audio {
             Some(OutputMp4AudioOptions {
                 mixing_strategy,
-                send_eos_when,
                 encoder,
                 channels,
                 initial,
@@ -50,7 +47,6 @@ impl TryFrom<Mp4Output> for core::RegisterOutputOptions {
                 let encoder_options = encoder.to_pipeline_options(channels);
                 let output_options = core::RegisterOutputAudioOptions {
                     initial: initial.try_into()?,
-                    end_condition: send_eos_when.unwrap_or_default().try_into()?,
                     mixing_strategy: mixing_strategy
                         .unwrap_or(AudioMixingStrategy::SumClip)
                         .into(),

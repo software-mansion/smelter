@@ -3,52 +3,6 @@ use std::time::Duration;
 use crate::common_core::prelude as core;
 use crate::*;
 
-impl TryFrom<OutputEndCondition> for core::PipelineOutputEndCondition {
-    type Error = TypeError;
-
-    fn try_from(value: OutputEndCondition) -> Result<Self, Self::Error> {
-        match value {
-            OutputEndCondition {
-                any_of: Some(any_of),
-                all_of: None,
-                any_input: None,
-                all_inputs: None,
-            } => Ok(core::PipelineOutputEndCondition::AnyOf(
-                any_of.into_iter().map(Into::into).collect(),
-            )),
-            OutputEndCondition {
-                any_of: None,
-                all_of: Some(all_of),
-                any_input: None,
-                all_inputs: None,
-            } => Ok(core::PipelineOutputEndCondition::AllOf(
-                all_of.into_iter().map(Into::into).collect(),
-            )),
-            OutputEndCondition {
-                any_of: None,
-                all_of: None,
-                any_input: Some(true),
-                all_inputs: None,
-            } => Ok(core::PipelineOutputEndCondition::AnyInput),
-            OutputEndCondition {
-                any_of: None,
-                all_of: None,
-                any_input: None,
-                all_inputs: Some(true),
-            } => Ok(core::PipelineOutputEndCondition::AllInputs),
-            OutputEndCondition {
-                any_of: None,
-                all_of: None,
-                any_input: None | Some(false),
-                all_inputs: None | Some(false),
-            } => Ok(core::PipelineOutputEndCondition::Never),
-            _ => Err(TypeError::new(
-                "Only one of \"any_of, all_of, any_input or all_inputs\" is allowed.",
-            )),
-        }
-    }
-}
-
 impl From<OpusEncoderPreset> for core::OpusEncoderPreset {
     fn from(value: OpusEncoderPreset) -> Self {
         match value {

@@ -66,7 +66,6 @@ fn main() {
                 id: None,
                 input_id: input_id.clone(),
             })),
-            end_condition: PipelineOutputEndCondition::Never,
         }),
         audio: Some(RegisterOutputAudioOptions {
             initial: AudioMixerConfig {
@@ -77,7 +76,6 @@ fn main() {
             },
             mixing_strategy: AudioMixingStrategy::SumClip,
             channels: AudioChannels::Stereo,
-            end_condition: PipelineOutputEndCondition::Never,
         }),
     };
 
