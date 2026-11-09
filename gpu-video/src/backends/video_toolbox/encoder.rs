@@ -32,7 +32,7 @@ use crate::{
         VideoEncoderBackend, VideoEncoderParametersInfoH264, VideoEncoderParametersInfoH265,
     },
     in_flight_tracker::{InFlightTracker, SubmissionToken},
-    parameters::{EncoderPreset, EncoderUsage, H264Profile, H265Profile, RateControl},
+    parameters::{EncoderPreset, EncoderUsage, ProfileH264, ProfileH265, RateControl},
 };
 
 #[cfg(metal_interop)]
@@ -187,12 +187,12 @@ impl<ParameterSetKind: Copy + PartialEq + std::fmt::Display>
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum H264ParameterSet {
+pub(crate) enum ParameterSetH264 {
     Sps,
     Pps,
 }
 
-impl std::fmt::Display for H264ParameterSet {
+impl std::fmt::Display for ParameterSetH264 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Sps => f.write_str("SPS"),
@@ -202,13 +202,13 @@ impl std::fmt::Display for H264ParameterSet {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum H265ParameterSet {
+pub(crate) enum ParameterSetH265 {
     Vps,
     Sps,
     Pps,
 }
 
-impl std::fmt::Display for H265ParameterSet {
+impl std::fmt::Display for ParameterSetH265 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Vps => f.write_str("VPS"),
@@ -221,17 +221,17 @@ impl std::fmt::Display for H265ParameterSet {
 pub(crate) struct H264Codec;
 
 impl H26xCodec for H264Codec {
-    type Profile = H264Profile;
-    type ParameterSetKind = H264ParameterSet;
+    type Profile = ProfileH264;
+    type ParameterSetKind = ParameterSetH264;
 
     const CODEC_TYPE: cm::CMVideoCodecType = cm::kCMVideoCodecType_H264;
 
-    fn profile_level(profile: H264Profile) -> &'static cf::CFString {
+    fn profile_level(profile: ProfileH264) -> &'static cf::CFString {
         unsafe {
             match profile {
-                H264Profile::Baseline => vt::kVTProfileLevel_H264_Baseline_AutoLevel,
-                H264Profile::Main => vt::kVTProfileLevel_H264_Main_AutoLevel,
-                H264Profile::High => vt::kVTProfileLevel_H264_High_AutoLevel,
+                ProfileH264::Baseline => vt::kVTProfileLevel_H264_Baseline_AutoLevel,
+                ProfileH264::Main => vt::kVTProfileLevel_H264_Main_AutoLevel,
+                ProfileH264::High => vt::kVTProfileLevel_H264_High_AutoLevel,
             }
         }
     }
@@ -256,10 +256,10 @@ impl H26xCodec for H264Codec {
         )
     }
 
-    fn parameter_set_kind(nal: &[u8]) -> Option<H264ParameterSet> {
+    fn parameter_set_kind(nal: &[u8]) -> Option<ParameterSetH264> {
         match nal.first()? & 0x1f {
-            7 => Some(H264ParameterSet::Sps),
-            8 => Some(H264ParameterSet::Pps),
+            7 => Some(ParameterSetH264::Sps),
+            8 => Some(ParameterSetH264::Pps),
             _ => None,
         }
     }
@@ -268,15 +268,15 @@ impl H26xCodec for H264Codec {
 pub(crate) struct H265Codec;
 
 impl H26xCodec for H265Codec {
-    type Profile = H265Profile;
-    type ParameterSetKind = H265ParameterSet;
+    type Profile = ProfileH265;
+    type ParameterSetKind = ParameterSetH265;
 
     const CODEC_TYPE: cm::CMVideoCodecType = cm::kCMVideoCodecType_HEVC;
 
-    fn profile_level(profile: H265Profile) -> &'static cf::CFString {
+    fn profile_level(profile: ProfileH265) -> &'static cf::CFString {
         unsafe {
             match profile {
-                H265Profile::Main => vt::kVTProfileLevel_HEVC_Main_AutoLevel,
+                ProfileH265::Main => vt::kVTProfileLevel_HEVC_Main_AutoLevel,
             }
         }
     }
@@ -301,11 +301,11 @@ impl H26xCodec for H265Codec {
         )
     }
 
-    fn parameter_set_kind(nal: &[u8]) -> Option<H265ParameterSet> {
+    fn parameter_set_kind(nal: &[u8]) -> Option<ParameterSetH265> {
         match (nal.first()? >> 1) & 0x3f {
-            32 => Some(H265ParameterSet::Vps),
-            33 => Some(H265ParameterSet::Sps),
-            34 => Some(H265ParameterSet::Pps),
+            32 => Some(ParameterSetH265::Vps),
+            33 => Some(ParameterSetH265::Sps),
+            34 => Some(ParameterSetH265::Pps),
             _ => None,
         }
     }
@@ -1041,25 +1041,25 @@ impl<C: H26xCodec> VTEncoder<C> {
 
 impl VideoEncoderParametersInfoH264 for VTEncoder<H264Codec> {
     fn sps(&self) -> Result<Vec<u8>, VideoEncoderError> {
-        self.parameter_set(H264ParameterSet::Sps)
+        self.parameter_set(ParameterSetH264::Sps)
     }
 
     fn pps(&self) -> Result<Vec<u8>, VideoEncoderError> {
-        self.parameter_set(H264ParameterSet::Pps)
+        self.parameter_set(ParameterSetH264::Pps)
     }
 }
 
 impl VideoEncoderParametersInfoH265 for VTEncoder<H265Codec> {
     fn vps(&self) -> Result<Vec<u8>, VideoEncoderError> {
-        self.parameter_set(H265ParameterSet::Vps)
+        self.parameter_set(ParameterSetH265::Vps)
     }
 
     fn sps(&self) -> Result<Vec<u8>, VideoEncoderError> {
-        self.parameter_set(H265ParameterSet::Sps)
+        self.parameter_set(ParameterSetH265::Sps)
     }
 
     fn pps(&self) -> Result<Vec<u8>, VideoEncoderError> {
-        self.parameter_set(H265ParameterSet::Pps)
+        self.parameter_set(ParameterSetH265::Pps)
     }
 }
 

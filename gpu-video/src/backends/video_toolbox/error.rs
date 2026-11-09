@@ -7,7 +7,7 @@ use crate::VideoTranscoderError;
 use crate::{
     VideoBackendError, VideoDecoderError, VideoDeviceInitError, VideoEncoderError,
     in_flight_tracker::{SubmissionWaitTimeout, SubmitError},
-    parser::{h264::H264ParserError, reference_manager::ReferenceManagementError},
+    parser::{h264::ParserErrorH264, reference_manager::ReferenceManagementError},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -271,7 +271,7 @@ pub enum VTDecoderError {
     OSStatus(#[from] OSStatusError),
 
     #[error("H264 parser error: {0}")]
-    ParserError(#[from] H264ParserError),
+    ParserError(#[from] ParserErrorH264),
 
     #[error("Reference management error: {0}")]
     ReferenceManagementError(#[from] ReferenceManagementError),

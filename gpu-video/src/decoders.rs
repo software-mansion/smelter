@@ -4,11 +4,11 @@ use std::sync::{
 };
 
 use crate::{
-    DecoderEvent, EncodedInputChunk, H264ParserError, ReferenceManagementError, VideoBackendError,
+    DecoderEvent, EncodedInputChunk, ParserErrorH264, ReferenceManagementError, VideoBackendError,
     device::CorruptedStateHandling,
     parser::{
         decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions},
-        h264::{AccessUnit, H264Parser},
+        h264::{AccessUnit, ParserH264},
         reference_manager::ReferenceContext,
     },
 };
@@ -30,15 +30,15 @@ pub(crate) trait VideoDecoderBackend: Send {
 /// Backends set the shared `decode_failed` flag from their completion threads when a submitted
 /// frame fails to decode. The flag is consumed at the start of the next event, which marks the
 /// reference state as corrupted.
-pub(crate) struct H264EventProcessor {
-    parser: H264Parser,
+pub(crate) struct EventProcessorH264 {
+    parser: ParserH264,
     reference_ctx: ReferenceContext,
     decode_failed: Arc<AtomicBool>,
 }
 
-impl H264EventProcessor {
+impl EventProcessorH264 {
     pub(crate) fn new(
-        parser: H264Parser,
+        parser: ParserH264,
         corrupted_state_handling: CorruptedStateHandling,
     ) -> Self {
         Self {
@@ -77,7 +77,7 @@ impl H264EventProcessor {
     }
 }
 
-/// A decoder that outputs frames stored as [`Vec<u8>`] with the raw pixel data.
+/// An H.264 (AVC) decoder that outputs frames stored as [`Vec<u8>`] with the raw pixel data.
 pub struct BytesDecoderH264 {
     pub(crate) backend: Box<dyn VideoDecoderBackend>,
 }
@@ -128,7 +128,7 @@ pub enum VideoDecoderError {
     InvalidInputData(String),
 
     #[error("H264 parser error: {0}")]
-    ParserError(#[from] H264ParserError),
+    ParserError(#[from] ParserErrorH264),
 
     #[error("Reference management error: {0}")]
     ReferenceManagementError(#[from] ReferenceManagementError),

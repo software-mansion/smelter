@@ -143,7 +143,7 @@ pub struct WgpuTexturesEncoderH265 {
 
 impl WgpuTexturesEncoderH265 {
     /// Encodes a frame represented as [`EncodeTexture`]. Each frame needs to obtain its own [`EncodeTexture`] by calling [`WgpuTexturesEncoderH265::input_texture`].
-    /// The resulting chunks of H264 bitstream are sent via the callback provided at encoder creation.
+    /// The resulting chunks of H265 bitstream are sent via the callback provided at encoder creation.
     ///
     /// If the `force_keyframe` option is set to `true`, the encoder will encode this frame as a
     /// [keyframe](https://en.wikipedia.org/wiki/Video_compression_picture_types#Intra-coded_(I)_frames/slices_(key_frames)).

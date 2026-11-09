@@ -6,7 +6,7 @@ use h264_reader::{
     push::{AccumulatedNalHandler, NalAccumulator, NalInterest},
 };
 
-use super::h264::H264ParserError;
+use super::h264::ParserErrorH264;
 
 pub(crate) struct NalParser {
     reader: AnnexBReader<NalAccumulator<NalReceiver>>,
@@ -21,7 +21,7 @@ impl Default for NalParser {
 }
 
 impl NalParser {
-    pub fn parse_nalu(&mut self, nalu: &[u8]) -> Result<ParsedNalu, H264ParserError> {
+    pub fn parse_nalu(&mut self, nalu: &[u8]) -> Result<ParsedNalu, ParserErrorH264> {
         self.reader.push(nalu);
         self.reader.reset();
         self.reader.nal_handler_mut().parsed_nalu.take().unwrap()
@@ -31,7 +31,7 @@ impl NalParser {
 #[derive(Default)]
 struct NalReceiver {
     parser_ctx: h264_reader::Context,
-    parsed_nalu: Option<Result<ParsedNalu, H264ParserError>>,
+    parsed_nalu: Option<Result<ParsedNalu, ParserErrorH264>>,
 }
 
 impl AccumulatedNalHandler for NalReceiver {
@@ -47,16 +47,16 @@ impl AccumulatedNalHandler for NalReceiver {
 }
 
 impl NalReceiver {
-    fn handle_nal(&mut self, nal: RefNal<'_>) -> Result<ParsedNalu, H264ParserError> {
+    fn handle_nal(&mut self, nal: RefNal<'_>) -> Result<ParsedNalu, ParserErrorH264> {
         let nal_unit_type = nal
             .header()
-            .map_err(H264ParserError::NalHeaderParseError)?
+            .map_err(ParserErrorH264::NalHeaderParseError)?
             .nal_unit_type();
 
         match nal_unit_type {
             h264_reader::nal::UnitType::SeqParameterSet => {
                 let parsed = h264_reader::nal::sps::SeqParameterSet::from_bits(nal.rbsp_bits())
-                    .map_err(H264ParserError::SpsParseError)?;
+                    .map_err(ParserErrorH264::SpsParseError)?;
 
                 self.parser_ctx.put_seq_param_set(parsed.clone());
                 Ok(ParsedNalu::Sps(parsed.clone()))
@@ -67,7 +67,7 @@ impl NalReceiver {
                     &self.parser_ctx,
                     nal.rbsp_bits(),
                 )
-                .map_err(H264ParserError::PpsParseError)?;
+                .map_err(ParserErrorH264::PpsParseError)?;
 
                 self.parser_ctx.put_pic_param_set(parsed.clone());
 
@@ -81,7 +81,7 @@ impl NalReceiver {
                     &mut nal.rbsp_bits(),
                     nal.header().unwrap(),
                 )
-                .map_err(H264ParserError::SliceParseError)?;
+                .map_err(ParserErrorH264::SliceParseError)?;
 
                 let header = Arc::new(header);
 

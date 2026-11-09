@@ -22,12 +22,12 @@ use crate::{
         decoder::{Completion, VTDecoder, download_to_bytes},
         error::VTDecoderError,
     },
-    decoders::{H264EventProcessor, VideoDecoderBackend},
+    decoders::{EventProcessorH264, VideoDecoderBackend},
     device::DecoderParameters,
     frame_sorter::{DecodeResult, FrameSorter},
     parser::{
         decoder_instructions::DecoderInstruction,
-        h264::{AccessUnit, H264Parser, OutputBytestreamFormatH264, ParserOptionsH264},
+        h264::{AccessUnit, ParserH264, OutputBytestreamFormatH264, ParserOptionsH264},
         reference_manager::DecodeInformation,
     },
 };
@@ -36,7 +36,7 @@ type ConvertFn<T> =
     Box<dyn Fn(&cf::CFRetained<cv::CVBuffer>) -> Result<T, VTDecoderError> + Send + Sync>;
 
 pub(crate) struct VTDecoderH264<T> {
-    event_processor: H264EventProcessor,
+    event_processor: EventProcessorH264,
     decoder: VTDecoder,
     shared: Arc<Shared<T>>,
     max_in_flight: u64,
@@ -89,8 +89,8 @@ impl<T: Send + 'static> VTDecoderH264<T> {
         on_frame_callback: Box<dyn FnMut(OutputFrame<T>) + Send>,
         metal_compatible_output: bool,
     ) -> Self {
-        let event_processor = H264EventProcessor::new(
-            H264Parser::new(ParserOptionsH264 {
+        let event_processor = EventProcessorH264::new(
+            ParserH264::new(ParserOptionsH264 {
                 input_format: parameters.bytestream_format,
                 output_format: OutputBytestreamFormatH264::Avcc,
             }),

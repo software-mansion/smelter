@@ -7,7 +7,7 @@ pub(crate) trait WgpuVideoDecoderBackend: Send {
     ) -> Result<(), VideoDecoderError>;
 }
 
-/// A decoder that outputs frames stored as [`VideoTexture`](crate::VideoTexture)s
+/// An H.264 (AVC) decoder that outputs frames stored as NV12 [`VideoTexture`](crate::VideoTexture)s
 pub struct WgpuTexturesDecoderH264 {
     pub(crate) backend: Box<dyn WgpuVideoDecoderBackend>,
 }

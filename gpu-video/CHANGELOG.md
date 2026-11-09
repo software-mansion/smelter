@@ -66,6 +66,7 @@ By @noituri ([#2039](https://github.com/software-mansion/smelter/pull/2039))
 - Removed `EncodeProfileCapabilities::quality_levels` ([#2145](https://github.com/software-mansion/smelter/pull/2145) by @noituri)
 - Encoders now take `InputFrame<RawFrameRef>`s as input. `RawFrameRef` is similar to `RawFrameData`, but it borrows the contents. ([#2244](https://github.com/software-mansion/smelter/pull/2244) by @jerzywilczek)
 - wgpu decoders and encoders exchange frames as `VideoTexture` instead of `wgpu::Texture`, which lets NV12 frames work on Metal ([#2245](https://github.com/software-mansion/smelter/pull/2245) by @jerzywilczek)
+- All public names that used to start with `H264` or `H265` now end with them instead ([#TODO](todo) by @jerzywilczek)
 
 ### ✨ New features
 - Added VUI support to H.265 encoder ([#1995](https://github.com/software-mansion/smelter/pull/1995) by @noituri)

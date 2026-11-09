@@ -1,6 +1,6 @@
 # gpu-video
 
-A library for hardware video decoding and encoding, with [wgpu] integration.
+A library for hardware video decoding and encoding, in Rust, with [wgpu] integration. We aim to be the simplest and most idiomatic Rust library for video processing. No FFmpeg code is used in gpu-video.
 
 [![Crates.io][crates-badge]][crates-url]
 [![docs.rs][docs-badge]][docs-url]
@@ -27,9 +27,9 @@ The goal of this library is to provide easy access to hardware video coding. You
 - 🚧 - working on this currently
 - ❌ - not supported yet, but support is planned
 
-An advantage of using this library with wgpu is that decoded video frames never leave the GPU memory. There's no copying the frames to RAM and back to the GPU, so it should be quite fast if you want to use them for rendering.
+An advantage of using this library with wgpu is that decoded video frames never leave the GPU memory. There's no copying frames to RAM and back to the GPU, so it should be quite fast if you want to use them for rendering.
 
-Frames are passed around as a `VideoTexture`, a thin wrapper over the [`wgpu::Texture`]s holding the NV12 planes. It hands out plain texture views and copy descriptors for each plane, so it plugs into bind groups, render passes and copies like any other wgpu texture.
+Frames are passed around as a `VideoTexture`, a thin wrapper over the [`wgpu::Texture`]s holding the [NV12](https://en.wikipedia.org/wiki/YCbCr#4:2:0) planes. It hands out plain texture views and copy descriptors for each plane, so it plugs into bind groups, render passes and copies like any other wgpu texture.
 
 This library was developed as a part of [smelter, a tool for video composition](https://smelter.dev/).
 
@@ -51,7 +51,7 @@ async fn decode_video(
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
     let adapter = instance
-        .enumerate_adapters(wgpu::Backends::VULKAN)
+        .enumerate_adapters(wgpu::Backends::default())
         .await
         .into_iter()
         .find(|a| {
@@ -68,7 +68,8 @@ async fn decode_video(
         &queue,
         gpu_video::parameters::DecoderParameters::default(),
         |_frame| {
-            // Each frame is a VideoTexture: wgpu textures with NV12 planes you can sample for drawing.
+            // Each frame is a VideoTexture: wgpu textures with NV12 planes you can sample
+            // for drawing.
             // Keep this callback light, e.g. pass the frame through a channel.
         },
     ).unwrap();
@@ -90,18 +91,21 @@ async fn decode_video(
 }
 ```
 
-### Encode video frames from wgpu textures
+### Encode RGBA wgpu textures
 
 ```rust
 async fn encode_video(
-    frame_receiver: std::sync::mpsc::Receiver<gpu_video::VideoTexture>,
+    rgba_frame_receiver: std::sync::mpsc::Receiver<wgpu::Texture>,
 ) {
     use std::num::NonZeroU32;
-    use gpu_video::{VideoAdapterExt, VideoDeviceExt, parameters::VideoDeviceDescriptor};
+    use gpu_video::{
+        VideoAdapterExt, VideoDeviceExt, WgpuRgbaToNv12Converter,
+        parameters::{ColorRange, ColorSpace, VideoDeviceDescriptor, WgpuConverterParameters},
+    };
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
     let adapter = instance
-        .enumerate_adapters(wgpu::Backends::VULKAN)
+        .enumerate_adapters(wgpu::Backends::default())
         .await
         .into_iter()
         .find(|a| {
@@ -142,11 +146,21 @@ async fn encode_video(
         )
         .unwrap();
 
-    for frame in frame_receiver.iter() {
-        // NV12 frame is copied to the encoder's input texture.
+    let converter = WgpuRgbaToNv12Converter::new(
+        &device,
+        WgpuConverterParameters {
+            color_space: ColorSpace::BT709,
+            color_range: ColorRange::Limited,
+        },
+    )
+    .unwrap();
+
+    for rgba_frame in rgba_frame_receiver.iter() {
+        // RGBA frames need `wgpu::TextureUsages::TEXTURE_BINDING`.
+        let rgba_bind_group = converter.create_input_bind_group(&rgba_frame);
         let input_texture = encoder.input_texture().unwrap();
         let mut command_encoder = device.create_command_encoder(&Default::default());
-        frame.copy_to(&mut command_encoder, input_texture.texture());
+        converter.convert(&mut command_encoder, &rgba_bind_group, input_texture.texture());
         queue.submit([command_encoder.finish()]);
 
         encoder
@@ -162,29 +176,17 @@ async fn encode_video(
 }
 ```
 
-Be sure to check out our examples, especially the `player` example, which is a simple video player built using this library and wgpu. Because the player is very simple, you need to extract the raw h264 data from a container before usage. Here's an example on how to extract the h264 bytestream out of an mp4 file using ffmpeg:
-
-```sh
-ffmpeg -i input.mp4 -c:v copy -bsf:v h264_mp4toannexb -an output.h264
-```
-
-Then you can run the example with:
+Be sure to check out our examples, especially the `egui-player` example, which is an mp4 player built using this library, the [mp4 crate](https://crates.io/crates/mp4) and [egui](https://www.egui.rs/). You can run the example with:
 
 ```sh
 git clone https://github.com/software-mansion/smelter.git
-cd smelter/gpu-video
-cargo run --example player -- output.h264 FRAMERATE
+cd smelter/gpu-video/examples/egui-player
+cargo run
 ```
 
 ## Compatibility
 
-On Linux, the library should work on NVIDIA and AMD GPUs out of the box with recent Mesa drivers. For AMD GPUs with a bit older Mesa drivers, you may need to set the `RADV_PERFTEST=video_decode,video_encode` environment variable:
-
-```sh
-RADV_PERFTEST=video_decode,video_encode cargo run
-```
-
-It should work on Windows with recent drivers out of the box. Be sure to submit an issue if it doesn't.
+The library should work on Linux, Windows and macOS. It should also work on all other Apple operating systems (tvOS, iOS, watchOS etc.), but we don't test them. Be sure to submit an issue if it doesn't.
 
 [wgpu]: https://wgpu.rs/
 [`wgpu::Texture`]: https://docs.rs/wgpu/latest/wgpu/struct.Texture.html

@@ -1,6 +1,6 @@
 use bytes::BytesMut;
 use gpu_video::parser::h264::{
-    AccessUnit, H264Parser, ParsedNalu,
+    AccessUnit, ParserH264, ParsedNalu,
     nal_types::slice::{
         DecRefPicMarking, MemoryManagementControlOperation, SliceFamily, SliceHeader,
     },
@@ -10,7 +10,7 @@ use tracing::debug;
 use crate::prelude::*;
 
 pub struct H264AuSplitter {
-    parser: H264Parser,
+    parser: ParserH264,
     prev_ref_frame_num: u16,
     waiting_for_recovery_point: bool,
     last_recovery_point_pts: Option<Timestamp>,
@@ -19,7 +19,7 @@ pub struct H264AuSplitter {
 impl Default for H264AuSplitter {
     fn default() -> Self {
         Self {
-            parser: H264Parser::default(),
+            parser: ParserH264::default(),
             prev_ref_frame_num: 0,
             // Decoding starts at a recovery point.
             waiting_for_recovery_point: true,
@@ -312,7 +312,7 @@ pub enum AuSplitterError {
     MissingReferenceFrame,
 
     #[error("Could not parse H264 chunk: {0}")]
-    ParserError(#[from] gpu_video::parser::h264::H264ParserError),
+    ParserError(#[from] gpu_video::parser::h264::ParserErrorH264),
 
     #[error("Invalid access unit")]
     InvalidAccessUnit,

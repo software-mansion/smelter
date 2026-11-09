@@ -8,7 +8,7 @@ pub mod parameters {
     pub use crate::instance::VideoInstanceDescriptor;
     pub use crate::parser::h264::{AvccPrefixLength, InputBytestreamFormatH264};
 
-    pub type EncoderOutputParametersH264 = crate::device::EncoderOutputParameters<H264Profile>;
+    pub type EncoderOutputParametersH264 = crate::device::EncoderOutputParameters<ProfileH264>;
 
     #[cfg(feature = "transcoder")]
     pub use crate::transcoder::{
@@ -94,7 +94,7 @@ pub mod parameters {
     /// A profile in H.264 is a set of codec features used while encoding a specific video.
     /// Baseline uses the fewest features, Main can use more and High even more than Main.
     #[derive(Debug, Clone, Copy)]
-    pub enum H264Profile {
+    pub enum ProfileH264 {
         Baseline,
         Main,
         High,
@@ -103,7 +103,7 @@ pub mod parameters {
     /// A profile in H.265 is a set of codec features used while encoding a specific video.
     /// Right now, only Main is available.
     #[derive(Debug, Clone, Copy)]
-    pub enum H265Profile {
+    pub enum ProfileH265 {
         Main,
     }
 }
@@ -118,7 +118,7 @@ use crate::device::{
     ColorRange, ColorSpace, DecoderParameters, EncoderOutputParameters, EncoderParametersH264,
     EncoderParametersH265, VideoDeviceBackend,
 };
-use crate::parameters::{H264Profile, H265Profile, RateControl};
+use crate::parameters::{ProfileH264, ProfileH265, RateControl};
 use crate::parser::h264::AccessUnit;
 use std::sync::Arc;
 
@@ -138,7 +138,7 @@ pub use crate::encoders::{BytesEncoderH264, BytesEncoderH265, VideoEncoderError}
 #[cfg(feature = "wgpu")]
 pub use crate::encoders::{EncodeTexture, WgpuTexturesEncoderH264, WgpuTexturesEncoderH265};
 pub use crate::instance::VideoInstance;
-pub use crate::parser::{h264::H264ParserError, reference_manager::ReferenceManagementError};
+pub use crate::parser::{h264::ParserErrorH264 as ParserErrorH264, reference_manager::ReferenceManagementError};
 #[cfg(feature = "transcoder")]
 pub use crate::transcoder::{TranscodedChunk, VideoTranscoder, VideoTranscoderError};
 #[cfg(feature = "wgpu")]
@@ -353,7 +353,7 @@ impl VideoDevice {
     pub fn encoder_output_parameters_h265_low_latency(
         &self,
         rate_control: RateControl,
-    ) -> Result<EncoderOutputParameters<H265Profile>, VideoEncoderError> {
+    ) -> Result<EncoderOutputParameters<ProfileH265>, VideoEncoderError> {
         let Some(caps) = self.encode_capabilities().h265 else {
             return Err(VideoEncoderError::EncoderUnsupported);
         };
@@ -368,7 +368,7 @@ impl VideoDevice {
     pub fn encoder_output_parameters_h264_low_latency(
         &self,
         rate_control: RateControl,
-    ) -> Result<EncoderOutputParameters<H264Profile>, VideoEncoderError> {
+    ) -> Result<EncoderOutputParameters<ProfileH264>, VideoEncoderError> {
         let Some(caps) = self.encode_capabilities().h264 else {
             return Err(VideoEncoderError::EncoderUnsupported);
         };
@@ -383,7 +383,7 @@ impl VideoDevice {
     pub fn encoder_output_parameters_h265_high_quality(
         &self,
         rate_control: RateControl,
-    ) -> Result<EncoderOutputParameters<H265Profile>, VideoEncoderError> {
+    ) -> Result<EncoderOutputParameters<ProfileH265>, VideoEncoderError> {
         let Some(caps) = self.encode_capabilities().h265 else {
             return Err(VideoEncoderError::EncoderUnsupported);
         };
@@ -398,7 +398,7 @@ impl VideoDevice {
     pub fn encoder_output_parameters_h264_high_quality(
         &self,
         rate_control: RateControl,
-    ) -> Result<EncoderOutputParameters<H264Profile>, VideoEncoderError> {
+    ) -> Result<EncoderOutputParameters<ProfileH264>, VideoEncoderError> {
         let Some(caps) = self.encode_capabilities().h264 else {
             return Err(VideoEncoderError::EncoderUnsupported);
         };
