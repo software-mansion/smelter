@@ -85,13 +85,13 @@ impl VideoEncoder for VulkanH264Encoder {
                 input_parameters: video_params,
                 output_parameters: device
                     .encoder_output_parameters_h264_high_quality(rate_control)?,
-                max_in_flight_submissions: None,
+                max_in_flight_submissions: Some(0),
             },
             VulkanH264EncoderPreset::LowLatency => EncoderParametersH264 {
                 input_parameters: video_params,
                 output_parameters: device
                     .encoder_output_parameters_h264_low_latency(rate_control)?,
-                max_in_flight_submissions: None,
+                max_in_flight_submissions: Some(0),
             },
         };
 
