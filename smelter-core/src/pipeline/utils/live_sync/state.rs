@@ -8,7 +8,7 @@ use super::{
     decision_correct_mode::correct_mode_decision,
     decision_start_track::start_track_decision,
     edge_estimator::{EdgeEstimate, LiveEdgeEstimator},
-    mode::{IndependentMode, Mode},
+    mode::{IndependentMode, Mode, SlewingAnchor},
     stats::LiveSyncTrackStats,
     track::LiveSyncDeadline,
 };
@@ -101,6 +101,48 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             TrackKind::Video => self.video = Some(track),
         }
         deadline
+    }
+
+    /// Releases everything the track buffered and drops it together with its sink.
+    pub(super) fn remove_track(&mut self, kind: TrackKind) {
+        debug!(?kind, "Live sync: removing track");
+        let now = Instant::now();
+        self.reset_track(kind, now);
+        match kind {
+            TrackKind::Audio => self.audio = None,
+            TrackKind::Video => self.video = None,
+        }
+
+        // A track added later can be on a different timeline, so like on a discontinuity the
+        // shared estimate must not size its anchor, and a shared anchor nobody applies must not
+        // be reused by the next start.
+        if let Some(Mode::Shared(shared)) = self.mode {
+            let other = match kind {
+                TrackKind::Audio => TrackKind::Video,
+                TrackKind::Video => TrackKind::Audio,
+            };
+            self.mode = match shared.is_started(other) {
+                true => Some(Mode::Independent(IndependentMode {
+                    leader_kind: other,
+                    leader_anchor: SlewingAnchor {
+                        // the shared value may come from the removed track, which would stall
+                        // the leader's slew until its own pts pass it
+                        last_released_pts: None,
+                        ..shared.anchor
+                    },
+                    secondary_track_offset: None,
+                })),
+                false => None,
+            };
+        }
+        self.shared_estimator = LiveEdgeEstimator::new(
+            self.sync_point,
+            self.options.stabilization_tolerance,
+            self.options.stabilization_period,
+        );
+
+        self.publish_deadlines(now);
+        self.report_stats();
     }
 
     /// Runs every transition due at `now` (resets, start decisions, corrections) and releases

@@ -4,9 +4,11 @@ use std::{
 };
 
 use bytes::Bytes;
+use hang::catalog::{AudioConfig, VideoConfig};
 use moq_mux::catalog::hang::Container;
-use moq_native::moq_net::{BroadcastConsumer, Error as MoqError, Track};
+use moq_net::{Error as MoqError, broadcast, track::Subscription};
 use smelter_render::error::ErrorStack;
+use tokio::task::JoinHandle;
 use tracing::{Instrument, Span, debug, info, trace, warn};
 
 use crate::{
@@ -21,7 +23,7 @@ use crate::{
         libopus::OpusDecoder,
         vulkan_h264::VulkanH264Decoder,
     },
-    queue::{QueueSender, QueueTrackGroupOffset, QueueTrackGroupOptions, WeakQueueInput},
+    queue::{IndependentTrackGroup, QueueSender, QueueTrackGroupOffset, WeakQueueInput},
     utils::{
         H264AvcDecoderConfig, H264AvccToAnnexB, InitializableThread,
         channel::{Sender, TrySendError},
@@ -32,37 +34,35 @@ use crate::{
 
 use crate::prelude::*;
 
-use self::{
-    catalog::{MoqCatalogError, read_catalog},
+use super::{
+    buffer::{MoqChunk, MoqJitterBuffer, resolve_buffer_options},
+    catalog::{MoqCatalogError, MoqCatalogReader},
     track_reader::{LateGroupOptions, MoqTrackReader},
 };
-use super::{
-    buffer::resolve_buffer_options,
-    jitter_buffer::{MoqChunk, MoqJitterBuffer},
-};
 
-mod catalog;
-mod track_reader;
-
-struct VideoTrack {
-    name: String,
-    codec: VideoCodec,
-    container: Container,
-    description: Option<Bytes>,
+pub(super) struct VideoTrack {
+    pub name: String,
+    pub codec: VideoCodec,
+    pub container: Container,
+    pub description: Option<Bytes>,
+    /// Catalog entry the track was built from, used to detect catalog changes.
+    pub config: VideoConfig,
 }
 
-struct AudioTrack {
-    name: String,
-    codec: AudioCodec,
-    container: Container,
-    description: Option<Bytes>,
+pub(super) struct AudioTrack {
+    pub name: String,
+    pub codec: AudioCodec,
+    pub container: Container,
+    pub description: Option<Bytes>,
+    /// Catalog entry the track was built from, used to detect catalog changes.
+    pub config: AudioConfig,
 }
 
 #[derive(Clone)]
 struct TrackCtx {
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
-    broadcast: BroadcastConsumer,
+    broadcast: broadcast::Consumer,
     decoders: MoqInputDecoders,
     input_sync: Arc<LiveSync<MoqJitterBuffer>>,
     late_groups: LateGroupOptions,
@@ -71,7 +71,7 @@ struct TrackCtx {
 }
 
 pub(crate) struct BroadcastCtx {
-    pub broadcast: BroadcastConsumer,
+    pub broadcast: broadcast::Consumer,
     pub decoder_options: MoqInputDecoders,
     pub buffer: LiveInputBufferOptions,
     pub should_close: Arc<AtomicBool>,
@@ -85,48 +85,54 @@ pub(crate) async fn handle_broadcast(
 ) -> Result<(), MoqConnectionError> {
     info!("MoQ broadcast connection established");
 
-    let (video, audio) = read_catalog(&broadcast_ctx.broadcast).await?;
+    let catalog = MoqCatalogReader::new(&broadcast_ctx.broadcast).await?;
 
-    let mut handler =
-        BroadcastHandler::new(ctx.clone(), input_ref.clone(), video, audio, broadcast_ctx);
-
-    let (video_sender, audio_sender) = {
+    let track_group = {
         let Some(queue_input) = queue_input.upgrade() else {
             return Err(MoqConnectionError::InputUnregistered);
         };
-        queue_input.queue_new_track_group(QueueTrackGroupOptions {
-            video: handler.has_video(),
-            audio: handler.has_audio(),
-            offset: QueueTrackGroupOffset::Pts(Timestamp::ZERO),
-        })
+        queue_input.queue_new_independent_track_group(QueueTrackGroupOffset::Pts(Timestamp::ZERO))
     };
+    let mut handler = BroadcastHandler::new(ctx, input_ref, track_group, broadcast_ctx);
 
-    let video_task = handler.handle_video_track(video_sender);
-    let audio_task = handler.handle_audio_track(audio_sender);
-
-    if let Some(video_task) = video_task {
-        _ = video_task.await;
-    };
-    if let Some(audio_task) = audio_task {
-        _ = audio_task.await;
-    }
-    handler.track_ctx.input_sync.flush();
+    let result = handler.run(catalog).await;
+    handler.stop_tracks().await;
     info!("MoQ broadcast connection closed");
-    Ok(())
+    result
+}
+
+/// Track that runs until it ends on its own or the catalog no longer selects it.
+struct RunningTrack<C> {
+    name: String,
+    config: C,
+    task: JoinHandle<()>,
+}
+
+impl<C: PartialEq> RunningTrack<C> {
+    /// Whether the track still matches the catalog selection `(name, config)`.
+    fn is_current(running: &Option<Self>, selected: Option<(&String, &C)>) -> bool {
+        match (running, selected) {
+            (Some(running), Some((name, config))) => {
+                running.name == *name && running.config == *config && !running.task.is_finished()
+            }
+            (None, None) => true,
+            _ => false,
+        }
+    }
 }
 
 struct BroadcastHandler {
     track_ctx: TrackCtx,
-    video: Option<VideoTrack>,
-    audio: Option<AudioTrack>,
+    track_group: IndependentTrackGroup,
+    video: Option<RunningTrack<VideoConfig>>,
+    audio: Option<RunningTrack<AudioConfig>>,
 }
 
 impl BroadcastHandler {
     fn new(
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
-        video: Option<VideoTrack>,
-        audio: Option<AudioTrack>,
+        track_group: IndependentTrackGroup,
         broadcast_ctx: BroadcastCtx,
     ) -> Self {
         let BroadcastCtx {
@@ -166,106 +172,161 @@ impl BroadcastHandler {
         };
         Self {
             track_ctx,
-            video,
-            audio,
+            track_group,
+            video: None,
+            audio: None,
         }
     }
 
-    fn has_video(&self) -> bool {
-        self.video.is_some()
+    /// Updates tracks on every catalog snapshot until the catalog track ends together with the
+    /// broadcast. Restarts tracks whose catalog entry changed or that ended, stops tracks removed
+    /// from the catalog and starts the new ones. A new track starts in the queue after the
+    /// previous track of the same kind drained.
+    async fn run(&mut self, mut catalog: MoqCatalogReader) -> Result<(), MoqConnectionError> {
+        while let Some(tracks) = catalog.next().await {
+            let (video, audio) = tracks?;
+
+            let selected_video = video.as_ref().map(|video| (&video.name, &video.config));
+            if !RunningTrack::is_current(&self.video, selected_video) {
+                self.stop_track(TrackKind::Video).await;
+                if let Some(video) = video {
+                    self.start_video_track_task(video)?;
+                }
+            }
+
+            let selected_audio = audio.as_ref().map(|audio| (&audio.name, &audio.config));
+            if !RunningTrack::is_current(&self.audio, selected_audio) {
+                self.stop_track(TrackKind::Audio).await;
+                if let Some(audio) = audio {
+                    self.start_audio_track_task(audio)?;
+                }
+            }
+        }
+        Ok(())
     }
 
-    fn has_audio(&self) -> bool {
-        self.audio.is_some()
-    }
+    fn start_video_track_task(&mut self, video: VideoTrack) -> Result<(), MoqConnectionError> {
+        let frame_sender = self
+            .track_group
+            .add_video_track()
+            .map_err(|_| MoqConnectionError::InputUnregistered)?;
 
-    fn handle_video_track(
-        &mut self,
-        frame_sender: Option<QueueSender<Frame>>,
-    ) -> Option<tokio::task::JoinHandle<()>> {
-        let (Some(video), Some(frame_sender)) = (self.video.take(), frame_sender) else {
-            return None;
-        };
-
-        info!(track = %video.name, "Discovered MoQ video track");
+        info!(track = %video.name, "Starting MoQ video track");
+        let name = video.name.clone();
+        let config = video.config.clone();
         let ctx = self.track_ctx.clone();
-        let handle = self.track_ctx.ctx.tokio_rt.spawn(
+        let task = self.track_ctx.ctx.tokio_rt.spawn(
             async move {
-                if let Err(error) = run_video_track(ctx, video, frame_sender).await {
+                let input_sync = ctx.input_sync.clone();
+                if let Err(error) = run_video_track_task(ctx, video, frame_sender).await {
                     warn!(
                         "MoQ video track error: {}",
                         ErrorStack::new(&error).into_string(),
                     )
                 };
+                input_sync.remove_track(TrackKind::Video);
             }
             .instrument(Span::current()),
         );
-        Some(handle)
+        self.video = Some(RunningTrack { name, config, task });
+        Ok(())
     }
 
-    fn handle_audio_track(
-        &mut self,
-        sample_sender: Option<QueueSender<InputAudioSamples>>,
-    ) -> Option<tokio::task::JoinHandle<()>> {
-        let (Some(audio), Some(sample_sender)) = (self.audio.take(), sample_sender) else {
-            return None;
-        };
+    fn start_audio_track_task(&mut self, audio: AudioTrack) -> Result<(), MoqConnectionError> {
+        let sample_sender = self
+            .track_group
+            .add_audio_track()
+            .map_err(|_| MoqConnectionError::InputUnregistered)?;
 
-        info!(track = %audio.name, "Discovered MoQ audio track");
+        info!(track = %audio.name, "Starting MoQ audio track");
+        let name = audio.name.clone();
+        let config = audio.config.clone();
         let ctx = self.track_ctx.clone();
-        let handle = self.track_ctx.ctx.tokio_rt.spawn(
+        let task = self.track_ctx.ctx.tokio_rt.spawn(
             async move {
-                if let Err(error) = run_audio_track(ctx, audio, sample_sender).await {
+                let input_sync = ctx.input_sync.clone();
+                if let Err(error) = run_audio_track_task(ctx, audio, sample_sender).await {
                     warn!(
                         "MoQ audio track error: {}",
                         ErrorStack::new(&error).into_string(),
                     )
                 };
+                input_sync.remove_track(TrackKind::Audio);
             }
             .instrument(Span::current()),
         );
-        Some(handle)
+        self.audio = Some(RunningTrack { name, config, task });
+        Ok(())
+    }
+
+    /// Stops the track and drops its live sync track, so the decoder drains and the queue gets
+    /// EOS.
+    async fn stop_track(&mut self, kind: TrackKind) {
+        let task = match kind {
+            TrackKind::Video => self.video.take().map(|track| track.task),
+            TrackKind::Audio => self.audio.take().map(|track| track.task),
+        };
+        let Some(task) = task else {
+            return;
+        };
+        task.abort();
+        _ = task.await;
+        self.track_ctx.input_sync.remove_track(kind);
+    }
+
+    async fn stop_tracks(&mut self) {
+        self.stop_track(TrackKind::Video).await;
+        self.stop_track(TrackKind::Audio).await;
     }
 }
 
-async fn run_video_track(
+/// Cancel safety: `BroadcastHandler::stop_track` aborts the task, which drops this future at
+/// whichever `.await` it is waiting on. That relies on two things:
+/// - moq-net futures (`subscribe`, reads in `MoqTrackReader`) can be dropped mid-await without
+///   leaving the session or track in a broken state. moq-net is built around cancel-by-drop,
+///   but does not document this per method.
+/// - State changes that belong together (decoder spawn + `add_track`, `write_chunk`) are not
+///   split by an `.await`. Cleanup that always has to run (`remove_track`) is done by
+///   `stop_track` after the task ended, not after an `.await` here.
+async fn run_video_track_task(
     track_ctx: TrackCtx,
     video: VideoTrack,
     frame_sender: QueueSender<Frame>,
 ) -> Result<(), MoqConnectionError> {
-    let TrackCtx {
-        ctx,
-        input_ref,
-        broadcast,
-        decoders,
-        input_sync,
-        late_groups,
-        decoder_buffer_size,
-        should_close,
-    } = track_ctx;
-
     let decoder_handle = spawn_video_decoder(
-        &ctx,
-        &input_ref,
-        &decoders,
+        &track_ctx.ctx,
+        &track_ctx.input_ref,
+        &track_ctx.decoders,
         &video,
         frame_sender,
-        decoder_buffer_size,
+        track_ctx.decoder_buffer_size,
     )?;
-    let sink = MoqTrackSink::new(decoder_handle, ctx.queue_ctx.sync_point);
-    let mut track_sync = input_sync.add_track(TrackKind::Video, Box::new(sink));
+    let sink = MoqTrackSink::new(decoder_handle, track_ctx.ctx.queue_ctx.sync_point);
+    let mut track_sync = track_ctx
+        .input_sync
+        .add_track(TrackKind::Video, Box::new(sink));
 
-    let track = broadcast.subscribe_track(&Track::new(&video.name))?;
+    // Groups are kept as long as the reader would keep them, so its late group handling decides
+    // what is dropped.
+    let subscription = Subscription::default().with_max_age(track_ctx.late_groups.max_behind);
+    let track = track_ctx
+        .broadcast
+        .track(&video.name)?
+        .subscribe(subscription)
+        .await?;
     let mut reader = MoqTrackReader::new(
         track,
         video.container,
         MediaKind::Video(video.codec),
         track_sync.deadline(),
-        late_groups,
+        track_ctx.late_groups,
     );
 
     loop {
-        if should_close.load(std::sync::atomic::Ordering::Relaxed) {
+        if track_ctx
+            .should_close
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
             break;
         };
         let Some(chunk) = reader.read().await? else {
@@ -282,38 +343,52 @@ async fn run_video_track(
     Ok(())
 }
 
-async fn run_audio_track(
+/// Cancel safety: `BroadcastHandler::stop_track` aborts the task, which drops this future at
+/// whichever `.await` it is waiting on. That relies on two things:
+/// - moq-net futures (`subscribe`, reads in `MoqTrackReader`) can be dropped mid-await without
+///   leaving the session or track in a broken state. moq-net is built around cancel-by-drop,
+///   but does not document this per method.
+/// - State changes that belong together (decoder spawn + `add_track`, `write_chunk`) are not
+///   split by an `.await`. Cleanup that always has to run (`remove_track`) is done by
+///   `stop_track` after the task ended, not after an `.await` here.
+async fn run_audio_track_task(
     track_ctx: TrackCtx,
     audio: AudioTrack,
     sample_sender: QueueSender<InputAudioSamples>,
 ) -> Result<(), MoqConnectionError> {
-    let TrackCtx {
-        ctx,
-        input_ref,
-        broadcast,
-        decoders: _,
-        input_sync,
-        late_groups,
-        decoder_buffer_size,
-        should_close,
-    } = track_ctx;
+    let decoder_handle = spawn_audio_decoder(
+        &track_ctx.ctx,
+        &track_ctx.input_ref,
+        &audio,
+        sample_sender,
+        track_ctx.decoder_buffer_size,
+    )?;
+    let sink = MoqTrackSink::new(decoder_handle, track_ctx.ctx.queue_ctx.sync_point);
+    let mut track_sync = track_ctx
+        .input_sync
+        .add_track(TrackKind::Audio, Box::new(sink));
 
-    let decoder_handle =
-        spawn_audio_decoder(&ctx, &input_ref, &audio, sample_sender, decoder_buffer_size)?;
-    let sink = MoqTrackSink::new(decoder_handle, ctx.queue_ctx.sync_point);
-    let mut track_sync = input_sync.add_track(TrackKind::Audio, Box::new(sink));
-
-    let track = broadcast.subscribe_track(&Track::new(&audio.name))?;
+    // Groups are kept as long as the reader would keep them, so its late group handling decides
+    // what is dropped.
+    let subscription = Subscription::default().with_max_age(track_ctx.late_groups.max_behind);
+    let track = track_ctx
+        .broadcast
+        .track(&audio.name)?
+        .subscribe(subscription)
+        .await?;
     let mut reader = MoqTrackReader::new(
         track,
         audio.container,
         MediaKind::Audio(audio.codec),
         track_sync.deadline(),
-        late_groups,
+        track_ctx.late_groups,
     );
 
     loop {
-        if should_close.load(std::sync::atomic::Ordering::Relaxed) {
+        if track_ctx
+            .should_close
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
             break;
         };
         let Some(chunk) = reader.read().await? else {
