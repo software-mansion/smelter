@@ -6,10 +6,10 @@ use std::{
 };
 
 use moq_mux::{catalog::hang::Container, container::Container as _};
-use moq_native::moq_net::{GroupConsumer, TrackConsumer, kio};
+use moq_net::{group, kio, track};
 use tracing::{debug, warn};
 
-use super::super::jitter_buffer::{GroupInfo, MoqChunk};
+use super::buffer::{GroupInfo, MoqChunk};
 use crate::pipeline::utils::live_sync::LiveSyncDeadline;
 
 use crate::prelude::*;
@@ -30,7 +30,7 @@ pub(super) struct LateGroupOptions {
 /// Reads the frames of a track as they arrive. Every open group is polled, so a group that
 /// stalls does not hold back the ones after it; ordering is left to the jitter buffer.
 pub(super) struct MoqTrackReader {
-    track: TrackConsumer,
+    track: track::Subscriber,
     container: Container,
     kind: MediaKind,
     deadline: LiveSyncDeadline,
@@ -45,7 +45,7 @@ pub(super) struct MoqTrackReader {
 }
 
 struct TrackGroup {
-    consumer: GroupConsumer,
+    consumer: group::Consumer,
     /// Index of the next frame.
     index: u32,
     info: Arc<GroupInfo>,
@@ -53,7 +53,7 @@ struct TrackGroup {
 
 impl MoqTrackReader {
     pub fn new(
-        track: TrackConsumer,
+        track: track::Subscriber,
         container: Container,
         kind: MediaKind,
         deadline: LiveSyncDeadline,
@@ -130,6 +130,10 @@ impl MoqTrackReader {
                 match container.poll_read(&mut group.consumer, waiter) {
                     Poll::Ready(Ok(Some(frames))) => {
                         for frame in frames {
+                            // Group end markers carry no media.
+                            if container.end(&frame).is_some() {
+                                continue;
+                            }
                             let pts = Timestamp::from_micros(frame.timestamp.as_micros() as i64);
                             if group.index == 0 {
                                 group_starts.insert(*sequence, pts);

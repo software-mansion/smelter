@@ -125,7 +125,6 @@ impl<B: LiveSyncBuffer> LiveSync<B> {
 
     /// Releases everything the track buffered and removes it, dropping its sink. A track of the
     /// same kind can be added again afterwards.
-    #[allow(dead_code)]
     pub fn remove_track(&self, kind: TrackKind) {
         self.shared.lock().unwrap().remove_track(kind);
     }
