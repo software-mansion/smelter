@@ -1,0 +1,17 @@
+[package]
+name = "gpu-video-egui-player"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+gpu-video = { path = "../..", features = ["wgpu"] }
+eframe = "0.37.0"
+egui-wgpu = "0.37.0"
+rfd = "0.17.2"
+mp4 = "0.14"
+pollster = { workspace = true }
+tracing-subscriber = "0.3.20"
+
+[lints]
+workspace = true

@@ -23,6 +23,7 @@ impl WgpuNv12ToRgbaConverter {
         device: &wgpu::Device,
         params: WgpuConverterParameters,
     ) -> Result<Self, WgpuConverterInitError> {
+        // TODO: support more configurations
         match (params.color_space, params.color_range) {
             (ColorSpace::BT709, ColorRange::Limited) => {}
             _ => return Err(WgpuConverterInitError::OnlyLimitedBT709Supported),

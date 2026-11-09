@@ -53,7 +53,7 @@ pub mod h264 {
     }
 
     impl AvccPrefixLength {
-        pub(crate) fn prefix_byte_length(self) -> usize {
+        pub fn prefix_byte_length(self) -> usize {
             match self {
                 Self::Bytes1 => 1,
                 Self::Bytes2 => 2,
