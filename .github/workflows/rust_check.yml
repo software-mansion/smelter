@@ -244,6 +244,11 @@ jobs:
                   }
                   nvidia-smi --query-gpu=driver_version,driver_model.current,driver_model.pending --format=csv
 
+            - name: 🔧 Install the rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: 1.98
+
             - name: 🛠 Put Git Bash on PATH
               shell: powershell
               run: |
@@ -267,15 +272,11 @@ jobs:
                   "FFMPEG_DIR=$ffmpegDir" | Out-File -FilePath $env:GITHUB_ENV -Append
                   "$ffmpegDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
 
-            - name: 🔧 Install the rust toolchain
-              uses: dtolnay/rust-toolchain@stable
-              with:
-                  toolchain: 1.98
-
             - name: 🔬 Install nextest
-              uses: taiki-e/install-action@v2
-              with:
-                  tool: cargo-nextest
+              shell: bash
+              run: |
+                  curl -LsSf https://get.nexte.st/latest/windows-tar | tar zxf - -C "$(cygpath -u "${CARGO_HOME:-$USERPROFILE/.cargo}")/bin"
+                  cargo nextest --version
 
             - name: 📥 Checkout repo
               uses: actions/checkout@v6
