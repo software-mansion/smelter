@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.5.0](https://github.com/software-mansion/smelter/releases/tag/gpu-video%2Fv0.5.0)
+
 ### ‼️ Major changes
 #### Asynchronous API
 We've long known that gpu-video's performance is limited by the synchronous nature of its API.
