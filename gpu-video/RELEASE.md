@@ -5,10 +5,8 @@
 
 ## Checklist
 
-- Check if examples work on NVIDIA and AMD
-  - Remember to use `--features vk-validation` flag
-- Check if `gpu-video` compiles on macOS with `--features expose-parsers`
-- Check `README.md`
+- Check if examples work on Linux, macOS and Windows (test on NVIDIA and AMD)
+- Check `README.md` and `CHANGELOG.md`
 - Check docs
   - Also run: `cargo test --doc`
 - Update `CHANGELOG.md`
@@ -17,7 +15,3 @@
 - Release on crates.io
   - Dry run: `cargo release -p gpu-video --tag-prefix "gpu-video/"`
   - To actually release add `--execute` flag
-- Post on social media
-  - Reddit
-  - Twitter
-  - This Week in Rust
