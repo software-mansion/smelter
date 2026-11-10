@@ -268,7 +268,6 @@ jobs:
                   $ffmpegDir = (Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Directory | Select-Object -First 1).FullName
                   "FFMPEG_DIR=$ffmpegDir" | Out-File -FilePath $env:GITHUB_ENV -Append
                   "$ffmpegDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
-                  ffmpeg -version
 
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
