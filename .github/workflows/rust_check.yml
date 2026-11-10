@@ -239,7 +239,9 @@ jobs:
                       curl.exe -fsSL -o $exe "https://download.microsoft.com/download/0f21fd13-2390-4c79-876a-87ae3dc724c6/596.86_grid_win10_win11_server2022_server2025_dch_64bit_international_azure_swl.exe"
                       if ($LASTEXITCODE -ne 0) { throw "download failed" }
                       Write-Host "downloaded $((Get-Item $exe).Length) bytes"
-                      $p = Start-Process -FilePath $exe -ArgumentList "-s", "-noreboot", "-clean", "-noeula" -Wait -PassThru
+                      $p = Start-Process -FilePath $exe -ArgumentList "-s", "-noreboot", "-clean", "-noeula" -PassThru
+                      $null = $p.Handle
+                      if (-not $p.WaitForExit(10 * 60 * 1000)) { throw "installer timed out" }
                       Write-Host "installer exit code: $($p.ExitCode)"
                   }
                   nvidia-smi --query-gpu=driver_version,driver_model.current,driver_model.pending --format=csv
