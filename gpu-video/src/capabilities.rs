@@ -1,6 +1,6 @@
 pub use crate::adapter::{DeviceType, VideoAdapterInfo};
 
-use crate::parameters::{H264Profile, H265Profile};
+use crate::parameters::{ProfileH264, ProfileH265};
 
 /// The device capabilities for encoding
 #[derive(Debug, Clone, Copy)]
@@ -11,16 +11,16 @@ pub struct EncodeCapabilities {
 
 /// The device capabilities for H265 encoding.
 ///
-/// See [`H265Profile`] for information about what profiles are.
+/// See [`ProfileH265`] for information about what profiles are.
 #[derive(Debug, Clone, Copy)]
 pub struct EncodeH265Capabilities {
     pub main_profile: Option<EncodeProfileCapabilities>,
 }
 
 impl EncodeH265Capabilities {
-    pub fn max_profile(&self) -> Option<H265Profile> {
+    pub fn max_profile(&self) -> Option<ProfileH265> {
         if self.main_profile.is_some() {
-            Some(H265Profile::Main)
+            Some(ProfileH265::Main)
         } else {
             None
         }
@@ -29,7 +29,7 @@ impl EncodeH265Capabilities {
 
 /// The device capabilities for H264 encoding.
 ///
-/// See [`H264Profile`] for information about what profiles are.
+/// See [`ProfileH264`] for information about what profiles are.
 #[derive(Debug, Clone, Copy)]
 pub struct EncodeH264Capabilities {
     pub baseline_profile: Option<EncodeProfileCapabilities>,
@@ -38,13 +38,13 @@ pub struct EncodeH264Capabilities {
 }
 
 impl EncodeH264Capabilities {
-    pub fn max_profile(&self) -> Option<H264Profile> {
+    pub fn max_profile(&self) -> Option<ProfileH264> {
         if self.high_profile.is_some() {
-            Some(H264Profile::High)
+            Some(ProfileH264::High)
         } else if self.main_profile.is_some() {
-            Some(H264Profile::Main)
+            Some(ProfileH264::Main)
         } else if self.baseline_profile.is_some() {
-            Some(H264Profile::Baseline)
+            Some(ProfileH264::Baseline)
         } else {
             None
         }
@@ -84,7 +84,7 @@ pub struct DecodeCapabilities {
 
 /// The device capabilities for H265 decoding.
 ///
-/// See [`H265Profile`] for information about what profiles are.
+/// See [`ProfileH265`] for information about what profiles are.
 #[derive(Debug, Clone, Copy)]
 pub struct DecodeH265Capabilities {
     pub main_profile: Option<DecodeH265ProfileCapabilities>,
@@ -107,7 +107,7 @@ pub struct DecodeH265ProfileCapabilities {
 
 /// The device capabilities for H264 decoding.
 ///
-/// See [`H264Profile`] for information about what profiles are.
+/// See [`ProfileH264`] for information about what profiles are.
 #[derive(Debug, Clone, Copy)]
 pub struct DecodeH264Capabilities {
     pub baseline_profile: Option<DecodeH264ProfileCapabilities>,

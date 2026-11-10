@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
-use crate::parameters::{EncoderPreset, EncoderUsage, H264Profile, H265Profile, RateControl};
+use crate::parameters::{EncoderPreset, EncoderUsage, ProfileH264, ProfileH265, RateControl};
 use crate::parser::h264::InputBytestreamFormatH264;
 use crate::{
     BytesDecoderH264, BytesEncoderH264, BytesEncoderH265, EncodedOutputChunk, OutputFrame,
@@ -232,7 +232,7 @@ pub struct EncoderOutputParameters<P> {
 #[derive(Debug, Clone, Copy)]
 pub struct EncoderParametersH264 {
     pub input_parameters: VideoParameters,
-    pub output_parameters: EncoderOutputParameters<H264Profile>,
+    pub output_parameters: EncoderOutputParameters<ProfileH264>,
     /// Maximum number of encode submissions that can be in flight. When the limit is reached,
     /// encoding blocks until the oldest submission finishes.
     /// If [`None`], defaults to 3.
@@ -243,7 +243,7 @@ pub struct EncoderParametersH264 {
 #[derive(Debug, Clone, Copy)]
 pub struct EncoderParametersH265 {
     pub input_parameters: VideoParameters,
-    pub output_parameters: EncoderOutputParameters<H265Profile>,
+    pub output_parameters: EncoderOutputParameters<ProfileH265>,
     /// Maximum number of encode submissions that can be in flight. When the limit is reached,
     /// encoding blocks until the oldest submission finishes.
     /// If [`None`], defaults to 3.

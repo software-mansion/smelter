@@ -8,7 +8,7 @@ use rustc_hash::FxHashMap;
 use session_resources::VideoSessionResources;
 
 use crate::{
-    H264ParserError, RawFrameData, ReferenceManagementError, VideoBackendError,
+    ParserErrorH264, RawFrameData, ReferenceManagementError, VideoBackendError,
     backends::vulkan::{
         VulkanCommonError,
         codec::h264::parameters::SeqParameterSetExt,
@@ -892,7 +892,7 @@ pub enum VulkanDecoderError {
     MonochromeChromaFormatUnsupported,
 
     #[error("H264 parser error: {0}")]
-    ParserError(#[from] H264ParserError),
+    ParserError(#[from] ParserErrorH264),
 
     #[error("Reference management error: {0}")]
     ReferenceManagementError(#[from] ReferenceManagementError),

@@ -5,7 +5,7 @@ use crate::{
     backends::vulkan::vulkan_encoder::VulkanEncoderError,
     backends::vulkan::{vulkan_decoder::VulkanDecoderError, wrappers::ProfileInfo},
     device::{CodecColorDescription, ColorRange, ColorSpace, Rational},
-    parameters::H264Profile,
+    parameters::ProfileH264,
 };
 
 const MACROBLOCK_SIZE: u32 = 16;
@@ -250,7 +250,7 @@ impl From<&'_ SeqParameterSet> for VkH264SequenceParameterSet {
 impl VkH264SequenceParameterSet {
     #[allow(non_snake_case)]
     pub(crate) fn new_encode(
-        profile: H264Profile,
+        profile: ProfileH264,
         width: u32,
         height: u32,
         max_references: u32,
@@ -648,12 +648,12 @@ unsafe impl Sync for VkH264PictureParameterSet {}
 impl VkH264PictureParameterSet {
     pub(crate) fn new_encode(
         caps: &vk::VideoEncodeH264CapabilitiesKHR<'_>,
-        profile: H264Profile,
+        profile: ProfileH264,
     ) -> Self {
         let transform_8x8_mode_flag = (caps
             .std_syntax_flags
             .contains(vk::VideoEncodeH264StdFlagsKHR::TRANSFORM_8X8_MODE_FLAG_SET)
-            && matches!(profile, H264Profile::High)) as u32;
+            && matches!(profile, ProfileH264::High)) as u32;
 
         let pps = vk::native::StdVideoH264PictureParameterSet {
             flags: vk::native::StdVideoH264PpsFlags {

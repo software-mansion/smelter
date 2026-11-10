@@ -11,7 +11,7 @@ use crate::{
     backends::vulkan::vulkan_device::caps::{
         NativeEncodeCapabilities, NativeEncodeH264Capabilities,
     },
-    parameters::H264Profile,
+    parameters::ProfileH264,
 };
 
 pub(crate) mod encode;
@@ -31,7 +31,7 @@ pub(crate) struct H264VkParameters {
 }
 
 impl Codec for H264Codec {
-    type Profile = H264Profile;
+    type Profile = ProfileH264;
 
     type OwnedParameters = H264CodecParameters;
     type VkParameters<'a> = H264VkParameters;
@@ -145,16 +145,16 @@ impl<'a> CodecSpecificEncoderQualityLevelProperties
     }
 }
 
-impl H264Profile {
+impl ProfileH264 {
     pub(crate) fn to_profile_idc(self) -> ash::vk::native::StdVideoH264ProfileIdc {
         match self {
-            H264Profile::Baseline => {
+            ProfileH264::Baseline => {
                 ash::vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_BASELINE
             }
-            H264Profile::Main => {
+            ProfileH264::Main => {
                 ash::vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_MAIN
             }
-            H264Profile::High => {
+            ProfileH264::High => {
                 ash::vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_HIGH
             }
         }

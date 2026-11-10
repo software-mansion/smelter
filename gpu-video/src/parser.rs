@@ -69,7 +69,7 @@ pub mod h264 {
     }
 
     #[derive(Debug, thiserror::Error)]
-    pub enum H264ParserError {
+    pub enum ParserErrorH264 {
         #[error("Error while parsing a NAL header: {0:?}")]
         NalHeaderParseError(h264_reader::nal::NalHeaderError),
 
@@ -84,14 +84,14 @@ pub mod h264 {
     }
 
     #[derive(Default)]
-    pub struct H264Parser {
+    pub struct ParserH264 {
         nal_parser: NalParser,
         nalu_splitter: NALUSplitter,
         output_format: OutputBytestreamFormatH264,
         au_splitter: AUSplitter,
     }
 
-    impl H264Parser {
+    impl ParserH264 {
         pub fn new(options: ParserOptionsH264) -> Self {
             Self {
                 nalu_splitter: NALUSplitter::new(options.input_format),
@@ -106,7 +106,7 @@ pub mod h264 {
             &mut self,
             bytes: &[u8],
             pts: Option<u64>,
-        ) -> Result<Vec<AccessUnit>, H264ParserError> {
+        ) -> Result<Vec<AccessUnit>, ParserErrorH264> {
             let nalus = self.nalu_splitter.push(bytes, pts);
             let nalus = nalus.into_iter().map(|(nalu_bytes, pts)| {
                 self.nal_parser.parse_nalu(&nalu_bytes).map(|parsed_nalu| {
@@ -128,7 +128,7 @@ pub mod h264 {
             Ok(access_units)
         }
 
-        pub fn flush(&mut self) -> Result<Vec<AccessUnit>, H264ParserError> {
+        pub fn flush(&mut self) -> Result<Vec<AccessUnit>, ParserErrorH264> {
             let nalus = self.nalu_splitter.flush();
             let nalus = nalus.into_iter().map(|(nalu_bytes, pts)| {
                 self.nal_parser.parse_nalu(&nalu_bytes).map(|parsed_nalu| {

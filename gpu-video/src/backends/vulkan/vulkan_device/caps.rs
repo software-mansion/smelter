@@ -18,8 +18,8 @@ use crate::capabilities::{
     EncodeH264Capabilities, EncodeH265Capabilities, EncodeProfileCapabilities,
     RateControlCapabilities,
 };
-use crate::parameters::H264Profile;
-use crate::parameters::H265Profile;
+use crate::parameters::ProfileH264;
+use crate::parameters::ProfileH265;
 
 pub(crate) fn query_video_format_properties<'a>(
     device: vk::PhysicalDevice,
@@ -143,10 +143,10 @@ impl NativeEncodeH265Capabilities {
 
     pub(crate) fn profile(
         &self,
-        profile: H265Profile,
+        profile: ProfileH265,
     ) -> Option<&NativeEncodeProfileCapabilities<H265Codec>> {
         match profile {
-            H265Profile::Main => self.main.as_ref(),
+            ProfileH265::Main => self.main.as_ref(),
         }
     }
 }
@@ -204,12 +204,12 @@ impl NativeEncodeH264Capabilities {
 
     pub(crate) fn profile(
         &self,
-        profile: H264Profile,
+        profile: ProfileH264,
     ) -> Option<&NativeEncodeProfileCapabilities<H264Codec>> {
         match profile {
-            H264Profile::Baseline => self.baseline.as_ref(),
-            H264Profile::Main => self.main.as_ref(),
-            H264Profile::High => self.high.as_ref(),
+            ProfileH264::Baseline => self.baseline.as_ref(),
+            ProfileH264::Main => self.main.as_ref(),
+            ProfileH264::High => self.high.as_ref(),
         }
     }
 }
@@ -524,22 +524,22 @@ impl NativeDecodeH264Capabilities {
 
     pub(crate) fn profile(
         &self,
-        profile: H264Profile,
+        profile: ProfileH264,
     ) -> Option<&NativeDecodeProfileCapabilities<H264Codec>> {
         match profile {
-            H264Profile::Baseline => self.baseline.as_ref(),
-            H264Profile::Main => self.main.as_ref(),
-            H264Profile::High => self.high.as_ref(),
+            ProfileH264::Baseline => self.baseline.as_ref(),
+            ProfileH264::Main => self.main.as_ref(),
+            ProfileH264::High => self.high.as_ref(),
         }
     }
 
-    pub(crate) fn max_profile(&self) -> Option<H264Profile> {
+    pub(crate) fn max_profile(&self) -> Option<ProfileH264> {
         if self.high.is_some() {
-            Some(H264Profile::High)
+            Some(ProfileH264::High)
         } else if self.main.is_some() {
-            Some(H264Profile::Main)
+            Some(ProfileH264::Main)
         } else if self.baseline.is_some() {
-            Some(H264Profile::Baseline)
+            Some(ProfileH264::Baseline)
         } else {
             None
         }
