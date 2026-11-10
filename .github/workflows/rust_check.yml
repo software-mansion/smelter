@@ -47,6 +47,9 @@ jobs:
                   shared-key: "linux-build-${{ steps.cache_week.outputs.week }}"
                   save-if: ${{ github.ref == 'refs/heads/master' }}
 
+            - name: 🔒 Check Cargo.lock is up to date
+              run: cargo metadata --locked --format-version 1 > /dev/null
+
             - name: 🪢 Generate Chromium Embedded Framework bindings
               run: cargo build --package libcef
 
