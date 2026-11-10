@@ -224,7 +224,7 @@ jobs:
               run: cargo test --workspace --doc
 
     test_windows:
-        # needs: build_and_lint_linux
+        needs: build_and_lint_linux
         runs-on: windows-gpu-2022
         steps:
             # The machine's gpu is configured in TCC mode (vulkan no workey).
@@ -275,7 +275,7 @@ jobs:
             - name: 🔬 Install nextest
               shell: bash
               run: |
-                  curl -LsSf https://get.nexte.st/latest/windows-tar | tar zxf - -C "$(cygpath -u "${CARGO_HOME:-$USERPROFILE/.cargo}")/bin"
+                  curl -LsSf https://get.nexte.st/latest/windows-tar | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
                   cargo nextest --version
 
             - name: 📥 Checkout repo
