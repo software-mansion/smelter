@@ -244,13 +244,11 @@ jobs:
                   }
                   nvidia-smi --query-gpu=driver_version,driver_model.current,driver_model.pending --format=csv
 
-            # # `shell: bash` steps (also used internally by the rust-toolchain and install-action
-            # # actions) must resolve to Git Bash, not the WSL launcher in System32.
-            # - name: 🛠 Put Git Bash on PATH
-            #   shell: powershell
-            #   run: |
-            #       $gitBin = Join-Path (Split-Path (Split-Path (Get-Command git).Source)) "bin"
-            #       $gitBin | Out-File -FilePath $env:GITHUB_PATH -Append
+            - name: 🛠 Put Git Bash on PATH
+              shell: powershell
+              run: |
+                  $gitBin = Join-Path (Split-Path (Split-Path (Get-Command git).Source)) "bin"
+                  $gitBin | Out-File -FilePath $env:GITHUB_PATH -Append
 
             - name: 🛠 Install LLVM (libclang for bindgen)
               uses: KyleMayes/install-llvm-action@v2
