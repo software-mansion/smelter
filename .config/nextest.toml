@@ -17,7 +17,7 @@ filter = 'package(/^integration-tests/) and test(/^pipeline_tests::/)'
 retries = 2
 
 [[profile.ci.overrides]]
-filter = 'package(/^integration-tests/) and test(/^gpu_video_tests::/)'
+filter = 'binary_id(gpu-video::gpu_video_tests)'
 slow-timeout = { period = "180s", terminate-after = 2 }
 
 [profile.audit]

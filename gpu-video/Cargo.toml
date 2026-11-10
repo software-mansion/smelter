@@ -139,6 +139,8 @@ libc = { version = "0.2.186" }
 pollster = { workspace = true }
 
 [dev-dependencies]
+ffmpeg-next = { workspace = true }
+crossbeam-channel = { workspace = true }
 clap = { version = "4.5.20", features = ["derive"] }
 tracing-subscriber = "0.3.20"
 wgpu = { version = "30.0.0", default-features = false, features = [
@@ -178,3 +180,7 @@ required-features = ["wgpu"]
 [[example]]
 name = "transcode"
 required-features = ["transcoder"]
+
+[[test]]
+name = "gpu_video_tests"
+required-features = ["wgpu"]
