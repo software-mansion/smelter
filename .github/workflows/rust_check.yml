@@ -244,16 +244,16 @@ jobs:
                   }
                   nvidia-smi --query-gpu=driver_version,driver_model.current,driver_model.pending --format=csv
 
-            - name: 🔧 Install the rust toolchain
-              uses: dtolnay/rust-toolchain@stable
-              with:
-                  toolchain: 1.98
-
             - name: 🛠 Put Git Bash on PATH
               shell: powershell
               run: |
                   $gitBin = Join-Path (Split-Path (Split-Path (Get-Command git).Source)) "bin"
                   $gitBin | Out-File -FilePath $env:GITHUB_PATH -Append
+
+            - name: 🔧 Install the rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: 1.98
 
             - name: 🛠 Install LLVM (libclang for bindgen)
               uses: KyleMayes/install-llvm-action@v2
