@@ -124,14 +124,9 @@ pub struct VideoInputFrame(*mut ffi::IDeckLinkVideoInputFrame);
 
 impl VideoInputFrame {
     pub fn bytes(&self) -> Result<bytes::Bytes, DeckLinkError> {
-        let height = unsafe { ffi::video_input_frame_height(self.0) as usize };
-        let bytes_per_row = unsafe { ffi::video_input_frame_row_bytes(self.0) as usize };
-        let mut data = bytes::BytesMut::zeroed(height * bytes_per_row);
-        unsafe {
-            let frame_ptr = ffi::video_input_frame_bytes(self.0)?;
-            std::ptr::copy(frame_ptr, data.as_mut_ptr(), height * bytes_per_row);
-        }
-        Ok(data.freeze())
+        let len = self.height() * self.bytes_per_row();
+        let access = unsafe { ffi::video_input_frame_start_access(self.0)? };
+        Ok(bytes::Bytes::from_owner(VideoBuffer { access, len }))
     }
     pub fn width(&self) -> usize {
         unsafe { ffi::video_input_frame_width(self.0) as usize }
@@ -150,6 +145,25 @@ impl VideoInputFrame {
         Ok(Duration::from_nanos(time_value as u64))
     }
 }
+
+struct VideoBuffer {
+    access: ffi::VideoBufferAccess,
+    len: usize,
+}
+
+impl AsRef<[u8]> for VideoBuffer {
+    fn as_ref(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.access.bytes, self.len) }
+    }
+}
+
+impl Drop for VideoBuffer {
+    fn drop(&mut self) {
+        unsafe { ffi::video_buffer_end_access(self.access.buffer) };
+    }
+}
+
+unsafe impl Send for VideoBuffer {}
 
 pub struct AudioInputPacket(*mut ffi::IDeckLinkAudioInputPacket);
 

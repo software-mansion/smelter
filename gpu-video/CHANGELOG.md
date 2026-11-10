@@ -69,6 +69,7 @@ By @noituri ([#2039](https://github.com/software-mansion/smelter/pull/2039))
 - All public names that used to start with `H264` or `H265` now end with them instead ([#2330](https://github.com/software-mansion/smelter/pull/2330) by @jerzywilczek)
 
 ### ✨ New features
+- Devices from `VideoAdapterExt::request_device_with_video_support` enable `VK_EXT_external_memory_host` when the adapter supports it, so host memory can be imported into buffers ([#2259](https://github.com/software-mansion/smelter/pull/2259) by @michael-dm)
 - Added VUI support to H.265 encoder ([#1995](https://github.com/software-mansion/smelter/pull/1995) by @noituri)
 - Improved encoder performance on Vulkan by using a better synchronisation approach ([#2269](https://github.com/software-mansion/smelter/pull/2269) by @noituri)
 - Added `DecoderParameters::bitstream_format` for specifying input byte stream format (Annex B or AVCC) ([#2322](https://github.com/software-mansion/smelter/pull/2322) by @noituri)
