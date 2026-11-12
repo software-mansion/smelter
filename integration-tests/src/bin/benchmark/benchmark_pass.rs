@@ -322,7 +322,7 @@ impl SingleBenchmarkPass {
                 video: true,
                 audio: false,
                 required: true,
-                offset: QueueTrackOffset::None,
+                offset: QueueTrackGroupOffset::None,
             },
         )?;
 

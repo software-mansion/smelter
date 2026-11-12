@@ -10,7 +10,7 @@ pub use crate::output::*;
 pub use crate::frame::*;
 pub use crate::types::*;
 
-pub use crate::queue::{LateEventPolicy, QueueTrackOffset};
+pub use crate::queue::{LateEventPolicy, QueueTrackGroupOffset};
 
 pub(crate) use crate::stats::*;
 

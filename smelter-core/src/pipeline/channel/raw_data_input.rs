@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     QueueInputOptions,
     pipeline::input::Input,
-    queue::{QueueInput, QueueTrackOptions},
+    queue::{QueueInput, QueueTrackGroupOptions},
 };
 
 use crate::prelude::*;
@@ -13,12 +13,13 @@ use crate::prelude::*;
 ///
 /// ## Timestamps
 ///
-/// - Queue tracks are created immediately, with the `QueueTrackOffset` provided in options.
+/// - Queue track groups are created immediately, with the `QueueTrackGroupOffset` provided in
+///   options.
 /// - Frames and samples are passed to the queue as is, PTS is not modified. Caller is
 ///   responsible for producing PTS values that match the selected offset mode:
-///   - `QueueTrackOffset::Pts(offset)` - PTS relative to `sync_point + offset`
-///   - `QueueTrackOffset::FromStart(offset)` - PTS of first frame should be zero
-///   - `QueueTrackOffset::None` - PTS of first frame should be zero
+///   - `QueueTrackGroupOffset::Pts(offset)` - PTS relative to `sync_point + offset`
+///   - `QueueTrackGroupOffset::FromStart(offset)` - PTS of first frame should be zero
+///   - `QueueTrackGroupOffset::None` - PTS of first frame should be zero
 /// - End of stream is signaled by dropping the sender.
 ///
 /// ### Unsupported scenarios
@@ -42,11 +43,12 @@ impl RawDataInput {
             },
         );
         queue_input.set_stale_frame_timeout(ctx.stale_frame_timeout);
-        let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
-            video: options.video,
-            audio: options.audio,
-            offset: options.offset,
-        });
+        let (video_sender, audio_sender) =
+            queue_input.queue_new_track_group(QueueTrackGroupOptions {
+                video: options.video,
+                audio: options.audio,
+                offset: options.offset,
+            });
 
         Ok((
             Input::RawDataChannel,

@@ -12,24 +12,24 @@ use crate::{
     event::EventEmitter,
     queue::{
         QueueContext,
-        audio_input::AudioQueueInput,
+        audio_track::AudioQueueTrack,
         side_channel::{AudioSideChannel, VideoSideChannel},
         utils::PauseState,
-        video_input::VideoQueueInput,
+        video_track::VideoQueueTrack,
     },
     types::Ref,
 };
 
 use crate::prelude::*;
 
-/// Maximum number of tracks waiting to be started. `QueueInput::queue_new_track`
+/// Maximum number of track groups waiting to be started. `QueueInput::queue_new_track_group`
 /// blocks until there is room.
-const MAX_PENDING_TRACKS: usize = 5;
+const MAX_PENDING_TRACK_GROUPS: usize = 5;
 
-struct PendingTrack {
-    video: Option<VideoQueueInput>,
-    audio: Option<AudioQueueInput>,
-    track_offset: TrackOffset,
+struct PendingTrackGroup {
+    video: Option<VideoQueueTrack>,
+    audio: Option<AudioQueueTrack>,
+    group_offset: TrackGroupOffset,
 }
 
 pub(crate) struct QueueSender<T>(crossbeam_channel::Sender<T>);
@@ -64,13 +64,13 @@ pub(super) struct InnerQueueInput {
     event_emitter: Arc<EventEmitter>,
     input_ref: Ref<InputId>,
 
-    video: Option<VideoQueueInput>,
-    audio: Option<AudioQueueInput>,
-    track_offset: TrackOffset,
+    video: Option<VideoQueueTrack>,
+    audio: Option<AudioQueueTrack>,
+    group_offset: TrackGroupOffset,
     pause_state: PauseState,
 
-    pending_sender: crossbeam_channel::Sender<PendingTrack>,
-    pending_receiver: crossbeam_channel::Receiver<PendingTrack>,
+    pending_sender: crossbeam_channel::Sender<PendingTrackGroup>,
+    pending_receiver: crossbeam_channel::Receiver<PendingTrackGroup>,
     required: bool,
     stale_frame_timeout: Option<Duration>,
     video_side_channel: Option<VideoSideChannel>,
@@ -79,24 +79,24 @@ pub(super) struct InnerQueueInput {
 }
 
 impl InnerQueueInput {
-    fn maybe_start_next_track(&mut self) {
+    fn maybe_start_next_track_group(&mut self) {
         let video_eos_sent = self.video.as_ref().map(|v| v.eos_sent()).unwrap_or(true);
         let audio_eos_sent = self.audio.as_ref().map(|a| a.eos_sent()).unwrap_or(true);
         if video_eos_sent && audio_eos_sent {
-            self.replace_track()
+            self.replace_track_group()
         }
     }
 
-    /// Replace current track with the next pending, do nothing if there is no pending
-    fn replace_track(&mut self) {
+    /// Replace current track group with the next pending, do nothing if there is no pending
+    fn replace_track_group(&mut self) {
         let Ok(pending) = self.pending_receiver.try_recv() else {
             return;
         };
-        info!(input_id=%self.input_ref, "Push track to queue");
+        info!(input_id=%self.input_ref, "Push track group to queue");
 
         self.video = pending.video;
         self.audio = pending.audio;
-        self.track_offset = pending.track_offset;
+        self.group_offset = pending.group_offset;
         if let (Some(video), Some(timeout)) = (self.video.as_mut(), self.stale_frame_timeout) {
             video.set_stale_frame_timeout(timeout);
         }
@@ -119,64 +119,66 @@ impl InnerQueueInput {
         }
     }
 
-    fn new_pending_track(
+    fn new_pending_track_group(
         &self,
-        opts: QueueTrackOptions,
+        opts: QueueTrackGroupOptions,
     ) -> (
-        PendingTrack,
+        PendingTrackGroup,
         Option<QueueSender<Frame>>,
         Option<QueueSender<InputAudioSamples>>,
     ) {
         let input_id = self.input_ref.to_string();
-        info!(?opts, input_id, "Create new queue track");
-        let (track_offset, offset_from_start) = match opts.offset {
-            QueueTrackOffset::None => (TrackOffset::default(), None),
-            QueueTrackOffset::Pts(duration) => (TrackOffset::new(duration), None),
-            QueueTrackOffset::FromStart(duration) => (TrackOffset::default(), Some(duration)),
+        info!(?opts, input_id, "Create new queue track group");
+        let (group_offset, offset_from_start) = match opts.offset {
+            QueueTrackGroupOffset::None => (TrackGroupOffset::default(), None),
+            QueueTrackGroupOffset::Pts(duration) => (TrackGroupOffset::new(duration), None),
+            QueueTrackGroupOffset::FromStart(duration) => {
+                (TrackGroupOffset::default(), Some(duration))
+            }
         };
-        let (video_input, video_sender) = if opts.video {
+        let (video, video_sender) = if opts.video {
             let side_channel = self
                 .video_side_channel
                 .as_ref()
-                .map(|sc| sc.with_track_offset(&track_offset));
-            let (video_input, video_sender) = VideoQueueInput::new(
+                .map(|sc| sc.with_group_offset(&group_offset));
+            let (video, video_sender) = VideoQueueTrack::new(
                 &self.queue_ctx,
                 &self.event_emitter,
                 &self.input_ref,
                 self.required,
                 offset_from_start,
-                track_offset.clone(),
+                group_offset.clone(),
                 side_channel,
                 self.side_channel_delay,
             );
-            (Some(video_input), Some(QueueSender::new(video_sender)))
+            (Some(video), Some(QueueSender::new(video_sender)))
         } else {
             (None, None)
         };
-        let (audio_input, audio_sender) = if opts.audio {
+        let (audio, audio_sender) = if opts.audio {
             let side_channel = self
                 .audio_side_channel
                 .as_ref()
-                .map(|sc| sc.with_track_offset(&track_offset));
-            let (audio_input, audio_sender) = AudioQueueInput::new(
+                .map(|sc| sc.with_group_offset(&group_offset));
+            let (audio, audio_sender) = AudioQueueTrack::new(
                 &self.queue_ctx,
                 &self.event_emitter,
                 &self.input_ref,
                 self.required,
                 offset_from_start,
-                track_offset.clone(),
+                group_offset.clone(),
                 side_channel,
                 self.side_channel_delay,
             );
-            (Some(audio_input), Some(QueueSender::new(audio_sender)))
+            (Some(audio), Some(QueueSender::new(audio_sender)))
         } else {
             (None, None)
         };
         (
-            PendingTrack {
-                video: video_input,
-                audio: audio_input,
-                track_offset,
+            PendingTrackGroup {
+                video,
+                audio,
+                group_offset,
             },
             video_sender,
             audio_sender,
@@ -184,8 +186,8 @@ impl InnerQueueInput {
     }
 
     /// Remember the start pts. On resume shift offset by the pts difference:
-    /// - If input already started, add to track offset pts diff
-    /// - If input did not started, track_offset was not initialized yet
+    /// - If input already started, add pts diff to group offset
+    /// - If input did not started, group_offset was not initialized yet
     pub fn pause(&mut self) {
         if self.pause_state.is_paused() {
             return;
@@ -207,7 +209,7 @@ impl InnerQueueInput {
         }
         let pts = self.queue_ctx.effective_last_pts();
         if let Some(pause_time) = self.pause_state.resume(pts) {
-            self.track_offset.map_add(pause_time);
+            self.group_offset.map_add(pause_time);
         }
         if let Some(v) = self.video.as_mut() {
             v.resume()
@@ -219,7 +221,7 @@ impl InnerQueueInput {
 }
 
 #[derive(Debug, Clone)]
-pub enum QueueTrackOffset {
+pub enum QueueTrackGroupOffset {
     None,
     /// Effectively offset from sync point
     Pts(Timestamp),
@@ -228,10 +230,10 @@ pub enum QueueTrackOffset {
 }
 
 #[derive(Debug)]
-pub(crate) struct QueueTrackOptions {
+pub(crate) struct QueueTrackGroupOptions {
     pub video: bool,
     pub audio: bool,
-    pub offset: QueueTrackOffset,
+    pub offset: QueueTrackGroupOffset,
 }
 
 #[derive(Clone)]
@@ -327,7 +329,8 @@ impl QueueInput {
         video_side_channel: Option<VideoSideChannel>,
         audio_side_channel: Option<AudioSideChannel>,
     ) -> Self {
-        let (pending_sender, pending_receiver) = crossbeam_channel::bounded(MAX_PENDING_TRACKS);
+        let (pending_sender, pending_receiver) =
+            crossbeam_channel::bounded(MAX_PENDING_TRACK_GROUPS);
         Self(Arc::new(Mutex::new(InnerQueueInput {
             queue_ctx,
             event_emitter,
@@ -335,7 +338,7 @@ impl QueueInput {
 
             video: None,
             audio: None,
-            track_offset: TrackOffset::default(),
+            group_offset: TrackGroupOffset::default(),
 
             pending_sender,
             pending_receiver,
@@ -349,11 +352,11 @@ impl QueueInput {
         })))
     }
 
-    /// Blocks (without holding the inner mutex) if `MAX_PENDING_TRACKS` tracks
+    /// Blocks (without holding the inner mutex) if `MAX_PENDING_TRACK_GROUPS` groups
     /// are already pending, until some of them are dequeued.
-    pub fn queue_new_track(
+    pub fn queue_new_track_group(
         &self,
-        opts: QueueTrackOptions,
+        opts: QueueTrackGroupOptions,
     ) -> (
         Option<QueueSender<Frame>>,
         Option<QueueSender<InputAudioSamples>>,
@@ -362,22 +365,22 @@ impl QueueInput {
             return (None, None);
         }
         let guard = self.0.lock().unwrap();
-        let (track, video_sender, audio_sender) = guard.new_pending_track(opts);
+        let (group, video_sender, audio_sender) = guard.new_pending_track_group(opts);
         let pending_sender = guard.pending_sender.clone();
         drop(guard);
         // receiver is owned by InnerQueueInput, so send can't fail while
         // we hold the Arc
-        let _ = pending_sender.send(track);
+        let _ = pending_sender.send(group);
         (video_sender, audio_sender)
     }
 
-    pub fn abort_old_track(&self) {
-        self.0.lock().unwrap().replace_track()
+    pub fn abort_old_track_group(&self) {
+        self.0.lock().unwrap().replace_track_group()
     }
 
     /// Stop rendering the last frame once it is older than `timeout`. Without
     /// it the last frame is rendered until a newer one arrives. Applies to the
-    /// current track and to pending tracks once they start.
+    /// current video track and to video tracks of pending groups once they start.
     pub fn set_stale_frame_timeout(&self, timeout: Duration) {
         let mut guard = self.0.lock().unwrap();
         guard.stale_frame_timeout = Some(timeout);
@@ -398,15 +401,15 @@ impl QueueInput {
         WeakQueueInput(Arc::downgrade(&self.0))
     }
 
-    pub(super) fn maybe_start_next_track(&self) {
-        self.0.lock().unwrap().maybe_start_next_track();
+    pub(super) fn maybe_start_next_track_group(&self) {
+        self.0.lock().unwrap().maybe_start_next_track_group();
     }
 }
 
 impl WeakQueueInput {
     pub(super) fn video<F, R>(&self, f: F) -> Option<R>
     where
-        F: FnOnce(&mut VideoQueueInput) -> R,
+        F: FnOnce(&mut VideoQueueTrack) -> R,
     {
         let arc = self.0.upgrade()?;
         let mut inner = arc.lock().unwrap();
@@ -416,7 +419,7 @@ impl WeakQueueInput {
 
     pub(super) fn audio<F, R>(&self, f: F) -> Option<R>
     where
-        F: FnOnce(&mut AudioQueueInput) -> R,
+        F: FnOnce(&mut AudioQueueTrack) -> R,
     {
         let arc = self.0.upgrade()?;
         let mut inner = arc.lock().unwrap();
@@ -430,9 +433,9 @@ impl WeakQueueInput {
 }
 
 #[derive(Default, Clone)]
-pub(super) struct TrackOffset(Arc<Mutex<Option<Timestamp>>>);
+pub(super) struct TrackGroupOffset(Arc<Mutex<Option<Timestamp>>>);
 
-impl TrackOffset {
+impl TrackGroupOffset {
     pub fn new(value: Timestamp) -> Self {
         Self(Arc::new(Mutex::new(Some(value))))
     }

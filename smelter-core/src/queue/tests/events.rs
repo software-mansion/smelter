@@ -1,6 +1,6 @@
 use std::{thread::sleep, time::Duration};
 
-use crate::queue::{QueueInputOptions, QueueTrackOffset, QueueTrackOptions};
+use crate::queue::{QueueInputOptions, QueueTrackGroupOffset, QueueTrackGroupOptions};
 
 use super::harness::{
     BATCH_DURATION, OFFSET, OFFSET_PTS, TestInput, TestQueue, TestQueueOptions, ms,
@@ -27,7 +27,7 @@ mod required_input {
 
     /// Create a queue with a single required video-only input ("input_1").
     /// The queue is not started yet, so frames can be sent before start.
-    fn create_queue_with_video_input(offset: QueueTrackOffset) -> (TestQueue, TestInput) {
+    fn create_queue_with_video_input(offset: QueueTrackGroupOffset) -> (TestQueue, TestInput) {
         let queue = TestQueue::new(TestQueueOptions::default());
         let input = queue.add_input(
             "input_1",
@@ -35,7 +35,7 @@ mod required_input {
                 required: true,
                 ..Default::default()
             },
-            QueueTrackOptions {
+            QueueTrackGroupOptions {
                 video: true,
                 audio: false,
                 offset,
@@ -46,7 +46,7 @@ mod required_input {
 
     /// Like [`create_queue_with_video_input`], but desync the clocks and start
     /// the queue.
-    fn start_queue_with_video_input(offset: QueueTrackOffset) -> (TestQueue, TestInput) {
+    fn start_queue_with_video_input(offset: QueueTrackGroupOffset) -> (TestQueue, TestInput) {
         let (mut queue, input) = create_queue_with_video_input(offset);
 
         // desync regular clock from queue clock
@@ -62,8 +62,9 @@ mod required_input {
 
     #[test]
     fn offset_from_start_event_delivered_early() {
-        let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         queue.expect_events(&[]);
 
@@ -74,8 +75,9 @@ mod required_input {
 
     #[test]
     fn offset_from_start_event_delivered_on_time() {
-        let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         sleep(Duration::from_millis(58)); // a bit less
         queue.expect_events(&[]);
@@ -87,8 +89,9 @@ mod required_input {
 
     #[test]
     fn offset_from_start_event_delivered_late() {
-        let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         sleep(Duration::from_millis(100));
         queue.expect_events(&[]);
@@ -100,8 +103,9 @@ mod required_input {
 
     #[test]
     fn offset_from_start_event_playing() {
-        let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
@@ -119,8 +123,9 @@ mod required_input {
 
     #[test]
     fn offset_from_start_event_eos() {
-        let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
@@ -139,8 +144,9 @@ mod required_input {
 
     #[test]
     fn offset_from_start_event_eos_without_frames() {
-        let (mut queue, mut input) =
-            create_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (mut queue, mut input) = create_queue_with_video_input(
+            QueueTrackGroupOffset::FromStart(Duration::from_millis(60)),
+        );
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -166,7 +172,7 @@ mod required_input {
     #[test]
     fn offset_pts_after_start_event_delivered_early() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         queue.expect_events(&[]);
 
@@ -178,7 +184,7 @@ mod required_input {
     #[test]
     fn offset_pts_after_start_event_delivered_on_time() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
@@ -191,7 +197,7 @@ mod required_input {
     #[test]
     fn offset_pts_after_start_event_delivered_late() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         sleep(Duration::from_millis(100));
         queue.expect_events(&[]);
@@ -204,7 +210,7 @@ mod required_input {
     #[test]
     fn offset_pts_after_start_event_playing() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
@@ -223,7 +229,7 @@ mod required_input {
     #[test]
     fn offset_pts_after_start_event_eos() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
@@ -249,7 +255,7 @@ mod required_input {
     #[test]
     fn offset_pts_before_start_event_delivered() {
         let (mut queue, mut input) =
-            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS));
+            create_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -269,7 +275,7 @@ mod required_input {
     #[test]
     fn offset_pts_before_start_event_playing() {
         let (mut queue, mut input) =
-            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS));
+            create_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -288,7 +294,7 @@ mod required_input {
     #[test]
     fn offset_pts_before_start_event_eos() {
         let (mut queue, mut input) =
-            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS));
+            create_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -316,7 +322,7 @@ mod required_input {
 
     #[test]
     fn offset_none_after_start_event_delivered() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::None);
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::None);
 
         sleep(Duration::from_millis(58));
         // a required None input reports ready (empty batches), no events yet
@@ -329,7 +335,7 @@ mod required_input {
 
     #[test]
     fn offset_none_after_start_event_playing() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::None);
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::None);
 
         sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
@@ -347,7 +353,7 @@ mod required_input {
 
     #[test]
     fn offset_none_after_start_event_eos() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::None);
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::None);
 
         sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
@@ -378,7 +384,7 @@ mod required_input {
 
     #[test]
     fn offset_none_before_start_event_delivered() {
-        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackOffset::None);
+        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackGroupOffset::None);
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -395,7 +401,7 @@ mod required_input {
 
     #[test]
     fn offset_none_before_start_event_playing() {
-        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackOffset::None);
+        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackGroupOffset::None);
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -412,7 +418,7 @@ mod required_input {
 
     #[test]
     fn offset_none_before_start_event_eos() {
-        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackOffset::None);
+        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackGroupOffset::None);
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -442,7 +448,7 @@ mod optional_input {
 
     /// Create a queue with a single optional video-only input ("input_1").
     /// The queue is not started yet, so frames can be sent before start.
-    fn create_queue_with_video_input(offset: QueueTrackOffset) -> (TestQueue, TestInput) {
+    fn create_queue_with_video_input(offset: QueueTrackGroupOffset) -> (TestQueue, TestInput) {
         let queue = TestQueue::new(TestQueueOptions::default());
         let input = queue.add_input(
             "input_1",
@@ -450,7 +456,7 @@ mod optional_input {
                 required: false,
                 ..Default::default()
             },
-            QueueTrackOptions {
+            QueueTrackGroupOptions {
                 video: true,
                 audio: false,
                 offset,
@@ -461,7 +467,7 @@ mod optional_input {
 
     /// Like [`create_queue_with_video_input`], but desync the clocks and start
     /// the queue.
-    fn start_queue_with_video_input(offset: QueueTrackOffset) -> (TestQueue, TestInput) {
+    fn start_queue_with_video_input(offset: QueueTrackGroupOffset) -> (TestQueue, TestInput) {
         let (mut queue, input) = create_queue_with_video_input(offset);
 
         // desync regular clock from queue clock
@@ -478,8 +484,9 @@ mod optional_input {
 
     #[test]
     fn offset_from_start_event_delivered_early() {
-        let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         queue.expect_events(&[]);
 
@@ -490,8 +497,9 @@ mod optional_input {
 
     #[test]
     fn offset_from_start_event_delivered_on_time() {
-        let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
@@ -503,8 +511,9 @@ mod optional_input {
 
     #[test]
     fn offset_from_start_event_delivered_late() {
-        let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         sleep(Duration::from_millis(101));
         // +1ms to go out of sync with output frames, so playing event is not sent
@@ -517,8 +526,9 @@ mod optional_input {
 
     #[test]
     fn offset_from_start_event_playing() {
-        let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
@@ -534,8 +544,9 @@ mod optional_input {
 
     #[test]
     fn offset_from_start_event_eos() {
-        let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
@@ -558,7 +569,7 @@ mod optional_input {
     #[test]
     fn offset_pts_after_start_event_delivered_early() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         queue.expect_events(&[]);
 
@@ -570,7 +581,7 @@ mod optional_input {
     #[test]
     fn offset_pts_after_start_event_delivered_on_time() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
@@ -583,7 +594,7 @@ mod optional_input {
     #[test]
     fn offset_pts_after_start_event_delivered_late() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         sleep(Duration::from_millis(101));
         // +1 to go out of sync with output batches, so playing even is not sent
@@ -597,7 +608,7 @@ mod optional_input {
     #[test]
     fn offset_pts_after_start_event_playing() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
@@ -614,7 +625,7 @@ mod optional_input {
     #[test]
     fn offset_pts_after_start_event_eos() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         input.send_frame(ms(0));
         input.send_frame(ms(20));
@@ -637,7 +648,7 @@ mod optional_input {
     #[test]
     fn offset_pts_before_start_event_delivered() {
         let (mut queue, mut input) =
-            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS));
+            create_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -654,7 +665,7 @@ mod optional_input {
     #[test]
     fn offset_pts_before_start_event_playing() {
         let (mut queue, mut input) =
-            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS));
+            create_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -672,7 +683,7 @@ mod optional_input {
     #[test]
     fn offset_pts_before_start_event_eos() {
         let (mut queue, mut input) =
-            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS));
+            create_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -698,7 +709,7 @@ mod optional_input {
 
     #[test]
     fn offset_none_after_start_event_delivered() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::None);
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::None);
 
         sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
@@ -710,7 +721,7 @@ mod optional_input {
 
     #[test]
     fn offset_none_after_start_event_playing() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::None);
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::None);
 
         sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
@@ -726,7 +737,7 @@ mod optional_input {
 
     #[test]
     fn offset_none_after_start_event_eos() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::None);
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::None);
 
         sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
@@ -755,7 +766,7 @@ mod optional_input {
 
     #[test]
     fn offset_none_before_start_event_delivered() {
-        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackOffset::None);
+        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackGroupOffset::None);
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -772,7 +783,7 @@ mod optional_input {
 
     #[test]
     fn offset_none_before_start_event_playing() {
-        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackOffset::None);
+        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackGroupOffset::None);
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -789,7 +800,7 @@ mod optional_input {
 
     #[test]
     fn offset_none_before_start_event_eos() {
-        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackOffset::None);
+        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackGroupOffset::None);
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -828,7 +839,7 @@ mod required_audio_input {
 
     /// Create a queue with a single required audio-only input ("input_1").
     /// The queue is not started yet, so samples can be sent before start.
-    fn create_queue_with_audio_input(offset: QueueTrackOffset) -> (TestQueue, TestInput) {
+    fn create_queue_with_audio_input(offset: QueueTrackGroupOffset) -> (TestQueue, TestInput) {
         let queue = TestQueue::new(TestQueueOptions::default());
         let input = queue.add_input(
             "input_1",
@@ -836,7 +847,7 @@ mod required_audio_input {
                 required: true,
                 ..Default::default()
             },
-            QueueTrackOptions {
+            QueueTrackGroupOptions {
                 video: false,
                 audio: true,
                 offset,
@@ -847,7 +858,7 @@ mod required_audio_input {
 
     /// Like [`create_queue_with_audio_input`], but desync the clocks and start
     /// the queue.
-    fn start_queue_with_audio_input(offset: QueueTrackOffset) -> (TestQueue, TestInput) {
+    fn start_queue_with_audio_input(offset: QueueTrackGroupOffset) -> (TestQueue, TestInput) {
         let (mut queue, input) = create_queue_with_audio_input(offset);
 
         // desync regular clock from queue clock
@@ -863,8 +874,9 @@ mod required_audio_input {
 
     #[test]
     fn offset_from_start_event_delivered_early() {
-        let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_audio_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         queue.expect_events(&[]);
 
@@ -875,8 +887,9 @@ mod required_audio_input {
 
     #[test]
     fn offset_from_start_event_delivered_on_time() {
-        let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_audio_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         sleep(Duration::from_millis(58)); // a bit less
         queue.expect_events(&[]);
@@ -888,8 +901,9 @@ mod required_audio_input {
 
     #[test]
     fn offset_from_start_event_delivered_late() {
-        let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_audio_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         sleep(Duration::from_millis(100));
         queue.expect_events(&[]);
@@ -901,8 +915,9 @@ mod required_audio_input {
 
     #[test]
     fn offset_from_start_event_playing() {
-        let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_audio_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         // enough data for the required input to report ready (80ms)
         input.send_samples(ms(0), BATCH_DURATION);
@@ -925,8 +940,9 @@ mod required_audio_input {
 
     #[test]
     fn offset_from_start_event_eos() {
-        let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_audio_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         input.send_samples(ms(0), BATCH_DURATION);
         input.send_samples(ms(20), BATCH_DURATION);
@@ -945,8 +961,9 @@ mod required_audio_input {
 
     #[test]
     fn offset_from_start_event_eos_without_samples() {
-        let (mut queue, mut input) =
-            create_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (mut queue, mut input) = create_queue_with_audio_input(
+            QueueTrackGroupOffset::FromStart(Duration::from_millis(60)),
+        );
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -972,7 +989,7 @@ mod required_audio_input {
     #[test]
     fn offset_pts_after_start_event_delivered_early() {
         let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_audio_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         queue.expect_events(&[]);
 
@@ -984,7 +1001,7 @@ mod required_audio_input {
     #[test]
     fn offset_pts_after_start_event_delivered_on_time() {
         let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_audio_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
@@ -997,7 +1014,7 @@ mod required_audio_input {
     #[test]
     fn offset_pts_after_start_event_delivered_late() {
         let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_audio_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         sleep(Duration::from_millis(100));
         queue.expect_events(&[]);
@@ -1010,7 +1027,7 @@ mod required_audio_input {
     #[test]
     fn offset_pts_after_start_event_playing() {
         let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_audio_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         input.send_samples(ms(0), BATCH_DURATION);
         input.send_samples(ms(20), BATCH_DURATION);
@@ -1027,7 +1044,7 @@ mod required_audio_input {
     #[test]
     fn offset_pts_after_start_event_eos() {
         let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_audio_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         input.send_samples(ms(0), BATCH_DURATION);
         input.send_samples(ms(20), BATCH_DURATION);
@@ -1056,7 +1073,7 @@ mod required_audio_input {
     #[test]
     fn offset_pts_before_start_event_delivered() {
         let (mut queue, mut input) =
-            create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS));
+            create_queue_with_audio_input(QueueTrackGroupOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -1076,7 +1093,7 @@ mod required_audio_input {
     #[test]
     fn offset_pts_before_start_event_playing() {
         let (mut queue, mut input) =
-            create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS));
+            create_queue_with_audio_input(QueueTrackGroupOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -1101,7 +1118,7 @@ mod required_audio_input {
     #[test]
     fn offset_pts_before_start_event_eos() {
         let (mut queue, mut input) =
-            create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS));
+            create_queue_with_audio_input(QueueTrackGroupOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -1130,7 +1147,7 @@ mod required_audio_input {
 
     #[test]
     fn offset_none_after_start_event_delivered() {
-        let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::None);
+        let (queue, mut input) = start_queue_with_audio_input(QueueTrackGroupOffset::None);
 
         sleep(Duration::from_millis(58));
         // a required None input reports ready (empty chunks), no events yet
@@ -1143,7 +1160,7 @@ mod required_audio_input {
 
     #[test]
     fn offset_none_after_start_event_playing() {
-        let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::None);
+        let (queue, mut input) = start_queue_with_audio_input(QueueTrackGroupOffset::None);
 
         sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
@@ -1165,7 +1182,7 @@ mod required_audio_input {
 
     #[test]
     fn offset_none_after_start_event_eos() {
-        let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::None);
+        let (queue, mut input) = start_queue_with_audio_input(QueueTrackGroupOffset::None);
 
         sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
@@ -1193,7 +1210,7 @@ mod required_audio_input {
 
     #[test]
     fn offset_none_before_start_event_delivered() {
-        let (mut queue, mut input) = create_queue_with_audio_input(QueueTrackOffset::None);
+        let (mut queue, mut input) = create_queue_with_audio_input(QueueTrackGroupOffset::None);
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -1211,7 +1228,7 @@ mod required_audio_input {
 
     #[test]
     fn offset_none_before_start_event_playing() {
-        let (mut queue, mut input) = create_queue_with_audio_input(QueueTrackOffset::None);
+        let (mut queue, mut input) = create_queue_with_audio_input(QueueTrackGroupOffset::None);
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -1234,7 +1251,7 @@ mod required_audio_input {
 
     #[test]
     fn offset_none_before_start_event_eos() {
-        let (mut queue, mut input) = create_queue_with_audio_input(QueueTrackOffset::None);
+        let (mut queue, mut input) = create_queue_with_audio_input(QueueTrackGroupOffset::None);
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -1268,7 +1285,7 @@ mod optional_audio_input {
 
     /// Create a queue with a single optional audio-only input ("input_1").
     /// The queue is not started yet, so samples can be sent before start.
-    fn create_queue_with_audio_input(offset: QueueTrackOffset) -> (TestQueue, TestInput) {
+    fn create_queue_with_audio_input(offset: QueueTrackGroupOffset) -> (TestQueue, TestInput) {
         let queue = TestQueue::new(TestQueueOptions::default());
         let input = queue.add_input(
             "input_1",
@@ -1276,7 +1293,7 @@ mod optional_audio_input {
                 required: false,
                 ..Default::default()
             },
-            QueueTrackOptions {
+            QueueTrackGroupOptions {
                 video: false,
                 audio: true,
                 offset,
@@ -1287,7 +1304,7 @@ mod optional_audio_input {
 
     /// Like [`create_queue_with_audio_input`], but desync the clocks and start
     /// the queue.
-    fn start_queue_with_audio_input(offset: QueueTrackOffset) -> (TestQueue, TestInput) {
+    fn start_queue_with_audio_input(offset: QueueTrackGroupOffset) -> (TestQueue, TestInput) {
         let (mut queue, input) = create_queue_with_audio_input(offset);
 
         // desync regular clock from queue clock
@@ -1304,8 +1321,9 @@ mod optional_audio_input {
 
     #[test]
     fn offset_from_start_event_delivered_early() {
-        let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_audio_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         queue.expect_events(&[]);
 
@@ -1316,8 +1334,9 @@ mod optional_audio_input {
 
     #[test]
     fn offset_from_start_event_delivered_on_time() {
-        let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_audio_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
@@ -1329,8 +1348,9 @@ mod optional_audio_input {
 
     #[test]
     fn offset_from_start_event_delivered_late() {
-        let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_audio_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         sleep(Duration::from_millis(101));
         // +1ms so the chunk covering 100ms is produced before the batch
@@ -1345,8 +1365,9 @@ mod optional_audio_input {
 
     #[test]
     fn offset_from_start_event_playing() {
-        let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_audio_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         // one batch is enough: an optional input doesn't wait for coverage
         input.send_samples(ms(0), BATCH_DURATION);
@@ -1364,8 +1385,9 @@ mod optional_audio_input {
 
     #[test]
     fn offset_from_start_event_eos() {
-        let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_audio_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         input.send_samples(ms(0), BATCH_DURATION);
         input.send_samples(ms(20), BATCH_DURATION);
@@ -1391,7 +1413,7 @@ mod optional_audio_input {
     #[test]
     fn offset_pts_after_start_event_delivered_early() {
         let (mut queue, mut input) =
-            create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            create_queue_with_audio_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         // the batch arrives before start: delivered fires during the
         // pre-start cleanup tick (the offset is in the future, nothing is
@@ -1412,7 +1434,7 @@ mod optional_audio_input {
     #[test]
     fn offset_pts_after_start_event_delivered_on_time() {
         let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_audio_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
@@ -1426,7 +1448,7 @@ mod optional_audio_input {
     #[test]
     fn offset_pts_after_start_event_delivered_late() {
         let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_audio_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         sleep(Duration::from_millis(101));
         // +1ms so the chunk covering 100ms is produced before the batch
@@ -1442,7 +1464,7 @@ mod optional_audio_input {
     #[test]
     fn offset_pts_after_start_event_playing() {
         let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_audio_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         // send mid-chunk so the pop timing is deterministic
         sleep(Duration::from_millis(30));
@@ -1460,7 +1482,7 @@ mod optional_audio_input {
     #[test]
     fn offset_pts_after_start_event_eos() {
         let (queue, mut input) =
-            start_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_audio_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         sleep(Duration::from_millis(30));
         queue.expect_events(&[]);
@@ -1487,7 +1509,7 @@ mod optional_audio_input {
     #[test]
     fn offset_pts_before_start_event_delivered() {
         let (mut queue, mut input) =
-            create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS));
+            create_queue_with_audio_input(QueueTrackGroupOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -1506,7 +1528,7 @@ mod optional_audio_input {
     #[test]
     fn offset_pts_before_start_event_playing() {
         let (mut queue, mut input) =
-            create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS));
+            create_queue_with_audio_input(QueueTrackGroupOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -1526,7 +1548,7 @@ mod optional_audio_input {
     #[test]
     fn offset_pts_before_start_event_eos() {
         let (mut queue, mut input) =
-            create_queue_with_audio_input(QueueTrackOffset::Pts(OFFSET_PTS));
+            create_queue_with_audio_input(QueueTrackGroupOffset::Pts(OFFSET_PTS));
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -1553,7 +1575,7 @@ mod optional_audio_input {
 
     #[test]
     fn offset_none_after_start_event_delivered() {
-        let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::None);
+        let (queue, mut input) = start_queue_with_audio_input(QueueTrackGroupOffset::None);
 
         sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
@@ -1567,7 +1589,7 @@ mod optional_audio_input {
 
     #[test]
     fn offset_none_after_start_event_playing() {
-        let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::None);
+        let (queue, mut input) = start_queue_with_audio_input(QueueTrackGroupOffset::None);
 
         sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
@@ -1584,7 +1606,7 @@ mod optional_audio_input {
 
     #[test]
     fn offset_none_after_start_event_eos() {
-        let (queue, mut input) = start_queue_with_audio_input(QueueTrackOffset::None);
+        let (queue, mut input) = start_queue_with_audio_input(QueueTrackGroupOffset::None);
 
         sleep(Duration::from_millis(58));
         queue.expect_events(&[]);
@@ -1610,7 +1632,7 @@ mod optional_audio_input {
 
     #[test]
     fn offset_none_before_start_event_delivered() {
-        let (mut queue, mut input) = create_queue_with_audio_input(QueueTrackOffset::None);
+        let (mut queue, mut input) = create_queue_with_audio_input(QueueTrackGroupOffset::None);
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -1628,7 +1650,7 @@ mod optional_audio_input {
 
     #[test]
     fn offset_none_before_start_event_playing() {
-        let (mut queue, mut input) = create_queue_with_audio_input(QueueTrackOffset::None);
+        let (mut queue, mut input) = create_queue_with_audio_input(QueueTrackGroupOffset::None);
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -1647,7 +1669,7 @@ mod optional_audio_input {
 
     #[test]
     fn offset_none_before_start_event_eos() {
-        let (mut queue, mut input) = create_queue_with_audio_input(QueueTrackOffset::None);
+        let (mut queue, mut input) = create_queue_with_audio_input(QueueTrackGroupOffset::None);
 
         // desync regular clock from queue clock
         sleep(OFFSET);

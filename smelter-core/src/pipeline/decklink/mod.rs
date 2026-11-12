@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tracing::{Level, error, span};
 
 use crate::pipeline::input::Input;
-use crate::queue::{InputSideChannel, QueueTrackOffset, QueueTrackOptions};
+use crate::queue::{InputSideChannel, QueueTrackGroupOffset, QueueTrackGroupOptions};
 use crate::{pipeline::decklink::format::Format, queue::QueueInput};
 
 use crate::prelude::*;
@@ -22,7 +22,7 @@ const AUDIO_SAMPLE_RATE: u32 = 48_000;
 ///
 /// ## Timestamps
 ///
-/// - Register track with `QueueTrackOffset::Pts(Duration::ZERO)` which means
+/// - Register track group with `QueueTrackGroupOffset::Pts(Duration::ZERO)` which means
 ///   that PTS should be relative to queue `sync_point`.
 /// - Video and audio use one offset because their timestamps share the card clock.
 /// - Video-only capture has no presentation delay. Audio capture adds the same
@@ -89,11 +89,12 @@ impl DeckLink {
 
         let queue_input = QueueInput::new(&ctx, &input_ref, opts.queue_options);
         queue_input.set_stale_frame_timeout(ctx.stale_frame_timeout);
-        let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
-            video: true,
-            audio: opts.enable_audio,
-            offset: QueueTrackOffset::Pts(Timestamp::ZERO),
-        });
+        let (video_sender, audio_sender) =
+            queue_input.queue_new_track_group(QueueTrackGroupOptions {
+                video: true,
+                audio: opts.enable_audio,
+                offset: QueueTrackGroupOffset::Pts(Timestamp::ZERO),
+            });
         let callback = ChannelCallbackAdapter::new(
             &ctx,
             span,

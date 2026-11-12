@@ -2,7 +2,7 @@ use std::{thread::sleep, time::Duration};
 
 use crate::{
     Timestamp,
-    queue::{QueueInputOptions, QueueTrackOffset, QueueTrackOptions},
+    queue::{QueueInputOptions, QueueTrackGroupOffset, QueueTrackGroupOptions},
 };
 
 use super::harness::{
@@ -29,7 +29,7 @@ mod required_input {
 
     /// Create a queue with a single required video-only input ("input_1").
     /// The queue is not started yet, so frames can be sent before start.
-    fn create_queue_with_video_input(offset: QueueTrackOffset) -> (TestQueue, TestInput) {
+    fn create_queue_with_video_input(offset: QueueTrackGroupOffset) -> (TestQueue, TestInput) {
         let queue = TestQueue::new(TestQueueOptions::default());
         let input = queue.add_input(
             "input_1",
@@ -37,7 +37,7 @@ mod required_input {
                 required: true,
                 ..Default::default()
             },
-            QueueTrackOptions {
+            QueueTrackGroupOptions {
                 video: true,
                 audio: false,
                 offset,
@@ -48,7 +48,7 @@ mod required_input {
 
     /// Like [`create_queue_with_video_input`], but desync the clocks and start
     /// the queue.
-    fn start_queue_with_video_input(offset: QueueTrackOffset) -> (TestQueue, TestInput) {
+    fn start_queue_with_video_input(offset: QueueTrackGroupOffset) -> (TestQueue, TestInput) {
         let (mut queue, input) = create_queue_with_video_input(offset);
 
         // desync regular clock from queue clock
@@ -60,8 +60,9 @@ mod required_input {
 
     #[test]
     fn offset_from_start_delivered_early() {
-        let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         input.send_frame(ms(0));
         input.send_frame(ms(15));
@@ -120,8 +121,9 @@ mod required_input {
     /// the last frame.
     #[test]
     fn offset_from_start_eos_with_last_frame() {
-        let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         input.send_frame(ms(0));
         input.send_frame(ms(15));
@@ -154,7 +156,7 @@ mod required_input {
     #[test]
     fn offset_pts_eos_without_frames() {
         let (mut queue, mut input) =
-            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS));
+            create_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS));
 
         // the track ends before the queue starts, without a single frame
         input.end_video();
@@ -178,8 +180,9 @@ mod required_input {
     /// (a `FromStart` offset is only resolved when the first frame arrives).
     #[test]
     fn offset_from_start_eos_without_frames() {
-        let (mut queue, mut input) =
-            create_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (mut queue, mut input) = create_queue_with_video_input(
+            QueueTrackGroupOffset::FromStart(Duration::from_millis(60)),
+        );
 
         // the track ends before the queue starts, without a single frame
         input.end_video();
@@ -201,8 +204,9 @@ mod required_input {
 
     #[test]
     fn offset_from_start_delivered_on_time() {
-        let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         sleep(Duration::from_millis(58)); // a bit before
 
@@ -237,8 +241,9 @@ mod required_input {
 
     #[test]
     fn offset_from_start_delivered_late() {
-        let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         sleep(Duration::from_millis(200));
         // receiving empty batches before input offset start, but not after offset
@@ -274,7 +279,7 @@ mod required_input {
     #[test]
     fn offset_pts_after_start_delivered_early() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         input.send_frame(ms(0));
         input.send_frame(ms(15));
@@ -312,7 +317,7 @@ mod required_input {
     #[test]
     fn offset_pts_after_start_delivered_on_time() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         sleep(Duration::from_millis(58));
         // we don't know what will be first frame pts, so batches 0, 20, 40
@@ -351,7 +356,7 @@ mod required_input {
     #[test]
     fn offset_pts_after_start_delivered_on_time_with_first_packet_early() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         input.send_frame(ms(0));
 
@@ -392,7 +397,7 @@ mod required_input {
     #[test]
     fn offset_pts_after_start_delivered_late() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         sleep(Duration::from_millis(200));
         assert!(queue.next_video_batch().is_none());
@@ -422,7 +427,7 @@ mod required_input {
     #[test]
     fn offset_pts_after_start_delivered_late_first_packet_early() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         input.send_frame(ms(0));
         // TODO: this packet should not be necessary so the empty batches
@@ -462,7 +467,7 @@ mod required_input {
         // track zero is ~60ms before the queue start: frames with PTS below
         // ~60ms are already late at start and get dropped
         let (mut queue, mut input) =
-            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS - ms(40)));
+            create_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS - ms(40)));
 
         // all frames arrive before the queue starts
         input.send_frame(ms(0));
@@ -498,7 +503,7 @@ mod required_input {
     #[test]
     fn offset_pts_before_start_delivered_on_time_not_aligned_before() {
         let (mut queue, mut input) =
-            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS - ms(40)));
+            create_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS - ms(40)));
 
         input.send_frame(ms(30));
         input.send_frame(ms(45));
@@ -529,7 +534,7 @@ mod required_input {
     #[test]
     fn offset_pts_before_start_delivered_on_time_not_aligned_after() {
         let (mut queue, mut input) =
-            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS - ms(40)));
+            create_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS - ms(40)));
 
         input.send_frame(ms(45));
         input.send_frame(ms(60));
@@ -556,7 +561,7 @@ mod required_input {
     #[test]
     fn offset_pts_before_start_delivered_on_time_aligned() {
         let (mut queue, mut input) =
-            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS - ms(40)));
+            create_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS - ms(40)));
 
         input.send_frame(ms(40));
         input.send_frame(ms(60));
@@ -586,7 +591,7 @@ mod required_input {
     #[test]
     fn offset_pts_before_start_delivered_late() {
         let (mut queue, mut input) =
-            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS));
+            create_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS));
 
         sleep(Duration::from_millis(50) + OFFSET);
         assert!(queue.next_video_batch().is_none());
@@ -629,7 +634,7 @@ mod required_input {
 
     #[test]
     fn offset_none_after_start_delivered_on_time() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::None);
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::None);
 
         sleep(Duration::from_millis(58));
         // input reports ready with no data: empty batches until a frame arrives
@@ -665,7 +670,7 @@ mod required_input {
 
     #[test]
     fn offset_none_after_start_delivered_on_time_first_non_zero() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::None);
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::None);
 
         sleep(Duration::from_millis(58));
         // input reports ready with no data: empty batches until a frame arrives
@@ -698,7 +703,7 @@ mod required_input {
 
     #[test]
     fn offset_none_after_start_delivered_late_with_gap() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::None);
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::None);
 
         sleep(Duration::from_millis(58));
         // empty batches keep flowing until the first frame arrives
@@ -739,7 +744,7 @@ mod required_input {
 
     #[test]
     fn offset_none_before_start() {
-        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackOffset::None);
+        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackGroupOffset::None);
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -797,7 +802,7 @@ mod optional_input {
 
     /// Create a queue with a single required video-only input ("input_1").
     /// The queue is not started yet, so frames can be sent before start.
-    fn create_queue_with_video_input(offset: QueueTrackOffset) -> (TestQueue, TestInput) {
+    fn create_queue_with_video_input(offset: QueueTrackGroupOffset) -> (TestQueue, TestInput) {
         let queue = TestQueue::new(TestQueueOptions::default());
         let input = queue.add_input(
             "input_1",
@@ -805,7 +810,7 @@ mod optional_input {
                 required: false,
                 ..Default::default()
             },
-            QueueTrackOptions {
+            QueueTrackGroupOptions {
                 video: true,
                 audio: false,
                 offset,
@@ -816,7 +821,7 @@ mod optional_input {
 
     /// Like [`create_queue_with_video_input`], but desync the clocks and start
     /// the queue.
-    fn start_queue_with_video_input(offset: QueueTrackOffset) -> (TestQueue, TestInput) {
+    fn start_queue_with_video_input(offset: QueueTrackGroupOffset) -> (TestQueue, TestInput) {
         let (mut queue, input) = create_queue_with_video_input(offset);
 
         // desync regular clock from queue clock
@@ -828,8 +833,9 @@ mod optional_input {
 
     #[test]
     fn offset_from_start_delivered_early() {
-        let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         input.send_frame(ms(0));
         input.send_frame(ms(15));
@@ -904,8 +910,9 @@ mod optional_input {
     /// the last frame; that batch is required even for an optional input.
     #[test]
     fn offset_from_start_eos_with_last_frame() {
-        let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         input.send_frame(ms(0));
         input.send_frame(ms(15));
@@ -940,8 +947,9 @@ mod optional_input {
 
     #[test]
     fn offset_from_start_delivered_on_time() {
-        let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         sleep(Duration::from_millis(58)); // a bit before
 
@@ -979,8 +987,9 @@ mod optional_input {
 
     #[test]
     fn offset_from_start_delivered_late() {
-        let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::FromStart(Duration::from_millis(60)));
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::FromStart(
+            Duration::from_millis(60),
+        ));
 
         sleep(Duration::from_millis(98));
         assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), false);
@@ -1021,7 +1030,7 @@ mod optional_input {
     #[test]
     fn offset_pts_after_start_delivered_early() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         input.send_frame(ms(0));
         input.send_frame(ms(15));
@@ -1059,7 +1068,7 @@ mod optional_input {
     #[test]
     fn offset_pts_after_start_delivered_on_time() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         sleep(Duration::from_millis(58));
         assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), false);
@@ -1099,7 +1108,7 @@ mod optional_input {
     #[test]
     fn offset_pts_after_start_delivered_on_time_with_first_packet_early() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         input.send_frame(ms(0));
 
@@ -1141,7 +1150,7 @@ mod optional_input {
     #[test]
     fn offset_pts_after_start_delivered_late() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         sleep(Duration::from_millis(78));
         assert_empty_video_batch(&queue.next_video_batch().unwrap(), ms(0), false);
@@ -1172,7 +1181,7 @@ mod optional_input {
     #[test]
     fn offset_pts_after_start_delivered_late_first_packet_early() {
         let (queue, mut input) =
-            start_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS + ms(60)));
+            start_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS + ms(60)));
 
         input.send_frame(ms(0));
 
@@ -1210,7 +1219,7 @@ mod optional_input {
         // track zero is ~60ms before the queue start: frames with PTS below
         // ~60ms are already late at start and get dropped
         let (mut queue, mut input) =
-            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS - ms(40)));
+            create_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS - ms(40)));
 
         // all frames arrive before the queue starts
         input.send_frame(ms(0));
@@ -1246,7 +1255,7 @@ mod optional_input {
     #[test]
     fn offset_pts_before_start_delivered_on_time_not_aligned_before() {
         let (mut queue, mut input) =
-            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS - ms(40)));
+            create_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS - ms(40)));
 
         input.send_frame(ms(30));
         input.send_frame(ms(45));
@@ -1277,7 +1286,7 @@ mod optional_input {
     #[test]
     fn offset_pts_before_start_delivered_on_time_not_aligned_after() {
         let (mut queue, mut input) =
-            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS - ms(40)));
+            create_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS - ms(40)));
 
         input.send_frame(ms(45));
         input.send_frame(ms(60));
@@ -1304,7 +1313,7 @@ mod optional_input {
     #[test]
     fn offset_pts_before_start_delivered_on_time_aligned() {
         let (mut queue, mut input) =
-            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS - ms(40)));
+            create_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS - ms(40)));
 
         input.send_frame(ms(40));
         input.send_frame(ms(60));
@@ -1334,7 +1343,7 @@ mod optional_input {
     #[test]
     fn offset_pts_before_start_delivered_late() {
         let (mut queue, mut input) =
-            create_queue_with_video_input(QueueTrackOffset::Pts(OFFSET_PTS));
+            create_queue_with_video_input(QueueTrackGroupOffset::Pts(OFFSET_PTS));
 
         sleep(Duration::from_millis(50) + OFFSET);
         assert!(queue.next_video_batch().is_none());
@@ -1383,7 +1392,7 @@ mod optional_input {
 
     #[test]
     fn offset_none_after_start_delivered_on_time() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::None);
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::None);
 
         sleep(Duration::from_millis(58));
         // input reports ready with no data: empty batches until a frame arrives
@@ -1422,7 +1431,7 @@ mod optional_input {
 
     #[test]
     fn offset_none_after_start_delivered_on_time_first_non_zero() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::None);
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::None);
 
         sleep(Duration::from_millis(58));
         // input reports ready with no data: empty batches until a frame arrives
@@ -1458,7 +1467,7 @@ mod optional_input {
 
     #[test]
     fn offset_none_after_start_delivered_late_with_gap() {
-        let (queue, mut input) = start_queue_with_video_input(QueueTrackOffset::None);
+        let (queue, mut input) = start_queue_with_video_input(QueueTrackGroupOffset::None);
 
         sleep(Duration::from_millis(58));
         // empty batches keep flowing until the first frame arrives
@@ -1499,7 +1508,7 @@ mod optional_input {
 
     #[test]
     fn offset_none_before_start() {
-        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackOffset::None);
+        let (mut queue, mut input) = create_queue_with_video_input(QueueTrackGroupOffset::None);
 
         // desync regular clock from queue clock
         sleep(OFFSET);
@@ -1555,10 +1564,10 @@ mod stale_frame_timeout {
                 required: false,
                 ..Default::default()
             },
-            QueueTrackOptions {
+            QueueTrackGroupOptions {
                 video: true,
                 audio: false,
-                offset: QueueTrackOffset::FromStart(Duration::ZERO),
+                offset: QueueTrackGroupOffset::FromStart(Duration::ZERO),
             },
         );
         if let Some(timeout) = timeout {

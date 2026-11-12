@@ -18,7 +18,7 @@ use crate::{
             },
         },
     },
-    queue::{QueueTrackOffset, QueueTrackOptions},
+    queue::{QueueTrackGroupOffset, QueueTrackGroupOptions},
 };
 
 use crate::prelude::*;
@@ -92,11 +92,12 @@ pub(crate) async fn create_new_whip_session(
             state.ctx.queue_ctx.sync_point,
         );
 
-        let (mut video_sender, mut audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
-            video: true,
-            audio: true,
-            offset: QueueTrackOffset::Pts(Timestamp::ZERO),
-        });
+        let (mut video_sender, mut audio_sender) =
+            queue_input.queue_new_track_group(QueueTrackGroupOptions {
+                video: true,
+                audio: true,
+                offset: QueueTrackGroupOffset::Pts(Timestamp::ZERO),
+            });
 
         peer_connection.on_track(move |track_ctx| {
             let ctx = WhipTrackContext::new(track_ctx, &state, &buffer);

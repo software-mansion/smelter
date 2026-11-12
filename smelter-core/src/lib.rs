@@ -2,7 +2,7 @@
 
 mod audio_mixer;
 mod queue;
-pub use queue::{InputSideChannel, LateEventPolicy, QueueInputOptions, QueueTrackOffset};
+pub use queue::{InputSideChannel, LateEventPolicy, QueueInputOptions, QueueTrackGroupOffset};
 
 pub mod codecs;
 pub mod error;

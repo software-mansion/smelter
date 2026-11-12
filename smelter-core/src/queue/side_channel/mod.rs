@@ -10,7 +10,7 @@ use tracing::{debug, info};
 use crate::{
     pipeline::PipelineCtx,
     prelude::{Frame, InputAudioSamples},
-    queue::queue_input::TrackOffset,
+    queue::queue_input::TrackGroupOffset,
     types::Ref,
 };
 
@@ -37,7 +37,7 @@ impl<T> SideChannelSink<T> {
 
 #[derive(Clone)]
 pub struct VideoSideChannel {
-    track_offset: TrackOffset,
+    group_offset: TrackGroupOffset,
     start_pts: SharedPts,
     sink: SideChannelSink<Frame>,
 }
@@ -52,7 +52,7 @@ impl VideoSideChannel {
         info!(?path, "Starting video side channel");
         let server = SideChannelServer::new_video(path, input_ref.id(), ctx.wgpu_ctx.clone())?;
         Some(Self {
-            track_offset: TrackOffset::default(),
+            group_offset: TrackGroupOffset::default(),
             start_pts: ctx.queue_ctx.start_pts.clone(),
             sink: SideChannelSink::UnixSocket(server),
         })
@@ -60,20 +60,20 @@ impl VideoSideChannel {
 
     pub(super) fn native(ctx: &Arc<PipelineCtx>, sender: Sender<Frame>) -> Self {
         Self {
-            track_offset: TrackOffset::default(),
+            group_offset: TrackGroupOffset::default(),
             start_pts: ctx.queue_ctx.start_pts.clone(),
             sink: SideChannelSink::Native(sender),
         }
     }
 
-    pub(super) fn with_track_offset(&self, track_offset: &TrackOffset) -> Self {
+    pub(super) fn with_group_offset(&self, group_offset: &TrackGroupOffset) -> Self {
         let mut side_channel = self.clone();
-        side_channel.track_offset = track_offset.clone();
+        side_channel.group_offset = group_offset.clone();
         side_channel
     }
 
     pub(super) fn send_frame(&mut self, frame: &Frame) {
-        let Some(offset) = self.track_offset.get() else {
+        let Some(offset) = self.group_offset.get() else {
             return;
         };
         let Some(start_pts) = self.start_pts.value() else {
@@ -89,7 +89,7 @@ impl VideoSideChannel {
 
 #[derive(Clone)]
 pub struct AudioSideChannel {
-    track_offset: TrackOffset,
+    group_offset: TrackGroupOffset,
     start_pts: SharedPts,
     sink: SideChannelSink<InputAudioSamples>,
 }
@@ -104,7 +104,7 @@ impl AudioSideChannel {
         info!(?path, "Starting audio side channel");
         let server = SideChannelServer::new_audio(path, input_ref.id())?;
         Some(Self {
-            track_offset: TrackOffset::default(),
+            group_offset: TrackGroupOffset::default(),
             start_pts: ctx.queue_ctx.start_pts.clone(),
             sink: SideChannelSink::UnixSocket(server),
         })
@@ -112,20 +112,20 @@ impl AudioSideChannel {
 
     pub(super) fn native(ctx: &Arc<PipelineCtx>, sender: Sender<InputAudioSamples>) -> Self {
         Self {
-            track_offset: TrackOffset::default(),
+            group_offset: TrackGroupOffset::default(),
             start_pts: ctx.queue_ctx.start_pts.clone(),
             sink: SideChannelSink::Native(sender),
         }
     }
 
-    pub(super) fn with_track_offset(&self, track_offset: &TrackOffset) -> Self {
+    pub(super) fn with_group_offset(&self, group_offset: &TrackGroupOffset) -> Self {
         let mut clone = self.clone();
-        clone.track_offset = track_offset.clone();
+        clone.group_offset = group_offset.clone();
         clone
     }
 
     pub(super) fn send_samples(&self, batch: &InputAudioSamples) {
-        let Some(offset) = self.track_offset.get() else {
+        let Some(offset) = self.group_offset.get() else {
             return;
         };
         let Some(start_pts) = self.start_pts.value() else {

@@ -8,8 +8,8 @@ use crate::{
     Frame, InstantExt, Ref, Timestamp,
     event::{Event, EventEmitter},
     queue::{
-        QueueContext, QueueVideoFrame, queue_input::TrackOffset, side_channel::VideoSideChannel,
-        utils::EmitOnceGuard,
+        QueueContext, QueueVideoFrame, queue_input::TrackGroupOffset,
+        side_channel::VideoSideChannel, utils::EmitOnceGuard,
     },
 };
 
@@ -18,7 +18,7 @@ use crate::{
 /// FLV or remuxed MP4) shows one output frame late, and the next frame is skipped.
 const FRAME_PTS_TOLERANCE: Duration = Duration::from_millis(2);
 
-pub(crate) struct VideoQueueInput {
+pub(crate) struct VideoQueueTrack {
     queue_ctx: QueueContext,
     /// Frames from the channel might have any PTS, they need to be processed
     /// before adding them to the `queue`.
@@ -33,7 +33,7 @@ pub(crate) struct VideoQueueInput {
     /// offset will be resolved automatically on the stream start.
     offset_from_start: Option<Duration>,
 
-    track_offset: TrackOffset,
+    group_offset: TrackGroupOffset,
 
     paused_pts: Option<Timestamp>,
     paused_frame: Option<Frame>,
@@ -45,7 +45,7 @@ pub(crate) struct VideoQueueInput {
     input_id: InputId,
 }
 
-impl VideoQueueInput {
+impl VideoQueueTrack {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
         queue_ctx: &QueueContext,
@@ -53,7 +53,7 @@ impl VideoQueueInput {
         input_ref: &Ref<InputId>,
         required: bool,
         offset_from_start: Option<Duration>,
-        track_offset: TrackOffset,
+        group_offset: TrackGroupOffset,
         side_channel: Option<VideoSideChannel>,
         side_channel_delay: Duration,
     ) -> (Self, Sender<Frame>) {
@@ -64,7 +64,7 @@ impl VideoQueueInput {
             stale_frame_timeout: None,
             offset_from_start,
             receiver,
-            track_offset,
+            group_offset,
             paused_pts: None,
             paused_frame: None,
             event_delivered_guard: EmitOnceGuard::new(
@@ -130,7 +130,7 @@ impl VideoQueueInput {
     }
 
     pub(super) fn paused_event(&self, pts: Timestamp) -> QueueVideoFrame {
-        let Some(offset) = self.track_offset.get() else {
+        let Some(offset) = self.group_offset.get() else {
             return QueueVideoFrame::empty();
         };
         if let (Some(paused_pts), Some(mut frame)) = (self.paused_pts, self.paused_frame.clone()) {
@@ -227,14 +227,14 @@ impl VideoQueueInput {
         queue_start_pts: Timestamp,
     ) -> Option<Timestamp> {
         if self.receiver.state() != ReceiverState::Running {
-            return self.track_offset.get();
+            return self.group_offset.get();
         }
         self.event_delivered_guard.emit();
         let offset = match self.offset_from_start {
             Some(offset_from_start) => self
-                .track_offset
+                .group_offset
                 .get_or_init(queue_start_pts + offset_from_start),
-            None => self.track_offset.get_or_init(buffer_pts),
+            None => self.group_offset.get_or_init(buffer_pts),
         };
         Some(offset)
     }
@@ -249,7 +249,7 @@ impl VideoQueueInput {
         self.event_delivered_guard.emit();
         if self.offset_from_start.is_none() {
             let now = self.queue_ctx.sync_point.timestamp_now();
-            let offset = self.track_offset.get_or_init(now);
+            let offset = self.group_offset.get_or_init(now);
             let _ = self.receiver.is_ready_for_pts(now - offset);
         }
     }

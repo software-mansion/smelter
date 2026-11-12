@@ -28,7 +28,7 @@ use crate::{
             live_sync::{BufferingStrategy, FifoBuffer, LiveSync, LiveSyncOptions},
         },
     },
-    queue::{QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions},
+    queue::{QueueInput, QueueSender, QueueTrackGroupOffset, QueueTrackGroupOptions},
 };
 
 use super::hls_decoder::{spawn_audio_decoder, spawn_video_decoder};
@@ -49,12 +49,12 @@ type HlsBuffer = FifoBuffer<HlsPacket>;
 /// - Live playlist (`InputSync::Live`)
 ///   - Packet timestamps are passed through as they are; live sync maps them
 ///     onto the timeline of the queue sync point and keeps the buffer in range.
-///   - Register track with `QueueTrackOffset::Pts(Duration::ZERO)`
+///   - Register track group with `QueueTrackGroupOffset::Pts(Duration::ZERO)`
 ///   - `offset` is ignored, the live edge decides where the playback starts.
 /// - Non-live playlist (`InputSync::Simple`)
 ///   - Timestamps are normalized, so PTS of the first packet is zero.
-///   - Register track with `QueueTrackOffset::FromStart(offset)`, or with
-///     `QueueTrackOffset::None` if the offset is not defined.
+///   - Register track group with `QueueTrackGroupOffset::FromStart(offset)`, or with
+///     `QueueTrackGroupOffset::None` if the offset is not defined.
 /// - On discontinuity (detected by the sync, only for live playlists)
 ///   - Send `EncodedInputEvent::Discontinuity` to the decoder of the track
 ///     that broke, so it decodes what it still holds from the old timeline
@@ -144,17 +144,18 @@ impl HlsDemuxerThread {
             warn!("Offset is ignored for live playlists, playback starts at the live edge");
         }
 
-        let (frame_sender, samples_sender) = queue_input.queue_new_track(QueueTrackOptions {
-            video: video_stream.is_some(),
-            audio: audio_stream.is_some(),
-            offset: match is_live {
-                true => QueueTrackOffset::Pts(Timestamp::ZERO),
-                false => match offset {
-                    Some(offset) => QueueTrackOffset::FromStart(offset),
-                    None => QueueTrackOffset::None,
+        let (frame_sender, samples_sender) =
+            queue_input.queue_new_track_group(QueueTrackGroupOptions {
+                video: video_stream.is_some(),
+                audio: audio_stream.is_some(),
+                offset: match is_live {
+                    true => QueueTrackGroupOffset::Pts(Timestamp::ZERO),
+                    false => match offset {
+                        Some(offset) => QueueTrackGroupOffset::FromStart(offset),
+                        None => QueueTrackGroupOffset::None,
+                    },
                 },
-            },
-        });
+            });
 
         let buffer_opts = input_ctx.opts.buffer;
         let (min, desired, max) = resolve_buffer_options(buffer_opts);

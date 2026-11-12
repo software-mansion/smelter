@@ -8,8 +8,8 @@ use crate::{
     Ref,
     event::{Event, EventEmitter},
     queue::{
-        QueueAudioSamples, QueueContext, queue_input::TrackOffset, side_channel::AudioSideChannel,
-        utils::EmitOnceGuard,
+        QueueAudioSamples, QueueContext, queue_input::TrackGroupOffset,
+        side_channel::AudioSideChannel, utils::EmitOnceGuard,
     },
 };
 
@@ -17,7 +17,7 @@ use crate::prelude::*;
 
 const MIXER_STRETCH_BUFFER: Duration = Duration::from_millis(80);
 
-pub(crate) struct AudioQueueInput {
+pub(crate) struct AudioQueueTrack {
     queue_ctx: QueueContext,
     /// Samples from the channel might have any PTS, they need to be processed
     /// before adding them to the `queue`.
@@ -29,7 +29,7 @@ pub(crate) struct AudioQueueInput {
     /// offset will be resolved automatically on the stream start.
     offset_from_start: Option<Duration>,
 
-    track_offset: TrackOffset,
+    group_offset: TrackGroupOffset,
 
     paused: bool,
 
@@ -40,7 +40,7 @@ pub(crate) struct AudioQueueInput {
     input_id: InputId,
 }
 
-impl AudioQueueInput {
+impl AudioQueueTrack {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
         queue_ctx: &QueueContext,
@@ -48,7 +48,7 @@ impl AudioQueueInput {
         input_ref: &Ref<InputId>,
         required: bool,
         offset: Option<Duration>,
-        track_offset: TrackOffset,
+        group_offset: TrackGroupOffset,
         side_channel: Option<AudioSideChannel>,
         side_channel_delay: Duration,
     ) -> (Self, Sender<InputAudioSamples>) {
@@ -58,7 +58,7 @@ impl AudioQueueInput {
             required,
             offset_from_start: offset,
             receiver,
-            track_offset,
+            group_offset,
             paused: false,
             event_delivered_guard: EmitOnceGuard::new(
                 Event::AudioInputStreamDelivered(input_ref.id().clone()),
@@ -195,15 +195,15 @@ impl AudioQueueInput {
         queue_start_pts: Timestamp,
     ) -> Option<Timestamp> {
         if self.receiver.state() != ReceiverState::Running {
-            return self.track_offset.get();
+            return self.group_offset.get();
         }
 
         self.event_delivered_guard.emit();
         let offset = match self.offset_from_start {
             Some(offset_from_start) => self
-                .track_offset
+                .group_offset
                 .get_or_init(queue_start_pts + offset_from_start),
-            None => self.track_offset.get_or_init(buffer_pts),
+            None => self.group_offset.get_or_init(buffer_pts),
         };
         Some(offset)
     }
@@ -218,7 +218,7 @@ impl AudioQueueInput {
         self.event_delivered_guard.emit();
         if self.offset_from_start.is_none() {
             let now = self.queue_ctx.sync_point.timestamp_now();
-            let offset = self.track_offset.get_or_init(now);
+            let offset = self.group_offset.get_or_init(now);
             let _ = self.receiver.pop_before_pts(now - offset);
         }
     }
