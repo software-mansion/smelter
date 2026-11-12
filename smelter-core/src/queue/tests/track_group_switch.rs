@@ -1,21 +1,21 @@
-//! Track switching on a single input, as `Mp4Input` does when it loops: both
-//! tracks are registered with [`QueueTrackOffset::None`], the next one is queued
-//! while the previous is still draining, and the queue swaps once both media of
-//! the old track delivered EOS.
+//! Track group switching on a single input, as `Mp4Input` does when it loops: both
+//! groups are registered with [`QueueTrackGroupOffset::None`], the next one is queued
+//! while the previous is still draining, and the queue swaps once both tracks of
+//! the old group delivered EOS.
 //!
-//! The two media of a track share a single `TrackOffset`, so whichever resolves
-//! it first decides where that track's zero lands. The queue processes the video
+//! The two tracks of a group share a single `TrackGroupOffset`, so whichever resolves
+//! it first decides where that group's zero lands. The queue processes the video
 //! queue before the audio queue on each tick, so video both starts the pending
-//! track and anchors the offset to the *video* slot — the batch it is about to
-//! emit — which makes the first lookup on the new track exactly 0.
+//! group and anchors the offset to the *video* slot — the batch it is about to
+//! emit — which makes the first lookup on the new group exactly 0.
 //!
 //! That ordering matters because the two paths handle a non-zero lookup
 //! differently: `prepare_for_pts` discards frames older than it, while
 //! `pop_before_pts` only re-stamps sample batches. Anchoring on the audio slot
 //! instead would put the offset one batch (20ms) earlier, and the tests below
-//! would lose the new track's first frame.
+//! would lose the new group's first frame.
 //!
-//! Every test shares the same track 1: nothing for the first 50ms (three empty
+//! Every test shares the same group 1: nothing for the first 50ms (three empty
 //! batches and chunks), then 45ms of audio and video frames at 0/20/40/60ms,
 //! with the offset resolving to the 60ms slot. A chunk carries every batch up to
 //! chunk end + 80ms (`MIXER_STRETCH_BUFFER`), so those 45ms of audio are all
@@ -23,14 +23,14 @@
 //! later of the two (the last test inverts this).
 //!
 //! That puts the swap at the 140ms video slot. Ids keep incrementing across
-//! tracks, so the next track always starts with frame id 4 and sample batch
+//! groups, so the next group always starts with frame id 4 and sample batch
 //! id 3.
 
 use std::{thread::sleep, time::Duration};
 
 use crate::{
     Timestamp,
-    queue::{QueueInputOptions, QueueTrackOffset, QueueTrackOptions},
+    queue::{QueueInputOptions, QueueTrackGroupOffset, QueueTrackGroupOptions},
 };
 
 use super::harness::{
@@ -77,7 +77,7 @@ fn chunk_eos(start_pts: Timestamp, batches: Vec<(u32, Timestamp, Timestamp)>) ->
 }
 
 /// Create a queue with a single required input carrying both video and audio,
-/// with its first track registered the way `Mp4Input` registers one without an
+/// with its first track group registered the way `Mp4Input` registers one without an
 /// explicit offset. The queue is not started yet.
 fn create_queue_with_av_input() -> (TestQueue, TestInput) {
     let queue = TestQueue::new(TestQueueOptions::default());
@@ -87,25 +87,25 @@ fn create_queue_with_av_input() -> (TestQueue, TestInput) {
             required: true,
             ..Default::default()
         },
-        QueueTrackOptions {
+        QueueTrackGroupOptions {
             video: true,
             audio: true,
-            offset: QueueTrackOffset::None,
+            offset: QueueTrackGroupOffset::None,
         },
     );
     (queue, input)
 }
 
-/// Both media of the next track start at 0 and its frames are 20ms apart, the
+/// Both tracks of the next group start at 0 and its frames are 20ms apart, the
 /// output batch duration. The offset lands on the 140ms video slot, the lookup
-/// is 0, and the track plays from its first frame. Its audio starts at 140ms
+/// is 0, and the group plays from its first frame. Its audio starts at 140ms
 /// too, delivered ahead of time in the chunk that precedes it.
 #[test]
-fn next_track_equal_fps_keeps_first_frame() {
+fn next_track_group_equal_fps_keeps_first_frame() {
     let (mut queue, mut input) = create_queue_with_av_input();
     queue.start();
 
-    // nothing until 50ms, so track 1's `None` offset resolves to the 60ms slot
+    // nothing until 50ms, so group 1's `None` offset resolves to the 60ms slot
     sleep(Duration::from_millis(50));
     input.send_samples(ms(0), INPUT_BATCH_DURATION);
     input.send_samples(ms(15), INPUT_BATCH_DURATION);
@@ -115,12 +115,12 @@ fn next_track_equal_fps_keeps_first_frame() {
     input.send_frame(ms(40));
     input.send_frame(ms(60));
 
-    // next track, queued while track 1 is still draining. Sending both media up
+    // next group, queued while group 1 is still draining. Sending both tracks up
     // front means the queue observes them on the same tick.
-    input.new_track(QueueTrackOptions {
+    input.new_track_group(QueueTrackGroupOptions {
         video: true,
         audio: true,
-        offset: QueueTrackOffset::None,
+        offset: QueueTrackGroupOffset::None,
     });
     for index in 0..10 {
         input.send_samples(
@@ -194,11 +194,11 @@ fn next_track_equal_fps_keeps_first_frame() {
     );
 }
 
-/// Next track below the output framerate (frames 25ms apart). The first frame
+/// Next group below the output framerate (frames 25ms apart). The first frame
 /// still lands on the first batch, and is repeated on the next one because the
-/// track has nothing newer to offer yet. Audio is unaffected by the framerate.
+/// group has nothing newer to offer yet. Audio is unaffected by the framerate.
 #[test]
-fn next_track_lower_fps_keeps_first_frame() {
+fn next_track_group_lower_fps_keeps_first_frame() {
     let (mut queue, mut input) = create_queue_with_av_input();
     queue.start();
 
@@ -211,10 +211,10 @@ fn next_track_lower_fps_keeps_first_frame() {
     input.send_frame(ms(40));
     input.send_frame(ms(60));
 
-    input.new_track(QueueTrackOptions {
+    input.new_track_group(QueueTrackGroupOptions {
         video: true,
         audio: true,
-        offset: QueueTrackOffset::None,
+        offset: QueueTrackGroupOffset::None,
     });
     for index in 0..10 {
         input.send_samples(
@@ -288,11 +288,11 @@ fn next_track_lower_fps_keeps_first_frame() {
     );
 }
 
-/// Next track above the output framerate (frames 10ms apart). The first frame
+/// Next group above the output framerate (frames 10ms apart). The first frame
 /// lands on the first batch; the decimation only starts on the next one, where
 /// the 20ms lookup skips over frame 5.
 #[test]
-fn next_track_higher_fps_keeps_first_frame() {
+fn next_track_group_higher_fps_keeps_first_frame() {
     let (mut queue, mut input) = create_queue_with_av_input();
     queue.start();
 
@@ -305,10 +305,10 @@ fn next_track_higher_fps_keeps_first_frame() {
     input.send_frame(ms(40));
     input.send_frame(ms(60));
 
-    input.new_track(QueueTrackOptions {
+    input.new_track_group(QueueTrackGroupOptions {
         video: true,
         audio: true,
-        offset: QueueTrackOffset::None,
+        offset: QueueTrackGroupOffset::None,
     });
     for index in 0..10 {
         input.send_samples(
@@ -382,14 +382,14 @@ fn next_track_higher_fps_keeps_first_frame() {
     );
 }
 
-/// Next track's audio starts 20ms into its media while its video starts at 0.
+/// Next group's audio starts 20ms into its media while its video starts at 0.
 ///
 /// The offset stores the queue PTS that observed the first packet, never the
 /// packet's own PTS, so shifting the audio changes nothing for the video: the
-/// video output is identical to [`next_track_equal_fps_keeps_first_frame`]. The
-/// audio keeps its 20ms head start, landing at 160ms instead of 140ms.
+/// video output is identical to [`next_track_group_equal_fps_keeps_first_frame`].
+/// The audio keeps its 20ms head start, landing at 160ms instead of 140ms.
 #[test]
-fn next_track_audio_starting_later_keeps_first_frame() {
+fn next_track_group_audio_starting_later_keeps_first_frame() {
     let (mut queue, mut input) = create_queue_with_av_input();
     queue.start();
 
@@ -402,10 +402,10 @@ fn next_track_audio_starting_later_keeps_first_frame() {
     input.send_frame(ms(40));
     input.send_frame(ms(60));
 
-    input.new_track(QueueTrackOptions {
+    input.new_track_group(QueueTrackGroupOptions {
         video: true,
         audio: true,
-        offset: QueueTrackOffset::None,
+        offset: QueueTrackGroupOffset::None,
     });
     for index in 0..10 {
         input.send_samples(ms(20) + INPUT_BATCH_DURATION * index, INPUT_BATCH_DURATION);
@@ -474,15 +474,15 @@ fn next_track_audio_starting_later_keeps_first_frame() {
     );
 }
 
-/// The other way round: the next track's video starts 20ms into its media while
+/// The other way round: the next group's video starts 20ms into its media while
 /// its audio starts at 0.
 ///
-/// The offset is still the video slot, so the track's head start is preserved
-/// rather than absorbed: the first batch of the new track carries no frame and
+/// The offset is still the video slot, so the video's head start is preserved
+/// rather than absorbed: the first batch of the new group carries no frame and
 /// the first frame lands one batch later, 20ms after the offset. The audio still
-/// starts on the offset, so the 20ms gap between the two media is kept.
+/// starts on the offset, so the 20ms gap between the two tracks is kept.
 #[test]
-fn next_track_video_starting_later_renders_empty_batch() {
+fn next_track_group_video_starting_later_renders_empty_batch() {
     let (mut queue, mut input) = create_queue_with_av_input();
     queue.start();
 
@@ -495,10 +495,10 @@ fn next_track_video_starting_later_renders_empty_batch() {
     input.send_frame(ms(40));
     input.send_frame(ms(60));
 
-    input.new_track(QueueTrackOptions {
+    input.new_track_group(QueueTrackGroupOptions {
         video: true,
         audio: true,
-        offset: QueueTrackOffset::None,
+        offset: QueueTrackGroupOffset::None,
     });
     for index in 0..10 {
         input.send_samples(
@@ -569,11 +569,11 @@ fn next_track_video_starting_later_renders_empty_batch() {
     );
 }
 
-/// Next track's video starts 40ms into its media (what a leading empty edit in
+/// Next group's video starts 40ms into its media (what a leading empty edit in
 /// the `elst` box produces), audio at 0. Same as the 20ms case, two batches
 /// wide.
 #[test]
-fn next_track_video_starting_much_later_renders_empty_batches() {
+fn next_track_group_video_starting_much_later_renders_empty_batches() {
     let (mut queue, mut input) = create_queue_with_av_input();
     queue.start();
 
@@ -586,10 +586,10 @@ fn next_track_video_starting_much_later_renders_empty_batches() {
     input.send_frame(ms(40));
     input.send_frame(ms(60));
 
-    input.new_track(QueueTrackOptions {
+    input.new_track_group(QueueTrackGroupOptions {
         video: true,
         audio: true,
-        offset: QueueTrackOffset::None,
+        offset: QueueTrackGroupOffset::None,
     });
     for index in 0..10 {
         input.send_samples(
@@ -661,16 +661,16 @@ fn next_track_video_starting_much_later_renders_empty_batches() {
     );
 }
 
-/// Track 1's audio outlives its video, so the *audio* EOS is the later one and
+/// Group 1's audio outlives its video, so the *audio* EOS is the later one and
 /// the swap lands one iteration later, right after an audio chunk was pushed.
 /// The offset is still the video slot and the outcome matches
-/// [`next_track_equal_fps_keeps_first_frame`], shifted to the 280ms slot.
+/// [`next_track_group_equal_fps_keeps_first_frame`], shifted to the 280ms slot.
 ///
 /// It also shows the seam problem the offset ordering does not fix: the swap
-/// waits for both media, so the video delivers nothing between its EOS at 120ms
+/// waits for both tracks, so the video delivers nothing between its EOS at 120ms
 /// and the audio draining at 280ms.
 #[test]
-fn next_track_after_audio_ends_last_keeps_first_frame() {
+fn next_track_group_after_audio_ends_last_keeps_first_frame() {
     let (mut queue, mut input) = create_queue_with_av_input();
     queue.start();
 
@@ -687,10 +687,10 @@ fn next_track_after_audio_ends_last_keeps_first_frame() {
     input.send_frame(ms(40));
     input.send_frame(ms(60));
 
-    input.new_track(QueueTrackOptions {
+    input.new_track_group(QueueTrackGroupOptions {
         video: true,
         audio: true,
-        offset: QueueTrackOffset::None,
+        offset: QueueTrackGroupOffset::None,
     });
     for index in 0..10 {
         input.send_samples(
@@ -746,7 +746,7 @@ fn next_track_after_audio_ends_last_keeps_first_frame() {
     assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(20), true);
     assert_empty_audio_batch(&queue.next_audio_batch().unwrap(), ms(40), true);
 
-    // track 1's audio keeps draining while the video is already over
+    // group 1's audio keeps draining while the video is already over
     assert_audio_batch_eq(
         &queue.next_audio_batch().unwrap(),
         &chunk(
@@ -809,7 +809,7 @@ fn next_track_after_audio_ends_last_keeps_first_frame() {
         &chunk_eos(ms(260), vec![(19, ms(345), ms(360))]),
     );
 
-    // swap happened right after that chunk, so the next track's audio is
+    // swap happened right after that chunk, so the next group's audio is
     // anchored to the 280ms video slot
     assert_audio_batch_eq(
         &queue.next_audio_batch().unwrap(),

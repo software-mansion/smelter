@@ -36,8 +36,8 @@ const RESUME_SKEW_SNAP_THRESHOLD: Duration = Duration::from_secs(10);
 
 #[derive(Debug)]
 /// State that should be shared between different RTP tracks to use for synchronization.
-/// Whenever you create the sync point you should queue new track with
-/// `QueueTrackOffset::Pts(Duration::ZERO)`
+/// Whenever you create the sync point you should queue new track group with
+/// `QueueTrackGroupOffset::Pts(Duration::ZERO)`
 pub(crate) struct RtpNtpSyncPoint {
     pub reference_time: Instant,
     /// First 32 bits represent seconds, last 32 bits fraction of the second.

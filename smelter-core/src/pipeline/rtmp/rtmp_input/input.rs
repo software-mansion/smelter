@@ -17,7 +17,7 @@ use crate::prelude::*;
 /// ## Timestamps
 ///
 /// - On connection:
-///   - A new track is created with `QueueTrackOffset::Pts(effective_last_pts + buffer)`.
+///   - A new track group is created with `QueueTrackGroupOffset::Pts(effective_last_pts + buffer)`.
 ///     The buffer gives time for data to arrive and be decoded before the queue
 ///     needs it.
 ///   - PTS values are normalized to zero (subtracts first observed PTS, shared across

@@ -93,7 +93,7 @@ impl RtpJitterBufferSharedContext {
 /// - Timestamps on write are relative to `reference_time`
 /// - Timestamps on read are shifted by extra buffer
 /// - Unsupported scenarios:
-///   - QueueTrackOffset::None + RealTime
+///   - QueueTrackGroupOffset::None + RealTime
 ///     - It does not make sense to support it, if jitter buffer
 ///       is synced to real time, normalizing it to zero is incorrect.
 ///

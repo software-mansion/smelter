@@ -22,7 +22,9 @@ use crate::{
         mp4::reader::{DecoderOptions, Mp4FileReader, Track},
         utils::H264AvccToAnnexB,
     },
-    queue::{QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions, WeakQueueInput},
+    queue::{
+        QueueInput, QueueSender, QueueTrackGroupOffset, QueueTrackGroupOptions, WeakQueueInput,
+    },
     utils::{
         InitializableThread, ShutdownCondition,
         channel::{SendTimeoutError, Sender},
@@ -45,15 +47,15 @@ const MIN_CHUNK_BUFFER_DURATION: Duration = Duration::from_millis(200);
 /// - File is opened immediately and tracks are discovered.
 /// - With offset (`opts.offset = Some(offset)`)
 ///   - PTS of first frame should be zero
-///   - Register track with `QueueTrackOffset::FromStart(offset)`
+///   - Register track group with `QueueTrackGroupOffset::FromStart(offset)`
 /// - Without offset (`opts.offset = None`)
 ///   - PTS of first frame should be zero
-///   - Register track with `QueueTrackOffset::None`
+///   - Register track group with `QueueTrackGroupOffset::None`
 ///
 /// ### On loop (`opts.should_loop = true`)
 /// - When the video reader reaches the end (or the audio reader if there is no
-///   video track), a new track is created with `QueueTrackOffset::None` and the
-///   remaining in-progress track is aborted.
+///   video track), a new track group is created with `QueueTrackGroupOffset::None` and the
+///   remaining in-progress track group is aborted.
 /// - PTS of first frame starts from zero again (same as initial registration).
 ///
 /// ### Pause / Resume / Seek
@@ -61,7 +63,7 @@ const MIN_CHUNK_BUFFER_DURATION: Duration = Duration::from_millis(200);
 /// - Resuming restores queue consumption from where it stopped.
 /// - Seeking while paused should change the frame.
 /// - On seek
-///   - New track is created with `QueueTrackOffset::None`, old tracks are aborted.
+///   - New track group is created with `QueueTrackGroupOffset::None`, old ones are aborted.
 ///   - PTS of first frame after seek is zero (reader subtracts seek position from
 ///     file timestamps). For video, reading starts from the nearest keyframe before
 ///     the seek point (some pre-seek samples are decoded but not presented).
@@ -127,14 +129,15 @@ impl Mp4Input {
         }
 
         let queue_input = QueueInput::new(&ctx, &input_ref, options.queue_options.clone());
-        let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
-            video: video_track.is_some(),
-            audio: audio_track.is_some(),
-            offset: match options.offset {
-                Some(offset) => QueueTrackOffset::FromStart(offset),
-                None => QueueTrackOffset::None,
-            },
-        });
+        let (video_sender, audio_sender) =
+            queue_input.queue_new_track_group(QueueTrackGroupOptions {
+                video: video_track.is_some(),
+                audio: audio_track.is_some(),
+                offset: match options.offset {
+                    Some(offset) => QueueTrackGroupOffset::FromStart(offset),
+                    None => QueueTrackGroupOffset::None,
+                },
+            });
 
         // Buffer needs to be smaller than half of the longest track, otherwise
         // reader threads of short looped files finish too far ahead of playback.
@@ -315,10 +318,10 @@ impl TrackManagerThread {
             let Some(queue_input) = self.queue_input.upgrade() else {
                 return;
             };
-            queue_input.queue_new_track(QueueTrackOptions {
+            queue_input.queue_new_track_group(QueueTrackGroupOptions {
                 video: self.video_thread.is_some(),
                 audio: self.audio_thread.is_some(),
-                offset: QueueTrackOffset::None,
+                offset: QueueTrackGroupOffset::None,
             })
         };
 
@@ -364,7 +367,7 @@ impl TrackManagerThread {
             let Some(queue_input) = self.queue_input.upgrade() else {
                 return;
             };
-            queue_input.abort_old_track();
+            queue_input.abort_old_track_group();
         };
     }
 

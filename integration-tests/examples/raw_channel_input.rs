@@ -97,7 +97,7 @@ fn main() {
             video: true,
             audio: false,
             required: true,
-            offset: QueueTrackOffset::FromStart(Duration::ZERO),
+            offset: QueueTrackGroupOffset::FromStart(Duration::ZERO),
         },
     )
     .unwrap();

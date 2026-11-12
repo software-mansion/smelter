@@ -34,7 +34,7 @@ use crate::{
             util::BindToPortError,
         },
     },
-    queue::{QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions},
+    queue::{QueueInput, QueueSender, QueueTrackGroupOffset, QueueTrackGroupOptions},
     utils::{InitializableThread, channel::Sender},
 };
 
@@ -59,11 +59,11 @@ pub(super) mod rtcp_sync;
 ///   - At the start it will wait for full window before returning anything.
 /// - With offset (`opts.offset = Some(offset)`)
 ///   - PTS of first frame should be zero
-///   - Register track with QueueTrackOffset::FromStart(offset)
+///   - Register track group with QueueTrackGroupOffset::FromStart(offset)
 ///   - Timestamp from jitter buffer need to be normalized before sending them to queue
 /// - Without offset (`opts.offset = None`)
 ///   - PTS of fist frame should be queue_sync_point.elapsed()
-///   - Register track with QueueTrackOffset::Pts(Duration::ZERO)
+///   - Register track group with QueueTrackGroupOffset::Pts(Duration::ZERO)
 ///   - Jitter buffer is already producing correct timestamps
 /// - On reconnect
 ///   - Can only be connected once
@@ -114,14 +114,15 @@ impl RtpInput {
             ctx.queue_ctx.sync_point,
         );
 
-        let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
-            video: opts.video.is_some(),
-            audio: opts.audio.is_some(),
-            offset: match opts.offset {
-                Some(offset) => QueueTrackOffset::FromStart(offset),
-                None => QueueTrackOffset::Pts(Timestamp::ZERO),
-            },
-        });
+        let (video_sender, audio_sender) =
+            queue_input.queue_new_track_group(QueueTrackGroupOptions {
+                video: opts.video.is_some(),
+                audio: opts.audio.is_some(),
+                offset: match opts.offset {
+                    Some(offset) => QueueTrackGroupOffset::FromStart(offset),
+                    None => QueueTrackGroupOffset::Pts(Timestamp::ZERO),
+                },
+            });
 
         let video_handle = Self::start_video_thread(&ctx, &input_ref, opts.video, video_sender)?;
         let audio_handle = Self::start_audio_thread(&ctx, &input_ref, opts.audio, audio_sender)?;

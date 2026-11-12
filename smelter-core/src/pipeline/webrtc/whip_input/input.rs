@@ -30,7 +30,7 @@ use crate::prelude::*;
 ///
 /// - On connection
 ///   - PTS of first frame will be synced to `queue_sync_point` Instant
-///   - Register track with `QueueTrackOffset::Pts(Duration::ZERO)`
+///   - Register track group with `QueueTrackGroupOffset::Pts(Duration::ZERO)`
 ///   - Jitter buffer: `RtpJitterBufferMode::RealTime` produces timestamps already in the correct
 ///     time frame
 ///

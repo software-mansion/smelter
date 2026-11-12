@@ -18,7 +18,7 @@ pub struct RawDataInputOptions {
     pub required: bool,
     /// Defines how PTS of delivered frames/samples maps onto the queue timeline. PTS values
     /// are passed to the queue unchanged.
-    pub offset: QueueTrackOffset,
+    pub offset: QueueTrackGroupOffset,
 }
 
 #[derive(Debug, Clone)]

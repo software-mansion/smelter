@@ -13,7 +13,7 @@
 //! - read output with `next_video_batch`/`next_audio_batch` and compare against
 //!   expected `VideoBatch`/`AudioBatch` values; all PTS in summaries are relative
 //!   to the queue start, so expectations are deterministic for `Pts`/`FromStart`
-//!   offsets. For `QueueTrackOffset::None` the offset depends on wall clock —
+//!   offsets. For `QueueTrackGroupOffset::None` the offset depends on wall clock —
 //!   assert with tolerance instead of equality.
 
 #![allow(dead_code)]
@@ -29,14 +29,14 @@ use crate::{
     prelude::*,
     queue::{
         DEFAULT_AUDIO_CHUNK_DURATION, Queue, QueueAudioOutput, QueueContext, QueueInput,
-        QueueInputOptions, QueueOptions, QueueSender, QueueTrackOptions, QueueVideoOutput,
+        QueueInputOptions, QueueOptions, QueueSender, QueueTrackGroupOptions, QueueVideoOutput,
     },
     types::Ref,
 };
 
 /// Distance between queue creation and start to desync clocks
 pub const OFFSET: Duration = Duration::from_micros(123_456);
-/// [`OFFSET`] as a PTS, for track offsets relative to the sync point.
+/// [`OFFSET`] as a PTS, for track group offsets relative to the sync point.
 pub const OFFSET_PTS: Timestamp = Timestamp::from_micros(123_456);
 
 pub const OUTPUT_FRAMERATE: Framerate = Framerate { num: 50, den: 1 };
@@ -351,12 +351,12 @@ impl TestQueue {
         }
     }
 
-    /// Register an input and create its first track.
+    /// Register an input and create its first track group.
     pub fn add_input(
         &self,
         input_id: &str,
         opts: QueueInputOptions,
-        track: QueueTrackOptions,
+        group: QueueTrackGroupOptions,
     ) -> TestInput {
         let input_id = InputId(input_id.into());
         let input_ref = Ref::new(&input_id);
@@ -368,7 +368,7 @@ impl TestQueue {
             None,
             None,
         );
-        let (video, audio) = queue_input.queue_new_track(track);
+        let (video, audio) = queue_input.queue_new_track_group(group);
         self.queue.add_input(&input_id, queue_input.clone());
         TestInput {
             input_id,
@@ -517,12 +517,12 @@ pub struct TestInput {
 }
 
 impl TestInput {
-    /// Queue a new track on this input, replacing the track senders. The queue
-    /// switches to it once the current track ends (or immediately after
-    /// `queue_input.abort_old_track()`). Frame ids keep incrementing across
-    /// tracks.
-    pub fn new_track(&mut self, track: QueueTrackOptions) {
-        let (video, audio) = self.queue_input.queue_new_track(track);
+    /// Queue a new track group on this input, replacing the track senders. The queue
+    /// switches to it once the current group ends (or immediately after
+    /// `queue_input.abort_old_track_group()`). Frame ids keep incrementing across
+    /// groups.
+    pub fn new_track_group(&mut self, group: QueueTrackGroupOptions) {
+        let (video, audio) = self.queue_input.queue_new_track_group(group);
         self.video = video.map(spawn_relay);
         self.audio = audio.map(spawn_relay);
     }

@@ -9,7 +9,9 @@ use tracing::{Level, debug, error, info, span, trace, warn};
 
 use crate::{
     pipeline::input::Input,
-    queue::{InputSideChannel, QueueInput, QueueSender, QueueTrackOffset, QueueTrackOptions},
+    queue::{
+        InputSideChannel, QueueInput, QueueSender, QueueTrackGroupOffset, QueueTrackGroupOptions,
+    },
 };
 
 use crate::prelude::*;
@@ -50,7 +52,7 @@ impl TryFrom<FourCC> for V4l2Format {
 ///
 /// ## Timestamps
 ///
-/// - Register track with `QueueTrackOffset::Pts(Duration::ZERO)` which means
+/// - Register track group with `QueueTrackGroupOffset::Pts(Duration::ZERO)` which means
 ///   that PTS should be relative to queue `sync_point`.
 /// - PTS of each frame is relative to queue `sync_point` at receipt time.
 /// - Never block on sending.
@@ -84,10 +86,10 @@ impl V4l2Input {
 
         let queue_input = QueueInput::new(&ctx, &input_ref, opts.queue_options);
         queue_input.set_stale_frame_timeout(ctx.stale_frame_timeout);
-        let (Some(video_sender), _) = queue_input.queue_new_track(QueueTrackOptions {
+        let (Some(video_sender), _) = queue_input.queue_new_track_group(QueueTrackGroupOptions {
             video: true,
             audio: false,
-            offset: QueueTrackOffset::Pts(Timestamp::ZERO),
+            offset: QueueTrackGroupOffset::Pts(Timestamp::ZERO),
         }) else {
             return Err(InputInitError::InternalServerError(
                 "Video sender is None in V4L2 input",

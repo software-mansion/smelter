@@ -23,7 +23,7 @@ use crate::{
         rtmp::rtmp_input::{buffer::resolve_buffer_options, state::RtmpInputState},
         utils::{H264AvcDecoderConfig, H264AvccToAnnexB},
     },
-    queue::{QueueSender, QueueTrackOffset, QueueTrackOptions},
+    queue::{QueueSender, QueueTrackGroupOffset, QueueTrackGroupOptions},
     utils::{
         InitializableThread,
         channel::{Sender, TrySendError},
@@ -46,12 +46,12 @@ pub(crate) fn start_connection_thread(
 ) -> Option<JoinHandle<()>> {
     let input_id = input_ref.to_string();
     let queue_input = input.queue_input.upgrade()?;
-    let (video_sender, audio_sender) = queue_input.queue_new_track(QueueTrackOptions {
+    let (video_sender, audio_sender) = queue_input.queue_new_track_group(QueueTrackGroupOptions {
         video: true,
         audio: true,
         offset: match is_live {
-            true => QueueTrackOffset::Pts(Timestamp::ZERO),
-            false => QueueTrackOffset::None,
+            true => QueueTrackGroupOffset::Pts(Timestamp::ZERO),
+            false => QueueTrackGroupOffset::None,
         },
     });
 

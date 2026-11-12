@@ -1,12 +1,12 @@
 //! Common interface over track synchronization strategies for inputs that
 //! support both live and non-live streams.
 //!
-//! Each variant defines its own output timeline, so the queue track has to be
+//! Each variant defines its own output timeline, so the queue track group has to be
 //! registered to match the variant used:
 //! - [`InputSync::Live`] ([`LiveSync`]) maps timestamps onto the timeline of
-//!   the queue sync point; register with `QueueTrackOffset::Pts(Duration::ZERO)`.
+//!   the queue sync point; register with `QueueTrackGroupOffset::Pts(Duration::ZERO)`.
 //! - [`InputSync::Simple`] ([`SimpleSync`]) normalizes timestamps to start at
-//!   zero; register with `QueueTrackOffset::None` so the queue fixes the
+//!   zero; register with `QueueTrackGroupOffset::None` so the queue fixes the
 //!   placement on the first received packet.
 //!
 //! Chunks leave a track through the sink passed to

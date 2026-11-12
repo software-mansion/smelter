@@ -1,13 +1,13 @@
-mod audio_input;
 mod audio_queue;
+mod audio_track;
 mod queue_input;
 mod queue_thread;
 mod side_channel;
 #[cfg(test)]
 mod tests;
 mod utils;
-mod video_input;
 mod video_queue;
+mod video_track;
 
 use std::{
     collections::HashMap,
@@ -24,8 +24,10 @@ use crate::audio_mixer::InputSamplesSet;
 
 use crate::prelude::*;
 
-pub use self::queue_input::{InputSideChannel, QueueInputOptions, QueueTrackOffset};
-pub(crate) use self::queue_input::{QueueInput, QueueSender, QueueTrackOptions, WeakQueueInput};
+pub use self::queue_input::{InputSideChannel, QueueInputOptions, QueueTrackGroupOffset};
+pub(crate) use self::queue_input::{
+    QueueInput, QueueSender, QueueTrackGroupOptions, WeakQueueInput,
+};
 
 use self::{
     audio_queue::AudioQueue,
@@ -64,27 +66,29 @@ impl From<&PipelineOptions> for QueueOptions {
 /// - Queue PTS values are measured from `sync_point` (an `Instant` captured at Queue
 ///   construction).
 /// - `start_pts` is the duration from `sync_point` to the moment `start` is called.
-/// - Inputs produce per-track PTS relative to the track's own zero. Moving those into the
-///   queue's frame of reference is the job of `VideoQueueInput` / `AudioQueueInput`.
-///   - `QueueTrackOffset::Pts(Duration::ZERO)` means the track's zero should line up with
-///     the queue's `sync_point` — i.e. the track produces timestamps in sync with wall clock
+/// - A track is a single video or audio stream. A track group is an optional video track and
+///   an optional audio track that share a time offset.
+/// - Inputs produce per-track PTS relative to the track group's own zero. Moving those into
+///   the queue's frame of reference is the job of `VideoQueueTrack` / `AudioQueueTrack`.
+///   - `QueueTrackGroupOffset::Pts(Duration::ZERO)` means the group's zero should line up with
+///     the queue's `sync_point` — i.e. the group produces timestamps in sync with wall clock
 ///     (used by realtime protocols like WebRTC, V4L2, DeckLink).
-///   - `QueueTrackOffset::Pts(d)` shifts the track so its zero maps to `sync_point + d`
+///   - `QueueTrackGroupOffset::Pts(d)` shifts the group so its zero maps to `sync_point + d`
 ///     (RTMP uses `effective_last_pts + RTMP_BUFFER` to leave room for decoding).
-///   - `QueueTrackOffset::FromStart(d)` places the track's zero at `start_pts + d`.
-///   - `QueueTrackOffset::None` defers: the offset is fixed on the first received packet.
-/// - `TrackOffset` is shared between a track's video and audio so their synchronization
+///   - `QueueTrackGroupOffset::FromStart(d)` places the group's zero at `start_pts + d`.
+///   - `QueueTrackGroupOffset::None` defers: the offset is fixed on the first received packet.
+/// - `TrackGroupOffset` is shared between a group's video and audio so their synchronization
 ///   from the input side is preserved.
-/// - Multiple tracks can be queued back-to-back via `queue_new_track`; the next one starts
-///   once the current one is done. Callers can force an early swap with `abort_old_track`.
-///   At most `MAX_PENDING_TRACKS` tracks can be pending; `queue_new_track` blocks until
-///   there is room.
+/// - Multiple track groups can be queued back-to-back via `queue_new_track_group`; the next
+///   one starts once the current one is done. Callers can force an early swap with
+///   `abort_old_track_group`. At most `MAX_PENDING_TRACK_GROUPS` groups can be pending;
+///   `queue_new_track_group` blocks until there is room.
 ///
 /// - Offset initialization:
-///   - `Pts(d)`: `track_offset` is set to `d` at construction; it never changes.
-///   - `FromStart(d)`: `track_offset` is initialized to `start_pts + d` when the first
+///   - `Pts(d)`: `group_offset` is set to `d` at construction; it never changes.
+///   - `FromStart(d)`: `group_offset` is initialized to `start_pts + d` when the first
 ///     packet is received after queue start.
-///   - `None`: `track_offset` is initialized on the first packet — before queue start to
+///   - `None`: `group_offset` is initialized on the first packet — before queue start to
 ///     `sync_point.elapsed()` at that moment (via `drop_old_frames_before_start`), after
 ///     queue start to the current queue PTS at which the packet is observed.
 ///
@@ -98,19 +102,19 @@ impl From<&PipelineOptions> for QueueOptions {
 ///
 /// - Example usage scenarios:
 ///   - MP4 input:
-///     - On seek, create a new track with `queue_new_track`, start new reader threads, then
-///       call `abort_old_track` to switch immediately.
-///     - On loop, create a new track; `abort_old_track` is optional. Skipping it may leak a
-///       few extra frames from the previous iteration depending on buffer size.
+///     - On seek, create a new track group with `queue_new_track_group`, start new reader
+///       threads, then call `abort_old_track_group` to switch immediately.
+///     - On loop, create a new track group; `abort_old_track_group` is optional. Skipping
+///       it may leak a few extra frames from the previous iteration depending on buffer size.
 ///   - RTMP server input:
 ///     - Read `effective_last_pts` (valid before and after start).
-///     - Register a track with `QueueTrackOffset::Pts(effective_last_pts + RTMP_BUFFER)`
-///       (`RTMP_BUFFER` is currently 2s) so decoded data has time to land.
-///     - Create the track with both audio and video senders; drop the unused one if no
+///     - Register a track group with `QueueTrackGroupOffset::Pts(effective_last_pts +
+///       RTMP_BUFFER)` (`RTMP_BUFFER` is currently 2s) so decoded data has time to land.
+///     - Create the track group with both audio and video senders; drop the unused one if no
 ///       config arrives within 5s.
 ///   - WHIP / WHEP / V4L2 / DeckLink:
-///     - Register a track with `QueueTrackOffset::Pts(Duration::ZERO)` so input PTS is
-///       aligned to `sync_point`.
+///     - Register a track group with `QueueTrackGroupOffset::Pts(Duration::ZERO)` so input PTS
+///       is aligned to `sync_point`.
 pub struct Queue {
     queue_ctx: QueueContext,
     video_queue: Mutex<VideoQueue>,

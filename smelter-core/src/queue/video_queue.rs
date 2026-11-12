@@ -66,7 +66,7 @@ impl VideoQueue {
         self.inputs
             .values()
             .filter_map(|input| input.upgrade())
-            .for_each(|input| input.maybe_start_next_track());
+            .for_each(|input| input.maybe_start_next_track_group());
 
         let input_status: Vec<_> = self
             .inputs
@@ -108,7 +108,7 @@ impl VideoQueue {
         self.inputs
             .values()
             .filter_map(|input| input.upgrade())
-            .for_each(|input| input.maybe_start_next_track());
+            .for_each(|input| input.maybe_start_next_track_group());
 
         for weak in self.inputs.values() {
             weak.video(|input| input.drop_old_frames_before_start());

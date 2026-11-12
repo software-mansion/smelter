@@ -21,7 +21,7 @@ use crate::{
         libopus::OpusDecoder,
         vulkan_h264::VulkanH264Decoder,
     },
-    queue::{QueueSender, QueueTrackOffset, QueueTrackOptions, WeakQueueInput},
+    queue::{QueueSender, QueueTrackGroupOffset, QueueTrackGroupOptions, WeakQueueInput},
     utils::{
         H264AvcDecoderConfig, H264AvccToAnnexB, InitializableThread,
         channel::{Sender, TrySendError},
@@ -94,10 +94,10 @@ pub(crate) async fn handle_broadcast(
         let Some(queue_input) = queue_input.upgrade() else {
             return Err(MoqConnectionError::InputUnregistered);
         };
-        queue_input.queue_new_track(QueueTrackOptions {
+        queue_input.queue_new_track_group(QueueTrackGroupOptions {
             video: handler.has_video(),
             audio: handler.has_audio(),
-            offset: QueueTrackOffset::Pts(Timestamp::ZERO),
+            offset: QueueTrackGroupOffset::Pts(Timestamp::ZERO),
         })
     };
 
