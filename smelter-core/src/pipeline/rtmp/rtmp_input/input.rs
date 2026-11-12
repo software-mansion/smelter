@@ -17,17 +17,15 @@ use crate::prelude::*;
 /// ## Timestamps
 ///
 /// - On connection:
-///   - A new track group is created with `QueueTrackGroupOffset::Pts(effective_last_pts + buffer)`.
-///     The buffer gives time for data to arrive and be decoded before the queue
-///     needs it.
+///   - A new independent track group is created with `QueueTrackGroupOffset::Pts(ZERO)` for
+///     live streams and `QueueTrackGroupOffset::None` otherwise. Video and audio tracks are
+///     added to it when their config arrives.
 ///   - PTS values are normalized to zero (subtracts first observed PTS, shared across
 ///     video and audio).
 /// - On reconnect:
 ///   - Only one active connection per input is allowed (`ensure_no_active_connection`).
 ///   - Once a previous connection finishes, a new one can connect and creates a fresh
-///     track.
-/// - After 5s without receiving both tracks (e.g. audio-only stream), unused track
-///   senders are dropped.
+///     track group.
 ///
 /// ### Unsupported scenarios
 /// - Timestamps are synchronized based on the connection end. If first packet is delivered

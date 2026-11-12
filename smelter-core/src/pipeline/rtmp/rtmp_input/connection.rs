@@ -23,7 +23,7 @@ use crate::{
         rtmp::rtmp_input::{buffer::resolve_buffer_options, state::RtmpInputState},
         utils::{H264AvcDecoderConfig, H264AvccToAnnexB},
     },
-    queue::{QueueSender, QueueTrackGroupOffset, QueueTrackGroupOptions},
+    queue::{IndependentTrackGroup, QueueSender},
     utils::{
         InitializableThread,
         channel::{Sender, TrySendError},
@@ -46,13 +46,9 @@ pub(crate) fn start_connection_thread(
 ) -> Option<JoinHandle<()>> {
     let input_id = input_ref.to_string();
     let queue_input = input.queue_input.upgrade()?;
-    let (video_sender, audio_sender) = queue_input.queue_new_track_group(QueueTrackGroupOptions {
-        video: true,
-        audio: true,
-        offset: match is_live {
-            true => QueueTrackGroupOffset::Pts(Timestamp::ZERO),
-            false => QueueTrackGroupOffset::None,
-        },
+    let track_group = queue_input.queue_new_independent_track_group(match is_live {
+        true => QueueTrackGroupOffset::Pts(Timestamp::ZERO),
+        false => QueueTrackGroupOffset::None,
     });
 
     let (min, desired, max) = resolve_buffer_options(input.buffer);
@@ -79,8 +75,7 @@ pub(crate) fn start_connection_thread(
         decoder_options: input.decoders.clone(),
         video_track_state: TrackState::BeforeFirstEvent,
         audio_track_state: TrackState::BeforeFirstEvent,
-        video_sender,
-        audio_sender,
+        track_group,
         input_sync,
         decoder_buffer_size,
     };
@@ -180,8 +175,7 @@ struct RtmpConnectionState {
 
     video_track_state: TrackState,
     audio_track_state: TrackState,
-    video_sender: Option<QueueSender<Frame>>,
-    audio_sender: Option<QueueSender<InputAudioSamples>>,
+    track_group: IndependentTrackGroup,
 }
 
 impl RtmpConnectionState {
@@ -237,10 +231,14 @@ impl RtmpConnectionState {
     }
 
     fn process_video_config(&mut self, config: VideoConfig) -> Result<(), RtmpConnectionError> {
-        let Some(frame_sender) = self.video_sender.take() else {
+        if let TrackState::Ready(_) = self.video_track_state {
             return Err(RtmpConnectionError::ReceivedSecondVideoTrack);
-        };
+        }
         trace!(?config, "Received video config");
+        let frame_sender = self
+            .track_group
+            .add_video_track()
+            .map_err(|_| RtmpConnectionError::TrackClosed)?;
 
         let handle = spawn_video_decoder(
             &self.ctx,
@@ -258,11 +256,14 @@ impl RtmpConnectionState {
     }
 
     fn process_audio_config(&mut self, config: AudioConfig) -> Result<(), RtmpConnectionError> {
-        let Some(samples_sender) = self.audio_sender.take() else {
+        if let TrackState::Ready(_) = self.audio_track_state {
             return Err(RtmpConnectionError::ReceivedSecondAudioTrack);
-        };
-
+        }
         trace!(?config, "Received audio config");
+        let samples_sender = self
+            .track_group
+            .add_audio_track()
+            .map_err(|_| RtmpConnectionError::TrackClosed)?;
         let handle = spawn_audio_decoder(
             &self.ctx,
             &self.input_ref,

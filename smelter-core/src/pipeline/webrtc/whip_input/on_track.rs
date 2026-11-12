@@ -16,7 +16,7 @@ use crate::{
             whip_input::WhipTrackContext,
         },
     },
-    queue::QueueSender,
+    queue::{IndependentTrackGroup, QueueSender},
     utils::InitializableThread,
 };
 
@@ -26,8 +26,7 @@ pub(super) fn handle_on_track(
     ctx: WhipTrackContext,
     input_ref: Ref<InputId>,
     video_preferences: Vec<VideoDecoderOptions>,
-    video_sender: &mut Option<QueueSender<Frame>>,
-    audio_sender: &mut Option<QueueSender<InputAudioSamples>>,
+    track_group: &IndependentTrackGroup,
 ) {
     let kind = ctx.track.kind();
     let tokio_rt = ctx.pipeline_ctx.tokio_rt.clone();
@@ -38,9 +37,12 @@ pub(super) fn handle_on_track(
     }
     match kind {
         RTPCodecType::Audio => {
-            let Some(audio_sender) = audio_sender.take() else {
-                warn!("Audio track already started");
-                return;
+            let audio_sender = match track_group.add_audio_track() {
+                Ok(sender) => sender,
+                Err(err) => {
+                    warn!(%err, "Failed to add audio track");
+                    return;
+                }
             };
             let task = async move {
                 if let Err(err) = process_audio_track(ctx, input_ref, audio_sender).await {
@@ -51,9 +53,12 @@ pub(super) fn handle_on_track(
             tokio_rt.spawn(task.instrument(span));
         }
         RTPCodecType::Video => {
-            let Some(video_sender) = video_sender.take() else {
-                warn!("Audio track already started");
-                return;
+            let video_sender = match track_group.add_video_track() {
+                Ok(sender) => sender,
+                Err(err) => {
+                    warn!(%err, "Failed to add video track");
+                    return;
+                }
             };
             let task = async move {
                 if let Err(err) =

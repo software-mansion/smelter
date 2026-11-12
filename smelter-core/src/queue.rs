@@ -24,10 +24,10 @@ use crate::audio_mixer::InputSamplesSet;
 
 use crate::prelude::*;
 
-pub use self::queue_input::{InputSideChannel, QueueInputOptions, QueueTrackGroupOffset};
 pub(crate) use self::queue_input::{
-    QueueInput, QueueSender, QueueTrackGroupOptions, WeakQueueInput,
+    IndependentTrackGroup, QueueInput, QueueSender, QueueTrackGroupOptions, WeakQueueInput,
 };
+pub use self::queue_input::{InputSideChannel, QueueInputOptions, QueueTrackGroupOffset};
 
 use self::{
     audio_queue::AudioQueue,
@@ -83,6 +83,12 @@ impl From<&PipelineOptions> for QueueOptions {
 ///   one starts once the current one is done. Callers can force an early swap with
 ///   `abort_old_track_group`. At most `MAX_PENDING_TRACK_GROUPS` groups can be pending;
 ///   `queue_new_track_group` blocks until there is room.
+/// - Independent track groups (`queue_new_independent_track_group`) start without tracks;
+///   tracks are added with `IndependentTrackGroup::add_video_track`/`add_audio_track` and
+///   removed by dropping their sender. A track added while the previous one of the same kind
+///   is still draining starts after that one delivers EOS. Added tracks share the group
+///   offset, so their PTS need to continue the group's timeline. The group ends like any
+///   other: once it has no running tracks and another group is pending.
 ///
 /// - Offset initialization:
 ///   - `Pts(d)`: `group_offset` is set to `d` at construction; it never changes.

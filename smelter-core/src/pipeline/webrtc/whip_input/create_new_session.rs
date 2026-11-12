@@ -4,21 +4,18 @@ use tracing::debug;
 use uuid::Uuid;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
-use crate::{
-    pipeline::{
-        rtp::{RtpJitterBufferMode, RtpJitterBufferSharedContext},
-        webrtc::{
-            WhipWhepServerState,
-            error::WhipWhepServerError,
-            offer_codec_filter::codecs_from_offer,
-            peer_connection_recvonly::RecvonlyPeerConnection,
-            whip_input::{
-                WhipTrackContext, on_track::handle_on_track, state::WhipInputSession,
-                video_preferences::video_params_compliant_with_offer,
-            },
+use crate::pipeline::{
+    rtp::{RtpJitterBufferMode, RtpJitterBufferSharedContext},
+    webrtc::{
+        WhipWhepServerState,
+        error::WhipWhepServerError,
+        offer_codec_filter::codecs_from_offer,
+        peer_connection_recvonly::RecvonlyPeerConnection,
+        whip_input::{
+            WhipTrackContext, on_track::handle_on_track, state::WhipInputSession,
+            video_preferences::video_params_compliant_with_offer,
         },
     },
-    queue::{QueueTrackGroupOffset, QueueTrackGroupOptions},
 };
 
 use crate::prelude::*;
@@ -92,12 +89,8 @@ pub(crate) async fn create_new_whip_session(
             state.ctx.queue_ctx.sync_point,
         );
 
-        let (mut video_sender, mut audio_sender) =
-            queue_input.queue_new_track_group(QueueTrackGroupOptions {
-                video: true,
-                audio: true,
-                offset: QueueTrackGroupOffset::Pts(Timestamp::ZERO),
-            });
+        let track_group = queue_input
+            .queue_new_independent_track_group(QueueTrackGroupOffset::Pts(Timestamp::ZERO));
 
         peer_connection.on_track(move |track_ctx| {
             let ctx = WhipTrackContext::new(track_ctx, &state, &buffer);
@@ -105,8 +98,7 @@ pub(crate) async fn create_new_whip_session(
                 ctx,
                 input_ref.clone(),
                 video_preferences.clone(),
-                &mut video_sender,
-                &mut audio_sender,
+                &track_group,
             );
         })
     };
