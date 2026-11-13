@@ -19,7 +19,7 @@ use crate::{
             },
         },
     },
-    queue::{QueueInput, QueueTrackGroupOffset, QueueTrackGroupOptions},
+    queue::QueueInput,
 };
 
 use crate::prelude::*;
@@ -41,7 +41,8 @@ const WHEP_INIT_TIMEOUT: Duration = Duration::from_secs(60);
 ///
 /// - Connection is established during input registration (with a 60s timeout).
 /// - PTS of first frame will be synced to `queue_sync_point` Instant
-/// - Register track group with `QueueTrackGroupOffset::Pts(Duration::ZERO)`
+/// - Register independent track group with `Pts(Duration::ZERO)` offset, tracks are added in
+///   `on_track`
 /// - Jitter buffer: `RtpJitterBufferMode::RealTime` produces timestamps already in the correct
 ///   time frame
 /// - No way to reconnect
@@ -144,12 +145,8 @@ async fn init_whep_client(
             ctx.queue_ctx.sync_point,
         );
 
-        let (mut video_sender, mut audio_sender) =
-            queue_input.queue_new_track_group(QueueTrackGroupOptions {
-                video: true,
-                audio: true,
-                offset: QueueTrackGroupOffset::Pts(Timestamp::ZERO),
-            });
+        let track_group = queue_input
+            .queue_new_independent_track_group(QueueTrackGroupOffset::Pts(Timestamp::ZERO));
 
         pc.on_track(move |track_ctx| {
             let ctx = WhepTrackContext::new(track_ctx, &ctx, &buffer);
@@ -157,8 +154,7 @@ async fn init_whep_client(
                 ctx,
                 input_ref.clone(),
                 video_preferences.clone(),
-                &mut video_sender,
-                &mut audio_sender,
+                &track_group,
             );
         });
     }

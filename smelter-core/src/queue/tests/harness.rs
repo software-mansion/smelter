@@ -28,8 +28,9 @@ use crate::{
     event::{Event, EventEmitter},
     prelude::*,
     queue::{
-        DEFAULT_AUDIO_CHUNK_DURATION, Queue, QueueAudioOutput, QueueContext, QueueInput,
-        QueueInputOptions, QueueOptions, QueueSender, QueueTrackGroupOptions, QueueVideoOutput,
+        DEFAULT_AUDIO_CHUNK_DURATION, IndependentTrackGroup, Queue, QueueAudioOutput, QueueContext,
+        QueueInput, QueueInputOptions, QueueOptions, QueueSender, QueueTrackGroupOffset,
+        QueueTrackGroupOptions, QueueVideoOutput, queue_input::TrackGroupEndedError,
     },
     types::Ref,
 };
@@ -358,6 +359,31 @@ impl TestQueue {
         opts: QueueInputOptions,
         group: QueueTrackGroupOptions,
     ) -> TestInput {
+        let mut input = self.new_input(input_id, opts);
+        input.new_track_group(group);
+        self.queue
+            .add_input(&input.input_id, input.queue_input.clone());
+        input
+    }
+
+    /// Register an input and create its first track group as an independent track group
+    /// without tracks. Tracks are added with `TestInput::add_video_track`/`add_audio_track`.
+    pub fn add_input_with_independent_track_group(
+        &self,
+        input_id: &str,
+        opts: QueueInputOptions,
+        offset: QueueTrackGroupOffset,
+    ) -> TestInput {
+        let mut input = self.new_input(input_id, opts);
+        input.new_independent_track_group(offset);
+        self.queue
+            .add_input(&input.input_id, input.queue_input.clone());
+        input
+    }
+
+    /// Input that is not registered in the queue yet. Callers queue the first track group before
+    /// registering, so the queue never sees the input without it.
+    fn new_input(&self, input_id: &str, opts: QueueInputOptions) -> TestInput {
         let input_id = InputId(input_id.into());
         let input_ref = Ref::new(&input_id);
         let queue_input = QueueInput::new_inner(
@@ -368,13 +394,12 @@ impl TestQueue {
             None,
             None,
         );
-        let (video, audio) = queue_input.queue_new_track_group(group);
-        self.queue.add_input(&input_id, queue_input.clone());
         TestInput {
             input_id,
             queue_input,
-            video: video.map(spawn_relay),
-            audio: audio.map(spawn_relay),
+            track_group: None,
+            video: None,
+            audio: None,
             next_frame_id: 0,
             next_samples_id: 0,
         }
@@ -510,6 +535,8 @@ fn spawn_relay<T: Send + 'static>(queue_sender: QueueSender<T>) -> Sender<T> {
 pub struct TestInput {
     pub input_id: InputId,
     pub queue_input: QueueInput,
+    /// Last independent track group queued on this input.
+    pub track_group: Option<IndependentTrackGroup>,
     video: Option<Sender<Frame>>,
     audio: Option<Sender<InputAudioSamples>>,
     next_frame_id: u32,
@@ -525,6 +552,33 @@ impl TestInput {
         let (video, audio) = self.queue_input.queue_new_track_group(group);
         self.video = video.map(spawn_relay);
         self.audio = audio.map(spawn_relay);
+    }
+
+    /// Queue a new independent track group without tracks on this input. Tracks are added
+    /// with `add_video_track`/`add_audio_track`.
+    pub fn new_independent_track_group(&mut self, offset: QueueTrackGroupOffset) {
+        self.track_group = Some(self.queue_input.queue_new_independent_track_group(offset));
+    }
+
+    /// Add a video track to the last independent track group, replacing the video sender. The
+    /// previous video track is closed; the new one starts once the previous one delivered EOS.
+    pub fn add_video_track(&mut self) -> Result<(), TrackGroupEndedError> {
+        let track_group = self
+            .track_group
+            .as_ref()
+            .expect("no independent track group");
+        self.video = Some(spawn_relay(track_group.add_video_track()?));
+        Ok(())
+    }
+
+    /// Like `add_video_track`, but for audio.
+    pub fn add_audio_track(&mut self) -> Result<(), TrackGroupEndedError> {
+        let track_group = self
+            .track_group
+            .as_ref()
+            .expect("no independent track group");
+        self.audio = Some(spawn_relay(track_group.add_audio_track()?));
+        Ok(())
     }
 
     /// Send a single frame and return its id (n-th video frame sent on this input).
