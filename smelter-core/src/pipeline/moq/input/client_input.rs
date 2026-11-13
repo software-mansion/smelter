@@ -1,31 +1,27 @@
-use std::sync::{Arc, atomic::AtomicBool};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 use crate::{
     pipeline::{
         input::Input,
         moq::{
-            MoqSession, client_config,
-            input::connection::{BroadcastCtx, handle_broadcast},
+            client::MoqConnection,
+            input::connection::{BroadcastCtx, MoqConnectionError, handle_broadcast},
         },
     },
     queue::{QueueInput, WeakQueueInput},
 };
-use hang::moq_net::{BroadcastConsumer, Origin, OriginConsumer};
+use moq_net::origin;
 use smelter_render::error::ErrorStack;
-use tracing::{Instrument, Level, Span, info, span, warn};
-use url::Url;
+use tracing::{Instrument, Level, Span, debug, span, warn};
 
 use crate::prelude::*;
 
-struct BroadcastOptions {
-    broadcast_path: Arc<str>,
-    decoder_options: MoqInputDecoders,
-    buffer: LiveInputBufferOptions,
-}
-
 pub struct MoqClientInput {
     should_close: Arc<AtomicBool>,
-    _session: MoqSession,
+    _client: MoqConnection,
 }
 
 impl MoqClientInput {
@@ -41,141 +37,85 @@ impl MoqClientInput {
         )
         .entered();
 
-        let MoqClientInputOptions {
-            endpoint_url,
-            broadcast_path,
-            decoder_options,
-            queue_options,
-            buffer,
-        } = options;
-        let queue_input = QueueInput::new(&ctx, &input_ref, queue_options);
+        let queue_input = QueueInput::new(&ctx, &input_ref, options.queue_options.clone());
 
-        let (session, consumer) = Self::connect(&ctx, &endpoint_url)?;
+        let (client, consumer) = MoqConnection::new_subscriber(&ctx, &options.endpoint_url)?;
         let should_close = Arc::new(AtomicBool::new(false));
 
-        let broadcast_options = BroadcastOptions {
-            broadcast_path,
-            decoder_options,
-            buffer,
-        };
-        Self::start_broadcast_handler_task(
-            ctx,
-            input_ref,
-            consumer,
-            broadcast_options,
-            should_close.clone(),
-            queue_input.downgrade(),
-        );
+        ctx.spawn_async_task(|ctx| {
+            Self::run_broadcast_task(
+                ctx,
+                input_ref,
+                consumer,
+                options,
+                should_close.clone(),
+                queue_input.downgrade(),
+            )
+            .instrument(Span::current())
+        });
 
         Ok((
             Input::MoqClient(MoqClientInput {
                 should_close,
-                _session: session,
+                _client: client,
             }),
             InputInitInfo::Other,
             queue_input,
         ))
     }
 
-    fn connect(
-        ctx: &Arc<PipelineCtx>,
-        url: &str,
-    ) -> Result<(MoqSession, OriginConsumer), MoqClientError> {
-        let url = Url::parse(url).map_err(|err| MoqClientError::InvalidUrl(Arc::from(url), err))?;
-
-        if !matches!(url.scheme(), "https" | "http") {
-            return Err(MoqClientError::InvalidScheme(url.scheme().to_string()));
-        }
-
-        let client = {
-            // Creates the QUIC endpoint on the current runtime.
-            let _guard = ctx.tokio_rt.enter();
-            client_config(&url, ctx.moq_disable_tls_verification)
-                .init()
-                .map_err(|err| MoqClientError::ClientInitFailed(format!("{err}")))?
-        };
-
-        let origin = Origin::random().produce();
-        let consumer = origin.consume();
-        let client = client.with_consume(origin);
-
-        let session = ctx
-            .tokio_rt
-            .block_on(client.connect(url))
-            .map_err(|err| MoqClientError::ConnectFailed(format!("{err}")))?;
-        let session = MoqSession::new(session, ctx.tokio_rt.clone());
-        info!(moq_version = ?session.version(), "MoQ client session established");
-        Ok((session, consumer))
-    }
-
-    fn start_broadcast_handler_task(
+    async fn run_broadcast_task(
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
-        consumer: OriginConsumer,
-        options: BroadcastOptions,
+        consumer: origin::Consumer,
+        options: MoqClientInputOptions,
         should_close: Arc<AtomicBool>,
         queue_input: WeakQueueInput,
     ) {
-        let BroadcastOptions {
-            broadcast_path,
-            decoder_options,
-            buffer,
-        } = options;
-
-        ctx.spawn_async_task(|ctx| {
-            async move {
-                let Some(broadcast) =
-                    wait_for_broadcast(consumer, broadcast_path, &should_close).await
-                else {
+        let broadcast_path = options.broadcast_path;
+        let path = broadcast_path.trim_start_matches('/');
+        // Each iteration handles one announcement of the broadcast, so a publisher
+        // restart or a relay reconnect starts a new queue track group.
+        while !should_close.load(Ordering::Relaxed) {
+            // Fails once the origin closes, which happens when the input is dropped.
+            let broadcast = match consumer.routed_broadcast(path).await {
+                Ok(broadcast) => broadcast,
+                Err(err) => {
+                    debug!(%broadcast_path, %err, "Stopped waiting for MoQ broadcast");
                     return;
-                };
-
-                let broadcast_ctx = BroadcastCtx {
-                    broadcast,
-                    decoder_options,
-                    buffer,
-                    should_close,
-                };
-                let broadcast_result =
-                    handle_broadcast(ctx, input_ref, queue_input, broadcast_ctx).await;
-                if let Err(err) = broadcast_result {
-                    warn!(
-                        "Failed to receive broadcast: {}",
-                        ErrorStack::new(&err).into_string()
-                    );
                 }
+            };
+
+            let broadcast_result = handle_broadcast(
+                ctx.clone(),
+                input_ref.clone(),
+                queue_input.clone(),
+                BroadcastCtx {
+                    broadcast: broadcast.clone(),
+                    decoder_options: options.decoder_options,
+                    buffer: options.buffer,
+                    should_close: should_close.clone(),
+                },
+            )
+            .await;
+
+            match broadcast_result {
+                Ok(()) => (),
+                Err(MoqConnectionError::InputUnregistered) => return,
+                Err(err) => warn!(
+                    "Failed to receive broadcast: {}",
+                    ErrorStack::new(&err).into_string()
+                ),
             }
-            .instrument(Span::current())
-        });
+            // Block until broadcast is closed, so the next loop does not pick the same one
+            // again.
+            broadcast.closed().await;
+        }
     }
 }
 
 impl Drop for MoqClientInput {
     fn drop(&mut self) {
-        self.should_close
-            .store(true, std::sync::atomic::Ordering::Relaxed);
-    }
-}
-
-async fn wait_for_broadcast(
-    mut consumer: OriginConsumer,
-    broadcast_path: Arc<str>,
-    should_close: &Arc<AtomicBool>,
-) -> Option<BroadcastConsumer> {
-    loop {
-        if should_close.load(std::sync::atomic::Ordering::Relaxed) {
-            return None;
-        }
-
-        let Some((path, Some(broadcast))) = consumer.announced().await else {
-            warn!(%broadcast_path, "MoQ session closed before announcing required broadcast.");
-            return None;
-        };
-
-        let expected_path = broadcast_path.as_ref().trim_start_matches("/");
-        let incoming_path = path.as_str().trim_start_matches("/");
-        if incoming_path == expected_path {
-            return Some(broadcast);
-        }
+        self.should_close.store(true, Ordering::Relaxed);
     }
 }

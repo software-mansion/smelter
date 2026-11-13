@@ -1,14 +1,14 @@
 use std::sync::{Arc, OnceLock};
 
-use hang::moq_net::{Broadcast, BroadcastProducer, Origin, OriginProducer, TimeOverflow, Track};
+use hang::catalog::{AudioConfig, PRIORITY, VideoConfig};
 use moq_mux::{
-    catalog::hang::Container,
-    container::{Frame, Producer as ContainerProducer, Timestamp},
+    catalog::{Reserved, hang::Container},
+    container::{Frame, Producer as ContainerProducer},
 };
+use moq_net::{TimeOverflow, Timescale, Timestamp, broadcast, origin};
 use smelter_render::error::ErrorStack;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tracing::{Instrument, Level, Span, error, info, span, trace, warn};
-use url::Url;
 
 use crate::{
     event::Event,
@@ -18,7 +18,7 @@ use crate::{
             ffmpeg_vp9::FfmpegVp9Encoder, libopus::OpusEncoder, vulkan_h264::VulkanH264Encoder,
         },
         moq::{
-            MoqSession, client_config,
+            client::MoqConnection,
             output::{
                 audio_encoder_thread::{
                     AudioEncoderThread, AudioEncoderThreadHandle, AudioEncoderThreadOptions,
@@ -44,16 +44,16 @@ pub struct MoqClientOutput {
     audio: Option<AudioEncoderThreadHandle>,
 }
 
-/// Everything the writer thread needs to publish one broadcast. The session and
-/// origin aren't used directly, but dropping either tears the broadcast down, so
-/// the thread owns them for as long as it's writing.
+/// Everything the writer thread needs to publish one broadcast. The client,
+/// origin and broadcast aren't used directly, but dropping any of them tears the
+/// broadcast down, so the thread owns them for as long as it's writing.
 struct BroadcastState {
-    _session: MoqSession,
-    _origin: OriginProducer,
-    _broadcast: BroadcastProducer,
+    _client: MoqConnection,
+    _origin: origin::Producer,
+    _broadcast: broadcast::Producer,
     catalog: moq_mux::catalog::Producer,
-    video: Option<ContainerProducer<Container>>,
-    audio: Option<ContainerProducer<Container>>,
+    video: Option<ContainerProducer<Container, VideoConfig>>,
+    audio: Option<ContainerProducer<Container, AudioConfig>>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -116,12 +116,13 @@ impl MoqClientOutput {
             _ => None,
         };
 
-        let (session, origin) = Self::connect(&ctx, &options.endpoint_url)?;
+        let (client, origin) = MoqConnection::new_publisher(&ctx, &options.endpoint_url)?;
         let state = Self::publish(
+            &ctx,
             &options,
             video_track_config,
             audio_track_config,
-            session,
+            client,
             origin,
         )?;
 
@@ -141,93 +142,60 @@ impl MoqClientOutput {
         })
     }
 
-    fn connect(
-        ctx: &Arc<PipelineCtx>,
-        url: &str,
-    ) -> Result<(MoqSession, OriginProducer), MoqClientError> {
-        let url = Url::parse(url).map_err(|err| MoqClientError::InvalidUrl(Arc::from(url), err))?;
-
-        if !matches!(url.scheme(), "https" | "http") {
-            return Err(MoqClientError::InvalidScheme(url.scheme().to_string()));
-        }
-
-        let client = {
-            // Creates the QUIC endpoint on the current runtime.
-            let _guard = ctx.tokio_rt.enter();
-            client_config(&url, ctx.moq_disable_tls_verification)
-                .init()
-                .map_err(|err| MoqClientError::ClientInitFailed(format!("{err}")))?
-        };
-
-        let origin = Origin::random().produce();
-        let client = client.with_publish(origin.consume());
-
-        let session = ctx
-            .tokio_rt
-            .block_on(client.connect(url))
-            .map_err(|err| MoqClientError::ConnectFailed(format!("{err}")))?;
-        let session = MoqSession::new(session, ctx.tokio_rt.clone());
-        info!(moq_version = ?session.version(), "MoQ client session established");
-        Ok((session, origin))
-    }
-
-    /// Connect to the relay and announce the broadcast with its catalog.
+    /// Announce the broadcast with its catalog.
     fn publish(
+        ctx: &Arc<PipelineCtx>,
         options: &MoqClientOutputOptions,
-        video_config: Option<(hang::catalog::VideoConfig, Container)>,
-        audio_config: Option<(hang::catalog::AudioConfig, Container)>,
-        session: MoqSession,
-        origin: OriginProducer,
+        video_config: Option<(VideoConfig, Container)>,
+        audio_config: Option<(AudioConfig, Container)>,
+        client: MoqConnection,
+        origin: origin::Producer,
     ) -> Result<BroadcastState, MoqClientError> {
-        let mut broadcast = Broadcast::new().produce();
-        let mut catalog = moq_mux::catalog::Producer::new(&mut broadcast)
-            .map_err(|err| MoqClientError::BroadcastInitFailed(format!("{err}")))?;
-
-        let (video_config, video) = match video_config {
-            Some((config, container)) => {
-                let producer = Self::create_track(&mut broadcast, VIDEO_TRACK_NAME, container)?;
-                (Some(config), Some(producer))
-            }
-            None => (None, None),
-        };
-
-        let (audio_config, audio) = match audio_config {
-            Some((config, container)) => {
-                let producer = Self::create_track(&mut broadcast, AUDIO_TRACK_NAME, container)?;
-                (Some(config), Some(producer))
-            }
-            None => (None, None),
-        };
-
-        // One guard, so both catalog tracks (hang `catalog.json` and MSF
-        // `catalog`) are published once, describing every rendition.
-        {
-            let mut guard = catalog.lock();
-            if let Some(config) = video_config {
-                guard
-                    .video
-                    .insert(VIDEO_TRACK_NAME, config)
-                    .map_err(|err| MoqClientError::BroadcastInitFailed(format!("{err}")))?;
-            }
-            if let Some(config) = audio_config {
-                guard
-                    .audio
-                    .insert(AUDIO_TRACK_NAME, config)
-                    .map_err(|err| MoqClientError::BroadcastInitFailed(format!("{err}")))?;
-            }
+        fn init_err(err: impl std::fmt::Display) -> MoqClientError {
+            MoqClientError::BroadcastInitFailed(format!("{err}"))
         }
+        let _guard = ctx.tokio_rt.enter();
 
         // Relay paths are absolute; a leading slash would make it a different path.
         let path = options.broadcast_path.trim_start_matches('/');
-        if !origin.publish_broadcast(path, broadcast.consume()) {
-            return Err(MoqClientError::PublishFailed(
-                options.broadcast_path.clone(),
-            ));
-        }
+        let mut broadcast = origin
+            .create_broadcast(path)
+            .map_err(|_| MoqClientError::PublishFailed(options.broadcast_path.clone()))?;
+        let catalog = moq_mux::catalog::Producer::new(&mut broadcast, Default::default())
+            .map_err(init_err)?;
+
+        // The catalog is withheld until the reservation drops, so its first snapshot
+        // describes every rendition.
+        let reserved = catalog.reserve();
+        let video = match video_config {
+            Some((config, container)) => {
+                let info = Self::track_info(&reserved, PRIORITY.video, &container)?;
+                let track = broadcast
+                    .create_track(VIDEO_TRACK_NAME, info)
+                    .map_err(init_err)?;
+                Some(reserved.video(track, container, config).map_err(init_err)?)
+            }
+            None => None,
+        };
+        let audio = match audio_config {
+            Some((config, container)) => {
+                let info = Self::track_info(&reserved, PRIORITY.audio, &container)?;
+                let track = broadcast
+                    .create_track(AUDIO_TRACK_NAME, info)
+                    .map_err(init_err)?;
+                Some(reserved.audio(track, container, config).map_err(init_err)?)
+            }
+            None => None,
+        };
+        drop(reserved);
+
+        broadcast
+            .announce(Default::default())
+            .map_err(|_| MoqClientError::PublishFailed(options.broadcast_path.clone()))?;
         info!(broadcast_path = path, "Publishing MoQ broadcast.");
 
         Ok(BroadcastState {
-            _session: session,
+            _client: client,
             _origin: origin,
             _broadcast: broadcast,
             catalog,
@@ -236,17 +204,19 @@ impl MoqClientOutput {
         })
     }
 
-    fn create_track(
-        broadcast: &mut BroadcastProducer,
-        name: &str,
-        container: Container,
-    ) -> Result<ContainerProducer<Container>, MoqClientError> {
-        let track = broadcast
-            .create_track(Track::new(name))
-            .map_err(|err| MoqClientError::BroadcastInitFailed(format!("{err}")))?;
-        // The encoder may hand us deltas before the first keyframe; drop them
-        // rather than treating them as a protocol violation.
-        Ok(ContainerProducer::new(track, container).with_lenient_start())
+    /// CMAF timestamps are carried in the timescale of its init segment.
+    fn track_info(
+        reserved: &Reserved,
+        priority: u8,
+        container: &Container,
+    ) -> Result<moq_net::track::Info, MoqClientError> {
+        let info = reserved.track_info(priority);
+        let Container::Cmaf(wire) = container else {
+            return Ok(info);
+        };
+        let timescale = Timescale::new(wire.trak().mdia.mdhd.timescale as u64)
+            .map_err(|err| MoqClientError::InitSegmentError(format!("{err}")))?;
+        Ok(info.with_timescale(timescale))
     }
 
     fn init_video_encoder(
@@ -454,7 +424,7 @@ impl InterleavedPacketResolver {
     fn handle_video_read(
         &mut self,
         event: Option<EncodedOutputEvent>,
-        video_producer: Option<&mut ContainerProducer<Container>>,
+        video_producer: Option<&mut ContainerProducer<Container, VideoConfig>>,
     ) {
         match event {
             Some(EncodedOutputEvent::Data(chunk)) => self.next_video = Some(chunk),
@@ -474,7 +444,7 @@ impl InterleavedPacketResolver {
     fn handle_audio_read(
         &mut self,
         event: Option<EncodedOutputEvent>,
-        audio_producer: Option<&mut ContainerProducer<Container>>,
+        audio_producer: Option<&mut ContainerProducer<Container, AudioConfig>>,
     ) {
         match event {
             Some(EncodedOutputEvent::Data(chunk)) => self.next_audio = Some(chunk),
@@ -522,11 +492,18 @@ fn send_chunk(
             };
             trace!(?pts, "MoQ video frame.");
             let timestamp = Timestamp::from_micros(pts.as_micros_saturating())?;
-            producer.write(Frame {
+            let result = producer.write(Frame {
                 timestamp,
+                duration: None,
                 payload: chunk.data,
                 keyframe: chunk.is_keyframe,
-            })?;
+            });
+            match result {
+                // The encoder may hand us deltas before the first keyframe; drop them
+                // rather than treating them as a protocol violation.
+                Err(moq_mux::Error::MissingKeyframe(_)) => {}
+                result => result?,
+            }
         }
         MediaKind::Audio(_) => {
             let Some(producer) = state.audio.as_mut() else {
@@ -538,10 +515,11 @@ fn send_chunk(
             let timestamp = Timestamp::from_micros(pts.as_micros_saturating())?;
             producer.write(Frame {
                 timestamp,
+                duration: None,
                 payload: chunk.data,
                 keyframe: true,
             })?;
-            producer.finish_group()?;
+            producer.cut(None)?;
         }
     }
     Ok(())

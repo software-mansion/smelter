@@ -9,7 +9,7 @@ use smelter_render::{Framerate, OutputFrameFormat};
 
 use crate::{
     pipeline::moq::output::cmaf_init_segment::{
-        self, aac_cmaf_init_segment, h264_cmaf_init_segment, opus_cmaf_init_segment,
+        aac_cmaf_init_segment, h264_cmaf_init_segment, opus_cmaf_init_segment,
         vp8_cmaf_init_segment, vp9_cmaf_init_segment,
     },
     prelude::*,
@@ -86,11 +86,11 @@ pub(super) fn video_catalog_entry(
                 hang_catalog::VideoCodec::VP9(vp9) => vp9_cmaf_init_segment(vp9, resolution)?,
                 _ => unreachable!("codec is built from the encoder options above"),
             };
-            cmaf_container(init, cmaf_init_segment::VIDEO_TIMESCALE)
+            hang_catalog::Container::Cmaf { init }
         }
     };
 
-    let wire = WireContainer::try_from(&config.container)
+    let wire = WireContainer::try_from(&config)
         .map_err(|err| MoqClientError::InitSegmentError(format!("{err}")))?;
     Ok((config, wire))
 }
@@ -122,11 +122,11 @@ fn opus_audio_catalog_entry(
         MoqOutputContainer::Loc => hang_catalog::Container::Loc,
         MoqOutputContainer::Cmaf => {
             let init = opus_cmaf_init_segment(opus.sample_rate, extradata, opus.channels)?;
-            cmaf_container(init, opus.sample_rate)
+            hang_catalog::Container::Cmaf { init }
         }
     };
 
-    let wire = WireContainer::try_from(&config.container)
+    let wire = WireContainer::try_from(&config)
         .map_err(|err| MoqClientError::InitSegmentError(format!("{err}")))?;
     Ok((config, wire))
 }
@@ -166,11 +166,13 @@ fn aac_audio_catalog_entry(
         MoqOutputContainer::Loc => hang_catalog::Container::Loc,
         MoqOutputContainer::Cmaf => {
             let asc = description.ok_or(MoqClientError::MissingAacEncoderConfig)?;
-            cmaf_container(aac_cmaf_init_segment(&asc)?, aac.sample_rate)
+            hang_catalog::Container::Cmaf {
+                init: aac_cmaf_init_segment(&asc)?,
+            }
         }
     };
 
-    let wire = WireContainer::try_from(&config.container)
+    let wire = WireContainer::try_from(&config)
         .map_err(|err| MoqClientError::InitSegmentError(format!("{err}")))?;
     Ok((config, wire))
 }
@@ -179,17 +181,6 @@ fn channel_count(channels: AudioChannels) -> u32 {
     match channels {
         AudioChannels::Mono => 1,
         AudioChannels::Stereo => 2,
-    }
-}
-
-// `timescale` and `track_id` duplicate what's already in `init`; hang emits them
-// for players that predate the `init` field.
-#[allow(deprecated)]
-fn cmaf_container(init: Bytes, timescale: u32) -> hang_catalog::Container {
-    hang_catalog::Container::Cmaf {
-        init,
-        timescale: Some(timescale),
-        track_id: Some(cmaf_init_segment::TRACK_ID),
     }
 }
 
