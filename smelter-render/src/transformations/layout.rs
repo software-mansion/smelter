@@ -108,17 +108,6 @@ pub struct NestedLayout {
     /// top/left/width/height
     pub scale_x: f32,
     pub scale_y: f32,
-    /// Crop is applied before scaling.
-    ///
-    /// If you need to scale before cropping use 2 nested layouts:
-    /// - child to scale
-    /// - parent to crop
-    ///
-    /// Depending on content
-    /// - For texture it describes what chunk of texture should be cut and stretched on
-    ///   width/height
-    /// - For layout it cuts of part of it (defined in coordinates system of this component)
-    pub crop: Option<Crop>,
     /// Everything outside this mask should not be rendered. Coordinates are relative to
     /// the layouts top-left corner (and not to the 0,0 point that top-left are defined in)
     pub mask: Option<Mask>,

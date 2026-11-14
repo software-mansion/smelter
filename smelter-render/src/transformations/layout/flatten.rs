@@ -151,138 +151,44 @@ impl NestedLayout {
         // scaled separately for horizontal and vertical direction.
         let unified_scale = f32::min(self.scale_x, self.scale_y);
 
-        match &self.crop {
-            None => RenderLayout {
-                top: self.top + (child.top * self.scale_y),
-                left: self.left + (child.left * self.scale_x),
-                width: child.width * self.scale_x,
-                height: child.height * self.scale_y,
-                rotation_degrees: child.rotation_degrees + self.rotation_degrees, // TODO: not exactly correct
-                content: match child.content {
-                    RenderLayoutContent::Color {
-                        color,
-                        border_color,
-                        border_width,
-                    } => RenderLayoutContent::Color {
-                        color,
-                        border_color,
-                        border_width: border_width * unified_scale,
-                    },
-                    RenderLayoutContent::ChildNode {
-                        index,
-                        border_color,
-                        border_width,
-                        crop,
-                    } => RenderLayoutContent::ChildNode {
-                        index,
-                        border_color,
-                        border_width: border_width * unified_scale,
-                        crop,
-                    },
-                    RenderLayoutContent::BoxShadow { color, blur_radius } => {
-                        RenderLayoutContent::BoxShadow {
-                            color,
-                            blur_radius: blur_radius * unified_scale,
-                        }
-                    }
+        RenderLayout {
+            top: self.top + (child.top * self.scale_y),
+            left: self.left + (child.left * self.scale_x),
+            width: child.width * self.scale_x,
+            height: child.height * self.scale_y,
+            rotation_degrees: child.rotation_degrees + self.rotation_degrees, // TODO: not exactly correct
+            content: match child.content {
+                RenderLayoutContent::Color {
+                    color,
+                    border_color,
+                    border_width,
+                } => RenderLayoutContent::Color {
+                    color,
+                    border_color,
+                    border_width: border_width * unified_scale,
                 },
-                // TODO: This will not work correctly for layouts that are not proportionally
-                // scaled
-                border_radius: child.border_radius * unified_scale,
-                masks: self.parent_parent_masks(&child.masks),
-            },
-            Some(crop) => {
-                // Below values are only correct if `crop` is in the same coordinate
-                // system as self.top/self.left/self.width/self.height. This condition
-                // will always be fulfilled as long NestedLayout with LayoutContent::ChildNode
-                // does not have any child layouts.
-
-                // Value in coordinates of `self` (relative to it's top-left corner). Represents
-                // a position after cropping and translated back to (layout.top, layout.left).
-                let cropped_top = f32::max(child.top - crop.top, 0.0);
-                let cropped_left = f32::max(child.left - crop.left, 0.0);
-                let cropped_bottom = f32::min(child.top + child.height - crop.top, crop.height);
-                let cropped_right = f32::min(child.left + child.width - crop.left, crop.width);
-                let cropped_width = cropped_right - cropped_left;
-                let cropped_height = cropped_bottom - cropped_top;
-                match child.content.clone() {
-                    RenderLayoutContent::Color {
+                RenderLayoutContent::ChildNode {
+                    index,
+                    border_color,
+                    border_width,
+                    crop,
+                } => RenderLayoutContent::ChildNode {
+                    index,
+                    border_color,
+                    border_width: border_width * unified_scale,
+                    crop,
+                },
+                RenderLayoutContent::BoxShadow { color, blur_radius } => {
+                    RenderLayoutContent::BoxShadow {
                         color,
-                        border_color,
-                        border_width,
-                    } => {
-                        RenderLayout {
-                            top: self.top + (cropped_top * self.scale_y),
-                            left: self.left + (cropped_left * self.scale_x),
-                            width: cropped_width * self.scale_x,
-                            height: cropped_height * self.scale_y,
-                            rotation_degrees: child.rotation_degrees + self.rotation_degrees, // TODO: not exactly correct
-                            content: RenderLayoutContent::Color {
-                                color,
-                                border_color,
-                                border_width: border_width * unified_scale,
-                            },
-                            border_radius: child.border_radius * unified_scale,
-                            masks: self.parent_parent_masks(&child.masks),
-                        }
-                    }
-                    RenderLayoutContent::ChildNode {
-                        index,
-                        crop: child_crop,
-                        border_color,
-                        border_width,
-                    } => {
-                        // Calculate how much top/left coordinates changed when cropping. It represents
-                        // how much was removed in layout coordinates. Ignore the change of a position that
-                        // was a result of a translation after cropping.
-                        let top_diff = f32::max(crop.top - child.top, 0.0);
-                        let left_diff = f32::max(crop.left - child.left, 0.0);
-
-                        // Factor to translate from `layout` coordinates to child node coord.
-                        // The same factor holds for translations from `self.layout`.
-                        let horizontal_scale_factor = child_crop.width / child.width;
-                        let vertical_scale_factor = child_crop.height / child.height;
-
-                        let crop = Crop {
-                            top: child_crop.top + (top_diff * vertical_scale_factor),
-                            left: child_crop.left + (left_diff * horizontal_scale_factor),
-                            width: cropped_width * horizontal_scale_factor,
-                            height: cropped_height * vertical_scale_factor,
-                        };
-
-                        RenderLayout {
-                            top: self.top + (cropped_top * self.scale_y),
-                            left: self.left + (cropped_left * self.scale_x),
-                            width: cropped_width * self.scale_x,
-                            height: cropped_height * self.scale_y,
-                            rotation_degrees: child.rotation_degrees + self.rotation_degrees, // TODO: not exactly correct
-                            content: RenderLayoutContent::ChildNode {
-                                index,
-                                crop,
-                                border_color,
-                                border_width,
-                            },
-                            border_radius: child.border_radius * unified_scale,
-                            masks: self.parent_parent_masks(&child.masks),
-                        }
-                    }
-                    RenderLayoutContent::BoxShadow { color, blur_radius } => {
-                        RenderLayout {
-                            top: self.top + (cropped_top * self.scale_y),
-                            left: self.left + (cropped_left * self.scale_x),
-                            width: cropped_width * self.scale_x,
-                            height: cropped_height * self.scale_y,
-                            rotation_degrees: child.rotation_degrees + self.rotation_degrees, // TODO: not exactly correct
-                            content: RenderLayoutContent::BoxShadow {
-                                color,
-                                blur_radius: blur_radius * unified_scale,
-                            },
-                            border_radius: child.border_radius * unified_scale,
-                            masks: self.parent_parent_masks(&child.masks),
-                        }
+                        blur_radius: blur_radius * unified_scale,
                     }
                 }
-            }
+            },
+            // TODO: This will not work correctly for layouts that are not proportionally
+            // scaled
+            border_radius: child.border_radius * unified_scale,
+            masks: self.parent_parent_masks(&child.masks),
         }
     }
 

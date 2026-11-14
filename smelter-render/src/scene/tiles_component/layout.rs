@@ -31,7 +31,6 @@ pub(super) fn place_tiles(
         rotation_degrees: 0.0,
         scale_x: 1.0,
         scale_y: 1.0,
-        crop: None,
         mask: None,
         content: LayoutContent::Color(background_color),
         children: vec![],

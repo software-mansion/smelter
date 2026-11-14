@@ -247,7 +247,6 @@ impl LayoutChild {
             rotation_degrees: placement.rotation_degrees,
             scale_x: placement.scale,
             scale_y: placement.scale,
-            crop: None,
             mask: None,
             content,
             children,

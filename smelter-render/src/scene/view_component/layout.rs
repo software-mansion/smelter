@@ -38,29 +38,19 @@ impl ViewComponentParam {
         };
         let border_radius = self.border_radius.clip_to_size(size);
         let static_child_size = self.static_child_size(content_size, children);
-        let (scale, crop, mask) = match self.overflow {
-            Overflow::Visible => (1.0, None, None),
-            Overflow::Hidden => (
-                1.0,
-                None,
-                Some(Mask {
-                    radius: border_radius - self.border_width,
-                    top: self.border_width,
-                    left: self.border_width,
-                    width: content_size.width,
-                    height: content_size.height,
-                }),
-            ),
+        let content_mask = Mask {
+            radius: border_radius - self.border_width,
+            top: self.border_width,
+            left: self.border_width,
+            width: content_size.width,
+            height: content_size.height,
+        };
+        let (scale, mask) = match self.overflow {
+            Overflow::Visible => (1.0, None),
+            Overflow::Hidden => (1.0, Some(content_mask)),
             Overflow::Fit => (
                 self.scale_factor_for_overflow_fit(content_size, children),
-                None,
-                Some(Mask {
-                    radius: border_radius - self.border_width,
-                    top: self.border_width,
-                    left: self.border_width,
-                    width: content_size.width,
-                    height: content_size.height,
-                }),
+                Some(content_mask),
             ),
         };
 
@@ -97,7 +87,6 @@ impl ViewComponentParam {
             rotation_degrees: 0.0,
             scale_x: scale,
             scale_y: scale,
-            crop,
             mask,
             content: LayoutContent::Color(self.background_color),
             children: vec![],

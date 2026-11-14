@@ -77,7 +77,6 @@ impl RescalerComponentParam {
             rotation_degrees: 0.0,
             scale_x: 1.0,
             scale_y: 1.0,
-            crop: None,
             mask: Some(Mask {
                 radius: border_radius - self.border_width,
                 top: self.border_width,
