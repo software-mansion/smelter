@@ -66,7 +66,9 @@ pub(super) struct ChildPlacement {
 /// inside of it are rendered to the same texture.
 pub(super) struct LayoutRoot {
     pub(super) component: StatefulLayoutComponent,
-    /// Size that is available for the component.
+    /// Size that the component has to be placed in regardless of what it asks for.
+    forced_size: Option<Size>,
+    /// Size that the component was placed in by the last `layout` call.
     size: Size,
     /// Resolution of the output texture calculated by the last `layout` call.
     resolution: Resolution,
@@ -80,33 +82,22 @@ impl LayoutRoot {
         forced_size: Option<Size>,
         ctx: &BuildStateTreeCtx,
     ) -> Result<Self, SceneError> {
-        let size = match forced_size {
-            Some(size) => size,
-            None => {
-                let (width, height) = match component.position() {
-                    Position::Static { width, height } => (width, height),
-                    // Technically absolute positioning is a bug here, but I think throwing error
-                    // in this case would be to invasive. It's better to just ignore those values.
-                    Position::Absolute(position) => (position.width, position.height),
-                };
-                let (Some(width), Some(height)) = (width, height) else {
-                    return Err(SceneError::UnknownDimensionsForLayoutNodeRoot {
-                        component: component.component_type(),
-                        msg: match component.component_id() {
-                            Some(id) => format!(
-                                "Please provide width and height values for component with id \"{id}\""
-                            ),
-                            None => "Please provide width and height values.".to_string(),
-                        },
-                    });
-                };
-                Size { width, height }
-            }
+        let Some(size) = forced_size.or_else(|| requested_size(&component)) else {
+            return Err(SceneError::UnknownDimensionsForLayoutNodeRoot {
+                component: component.component_type(),
+                msg: match component.component_id() {
+                    Some(id) => format!(
+                        "Please provide width and height values for component with id \"{id}\""
+                    ),
+                    None => "Please provide width and height values.".to_string(),
+                },
+            });
         };
 
         Ok(Self {
             resolution: resolution(&component, size),
             component,
+            forced_size,
             size,
             node: LayoutNode::new(ctx.render_ctx),
             output: NodeTexture::new(),
@@ -119,6 +110,11 @@ impl LayoutRoot {
 
     pub(super) fn layout(&mut self, ctx: &LayoutCtx) {
         self.component.measure(ctx);
+        // A component that does not ask for a specific size is rejected in `new`, and that
+        // can't change without a scene update.
+        if let Some(size) = self.forced_size.or_else(|| requested_size(&self.component)) {
+            self.size = size;
+        }
         self.resolution = resolution(&self.component, self.size);
         self.component.place(self.size);
     }
@@ -133,6 +129,20 @@ impl LayoutRoot {
         self.node
             .render(ctx, &sources, &mut self.output, layout, self.resolution);
     }
+}
+
+/// Size that `component` asks for. `None` if either width or height is not specified.
+fn requested_size(component: &StatefulLayoutComponent) -> Option<Size> {
+    let (width, height) = match component.position() {
+        Position::Static { width, height } => (width, height),
+        // Technically absolute positioning is a bug here, but I think throwing error
+        // in this case would be to invasive. It's better to just ignore those values.
+        Position::Absolute(position) => (position.width, position.height),
+    };
+    Some(Size {
+        width: width?,
+        height: height?,
+    })
 }
 
 /// Resolution of a texture that `component` is rendered to if `size` is available for it.
