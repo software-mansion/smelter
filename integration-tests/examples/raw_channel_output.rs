@@ -65,7 +65,8 @@ fn main() {
             initial: Scene::ComponentTree(Component::InputStream(InputStreamComponent {
                 id: None,
                 input_id: input_id.clone(),
-            })),
+            }))
+            .into(),
         }),
         audio: Some(RegisterOutputAudioOptions {
             initial: AudioMixerConfig {

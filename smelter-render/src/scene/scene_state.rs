@@ -8,7 +8,8 @@ use crate::{
 };
 
 use super::{
-    ComponentId, Node, NodeParams, OutputScene, Position, SceneError, Size, StatefulComponent,
+    Component, ComponentId, ComponentSize, Node, NodeParams, OutputScene, Position, SceneError,
+    Size, StatefulComponent,
     image_component::StatefulImageComponent,
     input_stream_component::StatefulInputStreamComponent,
     layout::{LayoutNode, SizedLayoutComponent, StatefulLayoutComponent},
@@ -63,6 +64,28 @@ impl SceneState {
     pub(crate) fn clear_output_state(&mut self, output_id: &OutputId) {
         self.output_scenes.remove(output_id);
         self.output_states.remove(output_id);
+    }
+
+    /// Size the component would have if it was used in a scene right now. It does not modify
+    /// state of any output.
+    pub(crate) fn measure_component(
+        &self,
+        component: Component,
+        renderers: &Renderers,
+        text_renderer_ctx: &TextRendererCtx,
+    ) -> Result<ComponentSize, SceneError> {
+        let ctx = BuildStateTreeCtx {
+            prev_state: HashMap::new(),
+            last_render_pts: self.last_pts,
+            input_resolutions: &self.input_resolutions,
+            text_renderer_ctx,
+            renderers,
+        };
+        let component = component.stateful_component(&ctx)?;
+        Ok(ComponentSize {
+            width: component.width(self.last_pts),
+            height: component.height(self.last_pts),
+        })
     }
 
     pub(crate) fn update_scene(

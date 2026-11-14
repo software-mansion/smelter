@@ -20,7 +20,8 @@ fn default_video() -> smelter_core::RegisterOutputVideoOptions {
     smelter_core::RegisterOutputVideoOptions {
         initial: smelter_render::scene::Scene::ComponentTree(
             smelter_render::scene::Component::View(smelter_render::scene::ViewComponent::default()),
-        ),
+        )
+        .into(),
     }
 }
 

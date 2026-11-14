@@ -19,7 +19,6 @@ use smelter_render::{
         ErrorStack, RegisterFontError, RegisterRendererError, RequestKeyframeError,
         UnregisterRendererError, UpdateSceneError,
     },
-    scene::Scene,
 };
 
 use crate::{
@@ -35,6 +34,7 @@ use crate::{
             register_pipeline_output,
         },
         rtmp::spawn_rtmp_server,
+        script::{OutputScripts, ScriptTarget, SetSceneError},
         webrtc::{
             UdpMuxHandle, WebrtcSettingEngineCtx, WhipWhepPipelineState, WhipWhepServer,
             WhipWhepServerHandle,
@@ -53,6 +53,7 @@ pub struct Pipeline {
     pub(super) outputs: PipelineOutputs,
     pub(super) queue: Arc<Queue>,
     pub(super) renderer: Renderer,
+    pub(super) scripts: OutputScripts,
     pub(super) stats_monitor: StatsMonitor,
 
     pub(super) ctx: Arc<PipelineCtx>,
@@ -220,6 +221,7 @@ impl Pipeline {
 
         self.audio_mixer.unregister_output(output_id);
         self.outputs.remove(output_id);
+        self.scripts.remove(output_id);
         self.renderer.unregister_output(output_id);
         Ok(())
     }
@@ -243,18 +245,22 @@ impl Pipeline {
             .unregister_renderer(renderer_id, registry_type)
     }
 
+    /// If the scene is defined by a script that returns audio config, then that config is used
+    /// instead of `audio`.
     pub fn update_output(
         &mut self,
         output_id: OutputId,
-        video: Option<Scene>,
+        video: Option<OutputScene>,
         audio: Option<AudioMixerConfig>,
-    ) -> Result<(), UpdateSceneError> {
+    ) -> Result<(), UpdateOutputError> {
         self.check_output_spec(&output_id, &video, &audio)?;
         if let Some(video) = video {
             self.update_scene_root(output_id.clone(), video)?;
         }
 
-        if let Some(audio) = audio {
+        if let Some(audio) = audio
+            && !self.scripts.controls_audio(&output_id)
+        {
             self.update_audio(&output_id, audio)?;
         }
 
@@ -282,7 +288,7 @@ impl Pipeline {
     fn check_output_spec(
         &self,
         output_id: &OutputId,
-        video: &Option<Scene>,
+        video: &Option<OutputScene>,
         audio: &Option<AudioMixerConfig>,
     ) -> Result<(), UpdateSceneError> {
         let Some(output) = self.outputs.get(output_id) else {
@@ -300,15 +306,15 @@ impl Pipeline {
     fn update_scene_root(
         &mut self,
         output_id: OutputId,
-        scene: Scene,
-    ) -> Result<(), UpdateSceneError> {
+        scene: OutputScene,
+    ) -> Result<(), UpdateOutputError> {
         let output = self
             .outputs
             .get_mut(&output_id)
             .ok_or_else(|| UpdateSceneError::OutputNotRegistered(output_id.clone()))?;
 
         let Some(video_output) = output.output.video() else {
-            return Err(UpdateSceneError::AudioVideoNotMatching(output_id));
+            return Err(UpdateSceneError::AudioVideoNotMatching(output_id).into());
         };
 
         info!(?output_id, "Update scene {:?}", scene);
@@ -321,12 +327,17 @@ impl Pipeline {
             return Ok(());
         }
 
-        self.renderer.update_scene(
-            output_id,
-            video_output.resolution,
-            video_output.frame_format,
-            scene,
-        )
+        let target = ScriptTarget {
+            resolution: video_output.resolution,
+            frame_format: video_output.frame_format,
+            has_audio: output.has_audio(),
+        };
+        self.scripts
+            .set_scene(&output_id, scene, target)
+            .map_err(|err| match err {
+                SetSceneError::Scene(err) => UpdateOutputError::SceneError(err),
+                SetSceneError::Script(err) => UpdateOutputError::ScriptError(output_id, err),
+            })
     }
 
     fn update_audio(
@@ -433,8 +444,15 @@ fn run_renderer_thread(
     frames_receiver: Receiver<QueueVideoOutput>,
     send_policy: OutputSendPolicy,
 ) {
-    let renderer = match pipeline.upgrade() {
-        Some(pipeline) => pipeline.lock().unwrap().renderer.clone(),
+    let (renderer, scripts, queue_ctx) = match pipeline.upgrade() {
+        Some(pipeline) => {
+            let guard = pipeline.lock().unwrap();
+            (
+                guard.renderer.clone(),
+                guard.scripts.clone(),
+                guard.ctx.queue_ctx.clone(),
+            )
+        }
         None => {
             warn!("Pipeline stopped before render thread was started.");
             return;
@@ -447,8 +465,26 @@ fn run_renderer_thread(
             break;
         };
 
-        let senders = pipeline.lock().unwrap().outputs.video_senders();
+        // Needs to happen before reading the list of inputs.
+        let pipeline_events = scripts.take_pipeline_events();
+        let (senders, registered_inputs) = {
+            let guard = pipeline.lock().unwrap();
+            let inputs = guard.inputs.values();
+            (
+                guard.outputs.video_senders(),
+                inputs.map(|input| input.input_ref.clone()).collect(),
+            )
+        };
         drop(pipeline);
+
+        // Scripts can update scenes, so they need to run before rendering.
+        let queue_start_pts = queue_ctx.start_pts().unwrap_or_default();
+        scripts.process_frame(
+            input_frames.pts - queue_start_pts,
+            pipeline_events,
+            registered_inputs,
+            &input_frames.frames,
+        );
 
         let input_frames: FrameSet<InputId> = input_frames.into();
 
@@ -471,6 +507,7 @@ fn run_renderer_thread(
             let pts = frame.pts;
             if send_policy.send(sender, frame.into(), pts.into()).is_err() {
                 warn!(?output_id, "Failed to send output frames. Channel closed.");
+                scripts.remove(&output_id);
                 renderer.unregister_output(&output_id);
             }
         }
@@ -578,6 +615,15 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
     )?;
 
     let queue = Queue::new(queue_options);
+    let event_emitter = Arc::new(EventEmitter::new());
+    let audio_mixer = AudioMixer::new(opts.mixing_sample_rate);
+    let scripts = OutputScripts::new(
+        opts.script_runtime,
+        renderer.clone(),
+        audio_mixer.clone(),
+        event_emitter.clone(),
+        opts.output_framerate,
+    );
     let ctx = Arc::new(PipelineCtx {
         queue_ctx: queue.ctx(),
         default_buffer_duration: opts.default_buffer_duration,
@@ -587,7 +633,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         output_framerate: opts.output_framerate,
 
         download_dir,
-        event_emitter: Arc::new(EventEmitter::new()),
+        event_emitter,
         stats_sender,
         tokio_rt: tokio_rt.handle().clone(),
         graphics_context,
@@ -619,8 +665,9 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         inputs: HashMap::new(),
         queue,
         renderer,
+        scripts,
         stats_monitor,
-        audio_mixer: AudioMixer::new(opts.mixing_sample_rate),
+        audio_mixer,
         is_started: false,
         ctx,
         whip_whep_handle,

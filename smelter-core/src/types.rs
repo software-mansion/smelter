@@ -130,6 +130,11 @@ impl<Id: fmt::Display + Clone> Ref<Id> {
         &self.public_id
     }
 
+    /// Value that is higher for refs created later.
+    pub fn creation_order(&self) -> u64 {
+        self.generated_id
+    }
+
     pub fn to_unique_string(&self) -> String {
         format!("{}-{}", self.public_id, self.generated_id)
     }

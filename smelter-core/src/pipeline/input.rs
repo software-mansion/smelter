@@ -20,6 +20,8 @@ use crate::prelude::*;
 
 pub struct PipelineInput {
     pub input: Input,
+    /// Unique per registration, unlike `InputId` which can be reused after unregister.
+    pub(crate) input_ref: Ref<InputId>,
 
     _stats_guard: InputStatsGuard,
 }
@@ -140,6 +142,7 @@ where
 
     let pipeline_input = PipelineInput {
         input,
+        input_ref: input_ref.clone(),
         _stats_guard: stats_guard,
     };
 

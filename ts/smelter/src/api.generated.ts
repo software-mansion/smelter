@@ -1951,8 +1951,18 @@ export interface OutputRtpVideoOptions {
    */
   initial: VideoScene;
 }
+/**
+ * Defines what is rendered for the output. Exactly one of `root` and `script` has to be defined.
+ */
 export interface VideoScene {
-  root: Component;
+  /**
+   * Root of a component tree.
+   */
+  root?: Component | null;
+  /**
+   * Script that produces the component tree. It runs inside Smelter, so it can react to input state changes or timers without any delay.
+   */
+  script?: SceneScript | null;
 }
 export interface Transition {
   /**
@@ -1975,6 +1985,20 @@ export interface BoxShadow {
   offset_y?: number | null;
   color?: RGBAColor | null;
   blur_radius?: number | null;
+}
+export interface SceneScript {
+  /**
+   * Source code of a Lua script (Luau dialect).
+   *
+   * A script that is already running for this output is not restarted when an update request provides exactly the same source, only `props` are replaced.
+   */
+  source: string;
+  /**
+   * Any JSON value, available in the script as `smelter.props()`. Defaults to `null`.
+   */
+  props?: {
+    [k: string]: unknown;
+  };
 }
 export interface OutputRtpAudioOptions {
   /**

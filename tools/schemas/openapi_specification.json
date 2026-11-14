@@ -6640,6 +6640,22 @@
           }
         ]
       },
+      "SceneScript": {
+        "type": "object",
+        "required": [
+          "source"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Source code of a Lua script (Luau dialect).\n\nA script that is already running for this output is not restarted when an update\nrequest provides exactly the same source, only `props` are replaced."
+          },
+          "props": {
+            "description": "Any JSON value, available in the script as `smelter.props()`. Defaults to `null`."
+          }
+        },
+        "additionalProperties": false
+      },
       "Shader": {
         "type": "object",
         "required": [
@@ -7422,12 +7438,29 @@
       },
       "VideoScene": {
         "type": "object",
-        "required": [
-          "root"
-        ],
+        "description": "Defines what is rendered for the output. Exactly one of `root` and `script` has to be\ndefined.",
         "properties": {
           "root": {
-            "$ref": "#/components/schemas/Component"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Component",
+                "description": "Root of a component tree."
+              }
+            ]
+          },
+          "script": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SceneScript",
+                "description": "Script that produces the component tree. It runs inside Smelter, so it can react to\ninput state changes or timers without any delay."
+              }
+            ]
           }
         },
         "additionalProperties": false

@@ -6,6 +6,7 @@ pub use crate::timestamp::*;
 
 pub use crate::input::*;
 pub use crate::output::*;
+pub use crate::script::*;
 
 pub use crate::frame::*;
 pub use crate::types::*;

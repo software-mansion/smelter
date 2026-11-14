@@ -196,7 +196,7 @@ impl SingleBenchmarkPass {
             output_id.clone(),
             RegisterEncodedDataOutputOptions {
                 video: Some(RegisterOutputVideoOptions {
-                    initial: Scene::ComponentTree(root),
+                    initial: Scene::ComponentTree(root).into(),
                 }),
                 audio: Some(audio_output_options(audio_mix)),
                 output_options: EncodedDataOutputOptions {
@@ -235,7 +235,7 @@ impl SingleBenchmarkPass {
             output_id.clone(),
             RegisterEncodedDataOutputOptions {
                 video: Some(RegisterOutputVideoOptions {
-                    initial: Scene::ComponentTree(root),
+                    initial: Scene::ComponentTree(root).into(),
                 }),
                 audio: Some(audio_output_options(audio_mix)),
                 output_options: EncodedDataOutputOptions {
@@ -268,7 +268,7 @@ impl SingleBenchmarkPass {
             output_id.clone(),
             RegisterRawDataOutputOptions {
                 video: Some(RegisterOutputVideoOptions {
-                    initial: Scene::ComponentTree(root),
+                    initial: Scene::ComponentTree(root).into(),
                 }),
                 audio: Some(audio_output_options(audio_mix)),
                 output_options: RawDataOutputOptions {

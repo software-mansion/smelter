@@ -29,6 +29,9 @@ pub use input::*;
 mod output;
 pub use output::*;
 
+mod script;
+pub use script::*;
+
 mod prelude;
 
 pub const GPU_VIDEO_ENABLED: bool = cfg!(feature = "gpu-video");

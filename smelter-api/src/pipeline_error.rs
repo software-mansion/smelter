@@ -1,9 +1,11 @@
 //! Maps pipeline errors to error codes and error categories returned by the HTTP API.
 
 use smelter_core::{
+    ScriptError,
     error::{
         InitPipelineError, InputInitError, OutputInitError, RegisterInputError,
         RegisterOutputError, UnregisterInputError, UnregisterOutputError, UpdateInputError,
+        UpdateOutputError,
     },
     protocols::{MoqClientError, Mp4InputError, RtmpClientError, WebrtcClientError},
 };
@@ -200,6 +202,7 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
                 PipelineErrorInfo::new(OUTPUT_ERROR, ErrorType::ServerError)
             }
             RegisterOutputError::SceneError(_, err) => err.into(),
+            RegisterOutputError::ScriptError(_, err) => err.into(),
             RegisterOutputError::NoVideoAndAudio(_) => {
                 PipelineErrorInfo::new(NO_VIDEO_OR_AUDIO_FOR_OUTPUT, ErrorType::UserError)
             }
@@ -268,6 +271,34 @@ impl From<&UpdateSceneError> for PipelineErrorInfo {
                 error_code: AUDIO_VIDEO_SPECIFICATION_NOT_MATCHING,
                 error_type: ErrorType::UserError,
             },
+        }
+    }
+}
+
+impl From<&UpdateOutputError> for PipelineErrorInfo {
+    fn from(err: &UpdateOutputError) -> Self {
+        match err {
+            UpdateOutputError::SceneError(err) => err.into(),
+            UpdateOutputError::ScriptError(_, err) => err.into(),
+        }
+    }
+}
+
+const SCENE_SCRIPT_ERROR: &str = "SCENE_SCRIPT_ERROR";
+const SCENE_SCRIPT_NOT_SUPPORTED: &str = "SCENE_SCRIPT_NOT_SUPPORTED";
+
+impl From<&ScriptError> for PipelineErrorInfo {
+    fn from(err: &ScriptError) -> Self {
+        match err {
+            ScriptError::RuntimeNotAvailable => {
+                PipelineErrorInfo::new(SCENE_SCRIPT_NOT_SUPPORTED, ErrorType::UserError)
+            }
+            ScriptError::Load(_)
+            | ScriptError::Runtime(_)
+            | ScriptError::InvalidScene(_)
+            | ScriptError::Terminated(_) => {
+                PipelineErrorInfo::new(SCENE_SCRIPT_ERROR, ErrorType::UserError)
+            }
         }
     }
 }

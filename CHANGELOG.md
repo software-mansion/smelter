@@ -15,6 +15,11 @@
 - Add `start_at_ms` option to MP4 and HLS outputs. Output is created when the register request is handled, but it starts producing data at the specified time by [@wkozyra95](https://github.com/wkozyra95)
 - Add `buffer` option to RTMP and HLS inputs to control the buffer kept between the live edge and playback, and `ingest_mode` option to RTMP input by [@wkozyra95](https://github.com/wkozyra95)
 - Return `endpoint_route` when registering a WHEP server output by [@wkozyra95](https://github.com/wkozyra95)
+- Add `script` option to `video.initial` and to the update output request. The scene is defined by a Lua script that runs inside Smelter and reacts to input changes and timers in sync with rendered frames by [@wkozyra95](https://github.com/wkozyra95)
+  - `SMELTER_SCRIPT_ENABLE`
+  - `SMELTER_SCRIPT_MEMORY_LIMIT_MB`
+  - `SMELTER_SCRIPT_START_TIME_LIMIT_MS`
+  - `SMELTER_SCRIPT_UPDATE_TIME_LIMIT_MS`
 
 ### 🐛 Bug fixes
 

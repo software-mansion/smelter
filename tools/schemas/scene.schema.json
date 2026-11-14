@@ -35,13 +35,30 @@
   "additionalProperties": false,
   "definitions": {
     "VideoScene": {
+      "description": "Defines what is rendered for the output. Exactly one of `root` and `script` has to be defined.",
       "type": "object",
-      "required": [
-        "root"
-      ],
       "properties": {
         "root": {
-          "$ref": "#/definitions/Component"
+          "description": "Root of a component tree.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Component"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "script": {
+          "description": "Script that produces the component tree. It runs inside Smelter, so it can react to input state changes or timers without any delay.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SceneScript"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -1503,6 +1520,22 @@
           ]
         }
       ]
+    },
+    "SceneScript": {
+      "type": "object",
+      "required": [
+        "source"
+      ],
+      "properties": {
+        "source": {
+          "description": "Source code of a Lua script (Luau dialect).\n\nA script that is already running for this output is not restarted when an update request provides exactly the same source, only `props` are replaced.",
+          "type": "string"
+        },
+        "props": {
+          "description": "Any JSON value, available in the script as `smelter.props()`. Defaults to `null`."
+        }
+      },
+      "additionalProperties": false
     },
     "AudioScene": {
       "type": "object",

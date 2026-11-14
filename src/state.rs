@@ -2,9 +2,10 @@ use std::sync::{Arc, Mutex};
 
 use smelter_core::{
     LateEventPolicy, Pipeline, PipelineOptions, PipelineRtmpServerOptions, PipelineWgpuOptions,
-    PipelineWhipWhepServerOptions, Timestamp, error::InitPipelineError,
+    PipelineWhipWhepServerOptions, ScriptRuntime, Timestamp, error::InitPipelineError,
     protocols::WebrtcUdpPortStrategy,
 };
+use smelter_lua::LuaScriptRuntime;
 use smelter_render::{
     error::ErrorStack,
     web_renderer::{ChromiumContext, ChromiumContextInitError},
@@ -187,6 +188,9 @@ pub fn pipeline_options_from_config(
         max_layouts_count: opt.render_max_layouts_count,
 
         chromium_context: chromium_context.clone(),
+        script_runtime: opt
+            .script_runtime
+            .map(|options| Arc::new(LuaScriptRuntime::new(options)) as Arc<dyn ScriptRuntime>),
         wgpu_options: PipelineWgpuOptions::Options {
             device_id: opt.gpu_device_id,
             driver_name: opt.gpu_driver_name.clone(),

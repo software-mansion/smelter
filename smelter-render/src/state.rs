@@ -12,7 +12,7 @@ use crate::{
         UnregisterRendererError, UpdateSceneError,
     },
     image,
-    scene::{OutputScene, Scene, SceneState},
+    scene::{Component, ComponentSize, OutputScene, Scene, SceneError, SceneState},
     shader,
     transformations::{
         image::Image,
@@ -199,6 +199,15 @@ impl Renderer {
             .lock()
             .unwrap()
             .update_scene(output_id, resolution, output_format, scene)
+    }
+
+    /// Size the component would have if it was used in a scene right now, e.g. size of a
+    /// registered image or size of a text after layout.
+    pub fn measure_component(&self, component: Component) -> Result<ComponentSize, SceneError> {
+        let guard = self.0.lock().unwrap();
+        guard
+            .scene
+            .measure_component(component, &guard.renderers, &guard.text_renderer_ctx)
     }
 
     pub fn wgpu_ctx(&self) -> Arc<WgpuCtx> {

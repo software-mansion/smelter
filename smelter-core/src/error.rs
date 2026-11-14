@@ -79,10 +79,22 @@ pub enum RegisterOutputError {
     #[error("Failed to initialize the scene when registering output \"{0}\".")]
     SceneError(OutputId, #[source] UpdateSceneError),
 
+    #[error("Failed to start the scene script when registering output \"{0}\".")]
+    ScriptError(OutputId, #[source] ScriptError),
+
     #[error(
         "Failed to register output stream \"{0}\". At least one of \"video\" and \"audio\" must be specified."
     )]
     NoVideoAndAudio(OutputId),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum UpdateOutputError {
+    #[error(transparent)]
+    SceneError(#[from] UpdateSceneError),
+
+    #[error("Failed to update the scene script of output \"{0}\".")]
+    ScriptError(OutputId, #[source] ScriptError),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -164,6 +176,9 @@ pub enum OutputRuntimeError {
 
     #[error(transparent)]
     Whip(#[from] OutputWhipRuntimeError),
+
+    #[error(transparent)]
+    Script(#[from] ScriptError),
 }
 
 /// Error that can happen after registration

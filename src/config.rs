@@ -9,6 +9,7 @@ use std::{
 use rand::Rng;
 use rtmp::TlsConfig;
 use smelter_core::DEFAULT_BUFFER_DURATION;
+use smelter_lua::LuaRuntimeOptions;
 use smelter_render::{DEFAULT_MAX_LAYOUTS_COUNT, Framerate, RenderingMode, WgpuFeatures};
 
 use crate::logger::FfmpegLogLevel;
@@ -53,6 +54,9 @@ pub struct Config {
     pub rtmp_tls_config: Option<TlsConfig>,
 
     pub moq_disable_tls_verification: bool,
+
+    /// Limits for scene scripts, `None` if scripts are disabled.
+    pub script_runtime: Option<LuaRuntimeOptions>,
 }
 
 #[derive(Debug, Clone)]
@@ -381,6 +385,29 @@ fn try_read_config() -> Result<Config, String> {
         Err(_) => DEFAULT_MAX_LAYOUTS_COUNT,
     };
 
+    let script_enable = match env::var("SMELTER_SCRIPT_ENABLE") {
+        Ok(enable) => bool_env_from_str(&enable).unwrap_or(true),
+        Err(_) => true,
+    };
+    let script_runtime = match script_enable {
+        true => {
+            let default = LuaRuntimeOptions::default();
+            Some(LuaRuntimeOptions {
+                memory_limit: match positive_number_env("SMELTER_SCRIPT_MEMORY_LIMIT_MB")? {
+                    Some(megabytes) => megabytes as usize * 1024 * 1024,
+                    None => default.memory_limit,
+                },
+                start_time_limit: positive_number_env("SMELTER_SCRIPT_START_TIME_LIMIT_MS")?
+                    .map(Duration::from_millis)
+                    .unwrap_or(default.start_time_limit),
+                update_time_limit: positive_number_env("SMELTER_SCRIPT_UPDATE_TIME_LIMIT_MS")?
+                    .map(Duration::from_millis)
+                    .unwrap_or(default.update_time_limit),
+            })
+        }
+        false => None,
+    };
+
     let config = Config {
         instance_id,
         api_port,
@@ -418,8 +445,19 @@ fn try_read_config() -> Result<Config, String> {
         moq_disable_tls_verification,
         rendering_mode,
         render_max_layouts_count,
+        script_runtime,
     };
     Ok(config)
+}
+
+fn positive_number_env(name: &str) -> Result<Option<u64>, String> {
+    match env::var(name) {
+        Ok(value) => match value.parse::<u64>() {
+            Ok(value) if value > 0 => Ok(Some(value)),
+            _ => Err(format!("{name} has to be a number greater than 0")),
+        },
+        Err(_) => Ok(None),
+    }
 }
 
 fn read_side_channel_socket_dir() -> Arc<Path> {

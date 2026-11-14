@@ -32,6 +32,7 @@ pub fn benchmark_pipeline_options(
         ahead_of_time_processing: false,
         run_late_scheduled_events: true,
         chromium_context: None,
+        script_runtime: None,
         download_root: std::env::temp_dir().into(),
         load_system_fonts: false,
         mixing_sample_rate: 48_000,

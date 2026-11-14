@@ -41,6 +41,7 @@ mod webrtc;
 mod input;
 mod instance;
 mod output;
+mod script;
 
 pub(crate) mod utils;
 
@@ -71,6 +72,9 @@ pub struct PipelineOptions {
 
     /// required for web rendering support
     pub chromium_context: Option<Arc<ChromiumContext>>,
+
+    /// required for outputs with a scene defined by a script
+    pub script_runtime: Option<Arc<dyn ScriptRuntime>>,
 
     pub whip_whep_server: PipelineWhipWhepServerOptions,
     pub webrtc_stun_servers: Arc<Vec<String>>,

@@ -123,7 +123,8 @@ mod main_module {
                 initial: Scene::ComponentTree(Component::InputStream(InputStreamComponent {
                     id: None,
                     input_id,
-                })),
+                }))
+                .into(),
             }),
             audio: None, // TODO: add audio example
         }

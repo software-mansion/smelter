@@ -16,6 +16,7 @@ use crate::{
         mp4::Mp4Output,
         rtmp::RtmpClientOutput,
         rtp::RtpOutput,
+        script::{ScriptTarget, SetSceneError},
         webrtc::{WhepOutput, WhipOutput},
     },
     stats::OutputStatsGuard,
@@ -306,20 +307,8 @@ fn start_registered_output(
         has_audio: audio.is_some(),
     };
 
-    if let (Some(video_opts), Some(video_output)) = (video, output.output.video()) {
-        let result = pipeline.renderer.update_scene(
-            output_id.clone(),
-            video_output.resolution,
-            video_output.frame_format,
-            video_opts.initial,
-        );
-
-        if let Err(err) = result {
-            pipeline.renderer.unregister_output(output_id);
-            return Err(RegisterOutputError::SceneError(output_id.clone(), err));
-        }
-    };
-
+    // Audio is registered first, because a scene script can replace the audio config.
+    let has_audio = audio.is_some();
     if let Some(audio_opts) = audio {
         pipeline.audio_mixer.register_output(
             output_id.clone(),
@@ -328,6 +317,30 @@ fn start_registered_output(
             audio_opts.channels,
         );
     }
+
+    if let (Some(video_opts), Some(video_output)) = (video, output.output.video()) {
+        let target = ScriptTarget {
+            resolution: video_output.resolution,
+            frame_format: video_output.frame_format,
+            has_audio,
+        };
+        let result = pipeline
+            .scripts
+            .set_scene(output_id, video_opts.initial, target);
+
+        if let Err(err) = result {
+            pipeline.audio_mixer.unregister_output(output_id);
+            pipeline.renderer.unregister_output(output_id);
+            return Err(match err {
+                SetSceneError::Scene(err) => {
+                    RegisterOutputError::SceneError(output_id.clone(), err)
+                }
+                SetSceneError::Script(err) => {
+                    RegisterOutputError::ScriptError(output_id.clone(), err)
+                }
+            });
+        }
+    };
 
     Ok(())
 }

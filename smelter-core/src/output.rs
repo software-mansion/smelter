@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use crossbeam_channel::Receiver;
-use smelter_render::scene::Scene;
 
 use crate::prelude::*;
 
@@ -69,7 +68,7 @@ impl ProtocolOutputOptions {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RegisterOutputVideoOptions {
-    pub initial: Scene,
+    pub initial: OutputScene,
 }
 
 #[derive(Debug, Clone, PartialEq)]

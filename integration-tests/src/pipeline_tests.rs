@@ -4,6 +4,8 @@ mod offline_processing;
 mod output_start_at;
 mod push_input_before_start;
 mod required_inputs;
+#[cfg(test)]
+mod scene_script;
 mod schedule_update;
 mod unregistering;
 mod video_audio;

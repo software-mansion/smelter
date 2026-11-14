@@ -9,6 +9,7 @@ members = [
     # Core crates
     "smelter-api",
     "smelter-core",
+    "smelter-lua",
     "smelter-render",
     "smelter-render-wasm",
 
@@ -36,6 +37,7 @@ web-renderer = ["dep:libcef", "smelter-api/web-renderer"]
 smelter = { path = ".", default-features = false }
 smelter-api = { path = "smelter-api" }
 smelter-core = { path = "smelter-core" }
+smelter-lua = { path = "smelter-lua" }
 smelter-render = { path = "smelter-render" }
 libcef = { path = "libcef" }
 gpu-video = { path = "gpu-video", features = ["expose-parsers", "expose-backends"] }
@@ -92,6 +94,7 @@ moq-native = "0.15"
 smelter-api = { workspace = true }
 smelter-render = { workspace = true }
 smelter-core = { workspace = true }
+smelter-lua = { workspace = true }
 rtmp = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

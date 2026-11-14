@@ -12,6 +12,7 @@ Smelter is a toolkit for real-time, low-latency, programmable video and audio co
 - **`smelter-core`** — Main library. Pipeline management, queue logic, encoding/decoding, muxing/transport protocols, audio mixing. Uses `smelter-render` for composition.
 - **`smelter-render`** — GPU rendering engine (wgpu). Takes input frames → produces composed output frames. Handles YUV/NV12↔RGBA conversion, scene layout, animations/transitions. Two core entrypoints: `Renderer::render` and `Renderer::update_scene`.
 - **`smelter-render-wasm`** — WASM wrapper around `smelter-render` for browser use.
+- **`smelter-lua`** — Lua (Luau) runtime for scenes defined by a script. Implements `ScriptRuntime` from `smelter-core`, converts Lua tables to scenes with `smelter-api` types. See `smelter-lua/README.md` for the Lua API.
 
 **Libraries:**
 - **`vk-video`** — Vulkan Video hardware codec (H.264 decode/encode), Linux/Windows only.

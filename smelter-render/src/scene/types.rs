@@ -53,6 +53,14 @@ pub struct Size {
     pub height: f32,
 }
 
+/// Size of a component as seen by its parent. A dimension is `None` when it is not defined by
+/// the component itself, e.g. a `View` without `width` that takes the size from a parent layout.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ComponentSize {
+    pub width: Option<f32>,
+    pub height: Option<f32>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AbsolutePosition {
     pub width: Option<f32>,

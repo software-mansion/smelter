@@ -13,6 +13,7 @@ gpu-video = ["smelter-core/gpu-video", "dep:gpu-video"]
 [dependencies]
 smelter-render = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 schemars = { workspace = true }
 utoipa = { workspace = true }
 bytes = { workspace = true }
@@ -24,9 +25,6 @@ smelter-core = { workspace = true }
 ffmpeg-next = { workspace = true }
 rtmp = { workspace = true }
 gpu-video = { workspace = true, optional = true }
-
-[dev-dependencies]
-serde_json = { workspace = true }
 
 [lints]
 workspace = true
