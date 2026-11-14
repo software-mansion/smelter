@@ -12,6 +12,7 @@ use anyhow::Result;
 use smelter_render::{
     Frame, FrameSet, InputId, OutputFrameFormat, OutputId, Renderer, RendererId, RendererSpec,
     RenderingMode, Resolution,
+    error::UpdateSceneError,
     scene::{Component, Scene},
 };
 
@@ -71,10 +72,36 @@ impl TestRunner {
         self
     }
 
+    /// Replaces frames sent on subsequent renders. Inputs registered earlier that are missing
+    /// from `inputs` stay registered, but no longer receive frames.
+    pub(crate) fn set_inputs(&mut self, inputs: Vec<TestInput>) {
+        for input in &inputs {
+            if !self.inputs.iter().any(|i| i.name == input.name) {
+                self.renderer
+                    .register_input(InputId(Arc::from(input.name.clone())));
+            }
+        }
+        self.inputs = inputs;
+    }
+
     pub(crate) fn update_scene(&mut self, scene: Component) {
+        self.try_update_scene(scene).unwrap();
+    }
+
+    pub(crate) fn try_update_scene(&mut self, scene: Component) -> Result<(), UpdateSceneError> {
+        self.renderer.update_scene(
+            OutputId(OUTPUT_ID.into()),
+            self.resolution,
+            self.output_format,
+            Scene::ComponentTree(scene),
+        )
+    }
+
+    /// Updates scene of an additional output. Snapshots are still taken from the main one.
+    pub(crate) fn update_scene_for_output(&mut self, output_id: &str, scene: Component) {
         self.renderer
             .update_scene(
-                OutputId(OUTPUT_ID.into()),
+                OutputId(output_id.into()),
                 self.resolution,
                 self.output_format,
                 Scene::ComponentTree(scene),
