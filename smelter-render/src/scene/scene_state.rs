@@ -8,7 +8,7 @@ use crate::{
 use super::{
     ComponentId, OutputScene, SceneError, StatefulComponent,
     image_component::StatefulImageComponent,
-    layout::{LayoutChild, StatefulLayoutComponent},
+    layout::{ChildComponent, StatefulLayoutComponent},
     validation::validate_scene_update,
 };
 
@@ -174,9 +174,9 @@ fn gather_layout_components_with_id<'a>(
         components.insert(id.clone(), PrevComponent::Layout(layout));
     }
     for child in layout.children() {
-        match child {
-            LayoutChild::Layout(layout) => gather_layout_components_with_id(layout, components),
-            LayoutChild::Node(node) => gather_components_with_id(node, components),
+        match &child.component {
+            ChildComponent::Layout(layout) => gather_layout_components_with_id(layout, components),
+            ChildComponent::Node(node) => gather_components_with_id(node, components),
         }
     }
 }

@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{slice, time::Duration};
 
 use crate::transformations::layout::NestedLayout;
 
@@ -7,7 +7,7 @@ use super::{
     RescaleMode, SceneError, Size, VerticalAlign,
     components::RescalerComponent,
     layout::{LayoutChild, StatefulLayoutComponent},
-    scene_state::{BuildStateTreeCtx, PrevComponent},
+    scene_state::{BuildStateTreeCtx, LayoutCtx, PrevComponent},
     transition::{TransitionOptions, TransitionState},
     types::interpolation::ContinuousValue,
 };
@@ -19,6 +19,12 @@ pub(super) struct StatefulRescalerComponent {
     start: Option<RescalerComponentParam>,
     end: RescalerComponentParam,
     transition: Option<TransitionState>,
+    /// State of the component for the current frame. It is a result of the last
+    /// `measure` call.
+    current: RescalerComponentParam,
+    /// Layout of the rescaler itself (without the child). It is a result of the last
+    /// `place` call.
+    layout: Option<NestedLayout>,
     child: LayoutChild,
 }
 
@@ -48,26 +54,34 @@ impl StatefulRescalerComponent {
         ContinuousValue::interpolate(start, &self.end, interpolation_progress)
     }
 
-    pub(super) fn children(&self) -> Vec<&LayoutChild> {
-        vec![&self.child]
+    pub(super) fn children(&self) -> &[LayoutChild] {
+        slice::from_ref(&self.child)
     }
 
-    pub(super) fn children_mut(&mut self) -> Vec<&mut LayoutChild> {
-        vec![&mut self.child]
+    pub(super) fn children_mut(&mut self) -> &mut [LayoutChild] {
+        slice::from_mut(&mut self.child)
     }
 
-    pub(super) fn position(&self, pts: Duration) -> Position {
-        let rescaler = self.transition_snapshot(pts);
-        rescaler.position.with_border(rescaler.border_width)
+    /// External position of a component (includes border)
+    pub(super) fn position(&self) -> Position {
+        self.current.position.with_border(self.current.border_width)
     }
 
     pub(super) fn component_id(&self) -> Option<&ComponentId> {
         self.end.id.as_ref()
     }
 
-    pub(super) fn layout(&mut self, size: Size, pts: Duration) -> NestedLayout {
-        self.transition_snapshot(pts)
-            .layout(size, &mut self.child, pts)
+    pub(super) fn measure(&mut self, ctx: &LayoutCtx) {
+        self.child.measure(ctx);
+        self.current = self.transition_snapshot(ctx.pts);
+    }
+
+    pub(super) fn place(&mut self, size: Size) {
+        self.layout = Some(self.current.place(size, &mut self.child));
+    }
+
+    pub(super) fn own_layout(&self) -> Option<&NestedLayout> {
+        self.layout.as_ref()
     }
 }
 
@@ -117,12 +131,15 @@ impl RescalerComponent {
             interrupt_previous_transition,
             ctx.last_render_pts,
         );
-        let rescaler = StatefulRescalerComponent {
+        let mut rescaler = StatefulRescalerComponent {
             start,
+            current: end.clone(),
             end,
             transition,
+            layout: None,
             child: Component::layout_child(*self.child, ctx)?,
         };
+        rescaler.current = rescaler.transition_snapshot(ctx.last_render_pts);
         Ok(StatefulLayoutComponent::Rescaler(rescaler))
     }
 }

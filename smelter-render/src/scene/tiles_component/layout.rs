@@ -1,27 +1,27 @@
-use std::time::Duration;
-
 use crate::{
     scene::{
         BorderRadius, RGBAColor, Size,
-        layout::{LayoutChild, StatefulLayoutComponent},
+        layout::{ChildComponent, ChildPlacement, LayoutChild},
     },
     transformations::layout::{LayoutContent, NestedLayout},
 };
 
 use super::tiles::Tile;
 
-pub(super) fn layout_tiles(
+/// Places `children` in `tiles` and returns a layout of the tiles component itself. Children
+/// without a tile are not shown.
+pub(super) fn place_tiles(
     tiles: &[Option<Tile>],
     size: Size,
     children: &mut [LayoutChild],
-    pts: Duration,
     background_color: RGBAColor,
 ) -> NestedLayout {
-    let children = children
-        .iter_mut()
-        .zip(tiles)
-        .map(|(component, tile)| layout_child(component, tile.clone(), pts))
-        .collect::<Vec<_>>();
+    for (child, tile) in children.iter_mut().zip(tiles) {
+        match tile {
+            Some(tile) => child.place(tile_placement(tile, child)),
+            None => child.hide(),
+        }
+    }
 
     NestedLayout {
         top: 0.0,
@@ -34,8 +34,7 @@ pub(super) fn layout_tiles(
         crop: None,
         mask: None,
         content: LayoutContent::Color(background_color),
-        child_nodes_count: children.iter().map(|l| l.child_nodes_count).sum(),
-        children,
+        children: vec![],
         border_width: 0.0,
         border_color: RGBAColor(0, 0, 0, 0),
         border_radius: BorderRadius::ZERO,
@@ -43,91 +42,34 @@ pub(super) fn layout_tiles(
     }
 }
 
-fn layout_child(child: &mut LayoutChild, tile: Option<Tile>, pts: Duration) -> NestedLayout {
-    let Some(tile) = tile else {
-        // If tile does not need to be rendered we still need to create empty layout that has
-        // child_nodes_count. Without this element children index offsets will not be calculated
-        // correctly.
-        let child_nodes_count = match child {
-            LayoutChild::Layout(layout_component) => layout_component.nodes_count(),
-            _ => 1,
-        };
-        return NestedLayout::child_nodes_placeholder(child_nodes_count);
+fn tile_placement(tile: &Tile, child: &LayoutChild) -> ChildPlacement {
+    let tile_size = Size {
+        width: tile.width,
+        height: tile.height,
     };
-    match child {
-        LayoutChild::Layout(layout_component) => {
-            let children_layouts = layout_component.layout(
-                Size {
-                    width: tile.width,
-                    height: tile.height,
-                },
-                pts,
-            );
-            NestedLayout {
-                top: tile.top,
-                left: tile.left,
-                width: tile.width,
-                height: tile.height,
-                rotation_degrees: 0.0,
-                scale_x: 1.0,
-                scale_y: 1.0,
-                crop: None,
-                mask: None,
-                content: LayoutContent::None,
-                child_nodes_count: children_layouts.child_nodes_count,
-                children: vec![children_layouts],
-                border_width: 0.0,
-                border_color: RGBAColor(0, 0, 0, 0),
-                border_radius: BorderRadius::ZERO,
-                box_shadow: vec![],
-            }
-        }
-        _ => {
-            let fitted = fit_into_tile(tile, child, pts);
-            NestedLayout {
-                // TODO: fit
-                top: fitted.top,
-                left: fitted.left,
-                width: fitted.width,
-                height: fitted.height,
-                rotation_degrees: 0.0,
-                scale_x: 1.0,
-                scale_y: 1.0,
-                crop: None,
-                mask: None,
-                content: StatefulLayoutComponent::layout_content(child, 0),
-                child_nodes_count: 1,
-                children: vec![],
-                border_width: 0.0,
-                border_color: RGBAColor(0, 0, 0, 0),
-                border_radius: BorderRadius::ZERO,
-                box_shadow: vec![],
-            }
-        }
+    match &child.component {
+        ChildComponent::Layout(_) => ChildPlacement::new(tile.top, tile.left, tile_size),
+        ChildComponent::Node(node) => fit_into_tile(tile, node.size()),
     }
 }
 
-fn fit_into_tile(tile: Tile, component: &LayoutChild, pts: Duration) -> Tile {
-    let Some(width) = component.width(pts) else {
-        return tile;
-    };
-    let Some(height) = component.height(pts) else {
-        return tile;
-    };
-    let scale_to_fit_width = tile.width / width;
-    let scale_to_fit_height = tile.height / height;
+/// The largest area in the middle of the `tile` that has the same aspect ratio as `size`.
+fn fit_into_tile(tile: &Tile, size: Size) -> ChildPlacement {
+    let scale_to_fit_width = tile.width / size.width;
+    let scale_to_fit_height = tile.height / size.height;
     let scale_factor = f32::min(scale_to_fit_width, scale_to_fit_height);
 
-    let top_offset = (tile.height - scale_factor * height) / 2.0;
-    let left_offset = (tile.width - scale_factor * width) / 2.0;
+    let top_offset = (tile.height - scale_factor * size.height) / 2.0;
+    let left_offset = (tile.width - scale_factor * size.width) / 2.0;
 
-    Tile {
-        top: tile.top + top_offset,
-        left: tile.left + left_offset,
-        width: scale_factor * width,
-        height: scale_factor * height,
-        id: tile.id,
-    }
+    ChildPlacement::new(
+        tile.top + top_offset,
+        tile.left + left_offset,
+        Size {
+            width: scale_factor * size.width,
+            height: scale_factor * size.height,
+        },
+    )
 }
 
 pub(super) fn resize_tiles(

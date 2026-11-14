@@ -12,7 +12,7 @@ impl NestedLayout {
         input_resolutions: &[Option<Resolution>],
         resolution: Resolution,
     ) -> Vec<RenderLayout> {
-        let (shadow, layouts) = self.inner_flatten(0, vec![]);
+        let (shadow, layouts) = self.inner_flatten(vec![]);
         shadow
             .into_iter()
             .chain(layouts)
@@ -21,19 +21,7 @@ impl NestedLayout {
             .collect()
     }
 
-    fn inner_flatten(
-        mut self,
-        child_index_offset: usize,
-        parent_masks: Vec<Mask>,
-    ) -> (Vec<RenderLayout>, Vec<RenderLayout>) {
-        let mut child_index_offset = child_index_offset;
-        if let LayoutContent::ChildNode { index, size } = self.content {
-            self.content = LayoutContent::ChildNode {
-                index: index + child_index_offset,
-                size,
-            };
-            child_index_offset += 1
-        }
+    fn inner_flatten(mut self, parent_masks: Vec<Mask>) -> (Vec<RenderLayout>, Vec<RenderLayout>) {
         let layout = self.render_layout(&parent_masks);
         // It is separated because box shadows of all siblings need to be rendered before
         // this layout and it's siblings
@@ -56,13 +44,7 @@ impl NestedLayout {
         let (children_shadow, children_layouts): (Vec<_>, Vec<_>) =
             std::mem::take(&mut self.children)
                 .into_iter()
-                .map(|child| {
-                    let child_nodes_count = child.child_nodes_count;
-                    let (shadows, layouts) =
-                        child.inner_flatten(child_index_offset, parent_masks.clone());
-                    child_index_offset += child_nodes_count;
-                    (shadows, layouts)
-                })
+                .map(|child| child.inner_flatten(parent_masks.clone()))
                 .unzip();
         let children_shadow = children_shadow
             .into_iter()

@@ -6,7 +6,7 @@ use crate::{OutputId, RendererId, Resolution};
 
 use self::image_component::StatefulImageComponent;
 use self::input_stream_component::StatefulInputStreamComponent;
-use self::layout::{LayoutChild, LayoutRoot};
+use self::layout::{ChildComponent, LayoutChild, LayoutRoot};
 use self::scene_state::{BuildStateTreeCtx, LayoutCtx};
 use self::shader_component::StatefulShaderComponent;
 use self::text_component::StatefulTextComponent;
@@ -70,7 +70,7 @@ pub enum Component {
 ///
 /// Layout components (`View`, `Rescaler`, `Tiles`) nested directly in each other are rendered
 /// together to one texture. Only the outermost one is represented by
-/// `StatefulComponent::Layout`, the rest of them are a `LayoutChild::Layout`.
+/// `StatefulComponent::Layout`, the rest of them are a `ChildComponent::Layout`.
 enum StatefulComponent {
     InputStream(StatefulInputStreamComponent),
     Shader(StatefulShaderComponent),
@@ -179,10 +179,10 @@ impl Component {
             Component::Rescaler(rescaler) => rescaler.stateful_component(ctx)?,
             component => {
                 let node = component.stateful_component(ctx, None)?;
-                return Ok(LayoutChild::Node(Box::new(node)));
+                return Ok(LayoutChild::new(ChildComponent::Node(Box::new(node))));
             }
         };
-        Ok(LayoutChild::Layout(Box::new(layout)))
+        Ok(LayoutChild::new(ChildComponent::Layout(Box::new(layout))))
     }
 }
 

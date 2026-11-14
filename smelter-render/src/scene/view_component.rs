@@ -7,7 +7,7 @@ use super::{
     SceneError, Size,
     components::ViewComponent,
     layout::{LayoutChild, StatefulLayoutComponent},
-    scene_state::{BuildStateTreeCtx, PrevComponent},
+    scene_state::{BuildStateTreeCtx, LayoutCtx, PrevComponent},
     transition::{TransitionOptions, TransitionState},
     types::interpolation::ContinuousValue,
 };
@@ -19,6 +19,11 @@ pub(super) struct StatefulViewComponent {
     start: Option<ViewComponentParam>,
     end: ViewComponentParam,
     transition: Option<TransitionState>,
+    /// State of the component for the current frame. It is a result of the last
+    /// `measure` call.
+    current: ViewComponentParam,
+    /// Layout of the view itself (without children). It is a result of the last `place` call.
+    layout: Option<NestedLayout>,
     children: Vec<LayoutChild>,
 }
 
@@ -49,29 +54,39 @@ impl StatefulViewComponent {
         ContinuousValue::interpolate(start, &self.end, interpolation_progress)
     }
 
-    pub(super) fn children(&self) -> Vec<&LayoutChild> {
-        self.children.iter().collect()
+    pub(super) fn children(&self) -> &[LayoutChild] {
+        &self.children
     }
 
-    pub(super) fn children_mut(&mut self) -> Vec<&mut LayoutChild> {
-        self.children.iter_mut().collect()
+    pub(super) fn children_mut(&mut self) -> &mut [LayoutChild] {
+        &mut self.children
     }
 
     /// External position of a component (includes border and padding)
-    pub(super) fn position(&self, pts: Duration) -> Position {
-        let view = self.view(pts);
-        view.position
-            .with_border(view.border_width)
-            .with_padding(view.padding)
+    pub(super) fn position(&self) -> Position {
+        self.current
+            .position
+            .with_border(self.current.border_width)
+            .with_padding(self.current.padding)
     }
 
     pub(super) fn component_id(&self) -> Option<&ComponentId> {
         self.end.id.as_ref()
     }
 
-    pub(super) fn layout(&mut self, size: Size, pts: Duration) -> NestedLayout {
-        let view = self.view(pts);
-        view.layout(size, &mut self.children, pts)
+    pub(super) fn measure(&mut self, ctx: &LayoutCtx) {
+        for child in self.children.iter_mut() {
+            child.measure(ctx);
+        }
+        self.current = self.view(ctx.pts);
+    }
+
+    pub(super) fn place(&mut self, size: Size) {
+        self.layout = Some(self.current.place(size, &mut self.children));
+    }
+
+    pub(super) fn own_layout(&self) -> Option<&NestedLayout> {
+        self.layout.as_ref()
     }
 }
 
@@ -122,16 +137,19 @@ impl ViewComponent {
             interrupt_previous_transition,
             ctx.last_render_pts,
         );
-        let view = StatefulViewComponent {
+        let mut view = StatefulViewComponent {
             start,
+            current: end.clone(),
             end,
             transition,
+            layout: None,
             children: self
                 .children
                 .into_iter()
                 .map(|c| Component::layout_child(c, ctx))
                 .collect::<Result<_, _>>()?,
         };
+        view.current = view.view(ctx.last_render_pts);
         Ok(StatefulLayoutComponent::View(view))
     }
 }

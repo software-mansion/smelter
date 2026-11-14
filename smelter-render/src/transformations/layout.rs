@@ -80,7 +80,12 @@ enum RenderLayoutContent {
 #[derive(Debug, Clone)]
 pub enum LayoutContent {
     Color(RGBAColor),
-    ChildNode { index: usize, size: Size },
+    /// Texture with a specified `size` that is passed to `LayoutNode::render` at
+    /// the position `index` in `sources`.
+    ChildNode {
+        index: usize,
+        size: Size,
+    },
     None,
 }
 
@@ -125,14 +130,6 @@ pub struct NestedLayout {
     pub box_shadow: Vec<BoxShadow>,
 
     pub(crate) children: Vec<NestedLayout>,
-    /// Describes how many children of this component are nodes. This value also
-    /// counts `layout` if its content is a `LayoutContent::ChildNode`.
-    ///
-    /// `child_nodes_count` is not necessarily equal to number of `LayoutContent::ChildNode` in
-    /// a sub-tree. For example, if we have a component that conditionally shows one
-    /// of its children then child_nodes_count will count all of those components even
-    /// though only one of those children will be present in the layouts tree.
-    pub(crate) child_nodes_count: usize,
 }
 
 impl LayoutNode {
@@ -236,31 +233,5 @@ impl LayoutNode {
         }
         self.resample_cache
             .retain(|layout_index, _| resampled.contains(layout_index));
-    }
-}
-
-impl NestedLayout {
-    /// NestedLayout that won't ever be rendered. It's intended to be optimized out
-    /// in the flattening process. Its only purpose is to keep track of child nodes that are not
-    /// currently used so the index offset can be calculated correctly.
-    pub(crate) fn child_nodes_placeholder(child_nodes_count: usize) -> Self {
-        Self {
-            top: 0.0,
-            left: 0.0,
-            width: 0.0,
-            height: 0.0,
-            rotation_degrees: 0.0,
-            scale_x: 1.0,
-            scale_y: 1.0,
-            crop: None,
-            mask: None,
-            content: LayoutContent::None,
-            children: vec![],
-            child_nodes_count,
-            border_width: 0.0,
-            border_color: RGBAColor(0, 0, 0, 0),
-            border_radius: BorderRadius::ZERO,
-            box_shadow: vec![],
-        }
     }
 }

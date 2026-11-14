@@ -1,9 +1,7 @@
-use std::time::Duration;
-
 use crate::{
     scene::{
-        BorderRadius, Overflow, Position, RGBAColor, Size, ViewChildrenDirection,
-        layout::{LayoutChild, StatefulLayoutComponent},
+        Overflow, Position, Size, ViewChildrenDirection,
+        layout::{ChildPlacement, LayoutChild},
     },
     transformations::layout::{LayoutContent, Mask, NestedLayout},
 };
@@ -28,18 +26,18 @@ struct StaticChildLayoutOpts {
 }
 
 impl ViewComponentParam {
-    pub(super) fn layout(
+    /// Places `children` inside of the view and returns a layout of the view itself.
+    pub(super) fn place(
         &self,
         size: Size, // how much size component has available(includes space for border)
         children: &mut [LayoutChild],
-        pts: Duration,
     ) -> NestedLayout {
         let content_size = Size {
             width: f32::max(size.width - 2.0 * self.border_width, 0.0),
             height: f32::max(size.height - 2.0 * self.border_width, 0.0),
         };
         let border_radius = self.border_radius.clip_to_size(size);
-        let static_child_size = self.static_child_size(content_size, children, pts);
+        let static_child_size = self.static_child_size(content_size, children);
         let (scale, crop, mask) = match self.overflow {
             Overflow::Visible => (1.0, None, None),
             Overflow::Hidden => (
@@ -54,7 +52,7 @@ impl ViewComponentParam {
                 }),
             ),
             Overflow::Fit => (
-                self.scale_factor_for_overflow_fit(content_size, children, pts),
+                self.scale_factor_for_overflow_fit(content_size, children),
                 None,
                 Some(Mask {
                     radius: border_radius - self.border_width,
@@ -70,42 +68,27 @@ impl ViewComponentParam {
         // child component should be placed
         let mut static_offset = self.border_width / scale;
 
-        let children: Vec<_> = children
-            .iter_mut()
-            .map(|child| {
-                let position = match child {
-                    LayoutChild::Layout(layout) => layout.position(pts),
-                    LayoutChild::Node(_) => Position::Static {
-                        width: child.width(pts),
-                        height: child.height(pts),
-                    },
-                };
-                match position {
-                    Position::Static { width, height } => {
-                        let (layout, updated_static_offset) = self.layout_static_child(
-                            child,
-                            StaticChildLayoutOpts {
-                                width,
-                                height,
-                                static_offset,
-                                static_child_size,
-                                parent_size: content_size,
-                                parent_border_width: self.border_width / scale,
-                            },
-                            pts,
-                        );
+        for child in children.iter_mut() {
+            let placement = match child.position() {
+                Position::Static { width, height } => {
+                    let (placement, updated_static_offset) =
+                        self.static_child_placement(StaticChildLayoutOpts {
+                            width,
+                            height,
+                            static_offset,
+                            static_child_size,
+                            parent_size: content_size,
+                            parent_border_width: self.border_width / scale,
+                        });
 
-                        static_offset = updated_static_offset;
-                        layout
-                    }
-                    Position::Absolute(position) => {
-                        StatefulLayoutComponent::layout_absolute_position_child(
-                            child, position, size, pts,
-                        )
-                    }
+                    static_offset = updated_static_offset;
+                    placement
                 }
-            })
-            .collect();
+                Position::Absolute(position) => ChildPlacement::absolute(position, size),
+            };
+            child.place(placement);
+        }
+
         NestedLayout {
             top: 0.0,
             left: 0.0,
@@ -117,8 +100,7 @@ impl ViewComponentParam {
             crop,
             mask,
             content: LayoutContent::Color(self.background_color),
-            child_nodes_count: children.iter().map(|l| l.child_nodes_count).sum(),
-            children,
+            children: vec![],
             border_width: self.border_width,
             border_color: self.border_color,
             border_radius,
@@ -126,12 +108,7 @@ impl ViewComponentParam {
         }
     }
 
-    fn layout_static_child(
-        &self,
-        child: &mut LayoutChild,
-        opts: StaticChildLayoutOpts,
-        pts: Duration,
-    ) -> (NestedLayout, f32) {
+    fn static_child_placement(&self, opts: StaticChildLayoutOpts) -> (ChildPlacement, f32) {
         let mut static_offset = opts.static_offset;
         let (top, left, width, height) = match self.direction {
             ViewChildrenDirection::Row => {
@@ -156,48 +133,8 @@ impl ViewComponentParam {
             }
         };
 
-        let layout = match child {
-            LayoutChild::Layout(layout_component) => {
-                let children_layouts = layout_component.layout(Size { width, height }, pts);
-                NestedLayout {
-                    top,
-                    left,
-                    width,
-                    height,
-                    rotation_degrees: 0.0,
-                    scale_x: 1.0,
-                    scale_y: 1.0,
-                    crop: None,
-                    mask: None,
-                    content: LayoutContent::None,
-                    child_nodes_count: children_layouts.child_nodes_count,
-                    children: vec![children_layouts],
-                    border_width: 0.0,
-                    border_color: RGBAColor(0, 0, 0, 0),
-                    border_radius: BorderRadius::ZERO,
-                    box_shadow: vec![],
-                }
-            }
-            _ => NestedLayout {
-                top,
-                left,
-                width,
-                height,
-                rotation_degrees: 0.0,
-                scale_x: 1.0,
-                scale_y: 1.0,
-                crop: None,
-                mask: None,
-                content: StatefulLayoutComponent::layout_content(child, 0),
-                child_nodes_count: 1,
-                children: vec![],
-                border_width: 0.0,
-                border_color: RGBAColor(0, 0, 0, 0),
-                border_radius: BorderRadius::ZERO,
-                box_shadow: vec![],
-            },
-        };
-        (layout, static_offset)
+        let placement = ChildPlacement::new(top, left, Size { width, height });
+        (placement, static_offset)
     }
 
     /// Calculate a size of a static child component that does not have it explicitly defined.
@@ -205,19 +142,19 @@ impl ViewComponentParam {
     /// height if the direction is `ViewChildrenDirection::Column`.
     ///
     /// size represents dimensions of content (without a border).
-    fn static_child_size(&self, size: Size, children: &[LayoutChild], pts: Duration) -> f32 {
+    fn static_child_size(&self, size: Size, children: &[LayoutChild]) -> f32 {
         let max_size = match self.direction {
             super::ViewChildrenDirection::Row => size.width - self.padding.horizontal(),
             super::ViewChildrenDirection::Column => size.height - self.padding.vertical(),
         };
 
-        let children_with_unknown_size_count = Self::static_children_iter(children, pts)
+        let children_with_unknown_size_count = Self::static_children_iter(children)
             .filter(|child| match self.direction {
-                ViewChildrenDirection::Row => child.width(pts).is_none(),
-                ViewChildrenDirection::Column => child.height(pts).is_none(),
+                ViewChildrenDirection::Row => child.width().is_none(),
+                ViewChildrenDirection::Column => child.height().is_none(),
             })
             .count();
-        let static_children_sum = self.sum_static_children_sizes(children, pts);
+        let static_children_sum = self.sum_static_children_sizes(children);
 
         if children_with_unknown_size_count == 0 {
             return 0.0; // if there is no dynamically sized children then this value does not matter
@@ -228,23 +165,16 @@ impl ViewComponentParam {
         )
     }
 
-    fn scale_factor_for_overflow_fit(
-        &self,
-        content_size: Size,
-        children: &[LayoutChild],
-        pts: Duration,
-    ) -> f32 {
-        let sum_size = self
-            .sum_static_children_sizes(children, pts)
-            .max(0.000000001); // avoid division by 0
+    fn scale_factor_for_overflow_fit(&self, content_size: Size, children: &[LayoutChild]) -> f32 {
+        let sum_size = self.sum_static_children_sizes(children).max(0.000000001); // avoid division by 0
         let (max_size, max_alternative_size) = match self.direction {
             super::ViewChildrenDirection::Row => (content_size.width, content_size.height),
             super::ViewChildrenDirection::Column => (content_size.height, content_size.width),
         };
-        let max_alternative_size_for_child = Self::static_children_iter(children, pts)
+        let max_alternative_size_for_child = Self::static_children_iter(children)
             .map(|child| match self.direction {
-                ViewChildrenDirection::Row => child.height(pts).unwrap_or(0.0),
-                ViewChildrenDirection::Column => child.width(pts).unwrap_or(0.0),
+                ViewChildrenDirection::Row => child.height().unwrap_or(0.0),
+                ViewChildrenDirection::Column => child.width().unwrap_or(0.0),
             })
             .max_by(|a, b| f32::partial_cmp(a, b).unwrap()) // will panic if comparing NaN
             .unwrap_or(0.0)
@@ -259,27 +189,21 @@ impl ViewComponentParam {
         )
     }
 
-    fn sum_static_children_sizes(&self, children: &[LayoutChild], pts: Duration) -> f32 {
+    fn sum_static_children_sizes(&self, children: &[LayoutChild]) -> f32 {
         let size_accessor = match self.direction {
             super::ViewChildrenDirection::Row => LayoutChild::width,
             super::ViewChildrenDirection::Column => LayoutChild::height,
         };
 
-        Self::static_children_iter(children, pts)
-            .map(|component| size_accessor(component, pts).unwrap_or(0.0))
+        Self::static_children_iter(children)
+            .map(|component| size_accessor(component).unwrap_or(0.0))
             .sum()
     }
 
-    fn static_children_iter(
-        children: &[LayoutChild],
-        pts: Duration,
-    ) -> impl Iterator<Item = &LayoutChild> {
-        children.iter().filter(move |child| match child {
-            LayoutChild::Layout(layout) => match layout.position(pts) {
-                super::Position::Static { .. } => true,
-                super::Position::Absolute(_) => false,
-            },
-            _ => true,
+    fn static_children_iter(children: &[LayoutChild]) -> impl Iterator<Item = &LayoutChild> {
+        children.iter().filter(|child| match child.position() {
+            Position::Static { .. } => true,
+            Position::Absolute(_) => false,
         })
     }
 }
