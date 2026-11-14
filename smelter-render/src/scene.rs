@@ -1,25 +1,18 @@
-use std::ops::Deref;
-use std::sync::Arc;
 use std::time::Duration;
 
-use crate::scene::image_component::ImageRenderParams;
-use crate::transformations::shader::Shader;
+use crate::state::{InputTextures, RenderCtx, node_texture::NodeTexture};
 use crate::transformations::shader::validation::error::ParametersValidationError;
-use crate::transformations::text_renderer::TextRenderParams;
-use crate::transformations::web_renderer::WebRenderer;
-use crate::{InputId, OutputId, RendererId, Resolution};
+use crate::{OutputId, RendererId, Resolution};
 
 use self::image_component::StatefulImageComponent;
 use self::input_stream_component::StatefulInputStreamComponent;
-use self::layout::StatefulLayoutComponent;
-use self::scene_state::{BuildStateTreeCtx, IntermediateNode};
+use self::layout::{LayoutChild, LayoutRoot};
+use self::scene_state::{BuildStateTreeCtx, LayoutCtx};
 use self::shader_component::StatefulShaderComponent;
 use self::text_component::StatefulTextComponent;
 use self::web_view_component::StatefulWebViewComponent;
 
-pub(crate) use layout::LayoutNode;
 pub(crate) use scene_state::SceneState;
-pub(crate) use shader_component::ShaderComponentParams;
 
 pub use components::*;
 pub use types::*;
@@ -68,98 +61,35 @@ pub enum Component {
     Rescaler(RescalerComponent),
 }
 
-/// Stateful version of a `Component`. Represents the same element as
-/// `Component`, but additionally it has its own state that can be used
-/// keep track of transition or to preserve some information from
-/// a previous scene update.
-#[derive(Debug, Clone)]
+/// Stateful version of a `Component` that is rendered to its own texture.
+///
+/// Represents the same element as `Component`, but additionally it has:
+/// - state that is used to keep track of a transition or to preserve some information
+///   from a previous scene update.
+/// - everything that is necessary to render that component.
+///
+/// Layout components (`View`, `Rescaler`, `Tiles`) nested directly in each other are rendered
+/// together to one texture. Only the outermost one is represented by
+/// `StatefulComponent::Layout`, the rest of them are a `LayoutChild::Layout`.
 enum StatefulComponent {
     InputStream(StatefulInputStreamComponent),
     Shader(StatefulShaderComponent),
     WebView(StatefulWebViewComponent),
     Image(StatefulImageComponent),
     Text(StatefulTextComponent),
-    Layout(Box<StatefulLayoutComponent>),
-}
-
-/// Defines a tree structure that is a base to construct a `RenderGraph`.
-/// Each `prams` element defines a parameters to construct a `RenderNode`
-/// and `children` define connections between them.
-///
-/// In most cases each `Node` will be used to construct a RenderNode, but
-/// in some cases multiple Nodes might be reduced to just one RenderNode
-/// e.g. `NodeParams::InputStream` for the same input stream might be present
-/// multiple times inside the tree, but it will result in only one `RenderNode`
-/// in the `RenderGraph`
-#[derive(Debug)]
-pub(crate) struct Node {
-    pub(crate) params: NodeParams,
-    pub(crate) children: Vec<Node>,
-}
-
-/// Set of params used to construct a `RenderNode`.
-#[derive(Debug)]
-pub(crate) enum NodeParams {
-    InputStream(InputId),
-    Shader(ShaderComponentParams, Arc<Shader>),
-    Web(Vec<ComponentId>, Arc<WebRenderer>),
-    Image(ImageRenderParams),
-    Text(TextRenderParams),
-    Layout(LayoutNode),
+    Layout(Box<LayoutRoot>),
 }
 
 impl StatefulComponent {
-    fn width(&self, pts: Duration) -> Option<f32> {
+    /// Size of a texture that this component is rendered to.
+    fn size(&self) -> Size {
         match self {
-            StatefulComponent::InputStream(input) => Some(input.size.width),
-            StatefulComponent::Shader(shader) => Some(shader.component.size.width),
-            StatefulComponent::WebView(web) => Some(web.size().width),
-            StatefulComponent::Image(image) => Some(image.width()),
-            StatefulComponent::Text(text) => Some(text.width()),
-            StatefulComponent::Layout(layout) => match layout.position(pts) {
-                Position::Static { width, .. } => width,
-                Position::Absolute(position) => position.width,
-            },
-        }
-    }
-
-    fn height(&self, pts: Duration) -> Option<f32> {
-        match self {
-            StatefulComponent::InputStream(input) => Some(input.size.height),
-            StatefulComponent::Shader(shader) => Some(shader.component.size.height),
-            StatefulComponent::WebView(web) => Some(web.size().height),
-            StatefulComponent::Image(image) => Some(image.height()),
-            StatefulComponent::Text(text) => Some(text.height()),
-            StatefulComponent::Layout(layout) => match layout.position(pts) {
-                Position::Static { height, .. } => height,
-                Position::Absolute(position) => position.height,
-            },
-        }
-    }
-
-    fn intermediate_node(&self) -> IntermediateNode {
-        match self {
-            StatefulComponent::InputStream(input) => input.intermediate_node(),
-            StatefulComponent::Shader(shader) => shader.intermediate_node(),
-            StatefulComponent::WebView(web) => web.intermediate_node(),
-            StatefulComponent::Image(image) => image.intermediate_node(),
-            StatefulComponent::Text(text) => text.intermediate_node(),
-            StatefulComponent::Layout(layout) => match layout.deref() {
-                StatefulLayoutComponent::View(view) => view.intermediate_node(),
-                StatefulLayoutComponent::Tiles(tiles) => tiles.intermediate_node(),
-                StatefulLayoutComponent::Rescaler(rescaler) => rescaler.intermediate_node(),
-            },
-        }
-    }
-
-    fn children_mut(&mut self) -> Vec<&mut StatefulComponent> {
-        match self {
-            StatefulComponent::InputStream(_) => vec![],
-            StatefulComponent::Shader(shader) => shader.children.iter_mut().collect(),
-            StatefulComponent::WebView(web) => web.children.iter_mut().collect(),
-            StatefulComponent::Image(_) => vec![],
-            StatefulComponent::Text(_) => vec![],
-            StatefulComponent::Layout(layout) => layout.children_mut(),
+            StatefulComponent::InputStream(input) => input.size,
+            StatefulComponent::Shader(shader) => shader.size,
+            StatefulComponent::WebView(web) => web.size(),
+            StatefulComponent::Image(image) => image.size(),
+            StatefulComponent::Text(text) => text.size(),
+            StatefulComponent::Layout(layout) => layout.size(),
         }
     }
 
@@ -170,28 +100,89 @@ impl StatefulComponent {
             StatefulComponent::WebView(web) => web.component_id(),
             StatefulComponent::Image(image) => image.component_id(),
             StatefulComponent::Text(text) => text.component_id(),
-            StatefulComponent::Layout(layout) => layout.component_id(),
+            StatefulComponent::Layout(layout) => layout.component.component_id(),
+        }
+    }
+
+    /// Calculates layout of this component and all its descendants for a single frame. It has
+    /// to be called for every frame before `render`.
+    fn layout(&mut self, ctx: &LayoutCtx) {
+        match self {
+            StatefulComponent::InputStream(input) => input.layout(ctx),
+            StatefulComponent::Shader(shader) => {
+                shader.children.iter_mut().for_each(|c| c.layout(ctx))
+            }
+            StatefulComponent::WebView(web) => web.children.iter_mut().for_each(|c| c.layout(ctx)),
+            StatefulComponent::Image(_) | StatefulComponent::Text(_) => (),
+            StatefulComponent::Layout(layout) => layout.layout(ctx),
+        }
+    }
+
+    /// Renders this component and all its descendants.
+    fn render(&mut self, ctx: &mut RenderCtx, inputs: &InputTextures, pts: Duration) {
+        match self {
+            // Textures of input streams are populated before the scene is rendered.
+            StatefulComponent::InputStream(_) => (),
+            StatefulComponent::Shader(shader) => shader.render(ctx, inputs, pts),
+            StatefulComponent::WebView(web) => web.render(ctx, inputs, pts),
+            StatefulComponent::Image(image) => image.render(ctx, pts),
+            StatefulComponent::Text(text) => text.render(ctx),
+            StatefulComponent::Layout(layout) => layout.render(ctx, inputs, pts),
+        }
+    }
+
+    /// Texture with a result of the last `render` call.
+    fn texture<'a>(&'a self, inputs: &'a InputTextures) -> &'a NodeTexture {
+        match self {
+            StatefulComponent::InputStream(input) => input.texture(inputs),
+            StatefulComponent::Shader(shader) => &shader.output,
+            StatefulComponent::WebView(web) => &web.output,
+            StatefulComponent::Image(image) => &image.output,
+            StatefulComponent::Text(text) => &text.output,
+            StatefulComponent::Layout(layout) => &layout.output,
         }
     }
 }
 
 impl Component {
-    /// Recursively convert `Component` tree provided by a user into a
-    /// `ComponentState` tree. `ComponentState` includes all the information
-    /// from `Component`, but additionally it has it's own state. When calculating
-    /// initial value of that state, the component has access to state of that
-    /// component from before scene update.
-    fn stateful_component(self, ctx: &BuildStateTreeCtx) -> Result<StatefulComponent, SceneError> {
-        match self {
-            Component::InputStream(input) => input.stateful_component(ctx),
-            Component::Shader(shader) => shader.stateful_component(ctx),
-            Component::WebView(web_view) => web_view.stateful_component(ctx),
-            Component::Image(image) => image.stateful_component(ctx),
-            Component::Text(text) => text.stateful_component(ctx),
-            Component::View(view) => view.stateful_component(ctx),
-            Component::Tiles(tiles) => tiles.stateful_component(ctx),
-            Component::Rescaler(rescaler) => rescaler.stateful_component(ctx),
-        }
+    /// Recursively convert `Component` tree provided by a user into a `StatefulComponent`
+    /// tree. When calculating initial value of the state, the component has access to state
+    /// of that component from before scene update.
+    ///
+    /// * `forced_size` - Forces size of a component, primary use case for this param is
+    ///   to force size on a top level component to match resolution of an output stream.
+    ///   TODO: Currently only layouts respect that value
+    fn stateful_component(
+        self,
+        ctx: &BuildStateTreeCtx,
+        forced_size: Option<Size>,
+    ) -> Result<StatefulComponent, SceneError> {
+        let layout = match self {
+            Component::InputStream(input) => return input.stateful_component(ctx),
+            Component::Shader(shader) => return shader.stateful_component(ctx),
+            Component::WebView(web_view) => return web_view.stateful_component(ctx),
+            Component::Image(image) => return image.stateful_component(ctx),
+            Component::Text(text) => return text.stateful_component(ctx),
+            Component::View(view) => view.stateful_component(ctx)?,
+            Component::Tiles(tiles) => tiles.stateful_component(ctx)?,
+            Component::Rescaler(rescaler) => rescaler.stateful_component(ctx)?,
+        };
+        let root = LayoutRoot::new(layout, forced_size, ctx)?;
+        Ok(StatefulComponent::Layout(Box::new(root)))
+    }
+
+    /// Same as `stateful_component`, but for a component that is a child of a layout component.
+    fn layout_child(self, ctx: &BuildStateTreeCtx) -> Result<LayoutChild, SceneError> {
+        let layout = match self {
+            Component::View(view) => view.stateful_component(ctx)?,
+            Component::Tiles(tiles) => tiles.stateful_component(ctx)?,
+            Component::Rescaler(rescaler) => rescaler.stateful_component(ctx)?,
+            component => {
+                let node = component.stateful_component(ctx, None)?;
+                return Ok(LayoutChild::Node(Box::new(node)));
+            }
+        };
+        Ok(LayoutChild::Layout(Box::new(layout)))
     }
 }
 

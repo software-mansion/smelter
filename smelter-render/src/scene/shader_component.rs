@@ -1,42 +1,38 @@
-use std::sync::Arc;
+use std::time::Duration;
 
-use crate::transformations::shader::Shader;
-
-use super::{
-    Component, ComponentId, IntermediateNode, SceneError, ShaderComponent, ShaderParam, Size,
-    StatefulComponent, scene_state::BuildStateTreeCtx,
+use crate::{
+    state::{InputTextures, RenderCtx, node_texture::NodeTexture},
+    transformations::shader::node::ShaderNode,
 };
 
-#[derive(Debug, Clone)]
-pub(super) struct StatefulShaderComponent {
-    pub(super) component: ShaderComponentParams,
-    pub(super) children: Vec<StatefulComponent>,
-    pub(super) shader: Arc<Shader>,
-}
+use super::{
+    Component, ComponentId, SceneError, ShaderComponent, Size, StatefulComponent,
+    scene_state::BuildStateTreeCtx,
+};
 
-#[derive(Debug, Clone)]
-pub(crate) struct ShaderComponentParams {
-    pub(crate) id: Option<ComponentId>,
-    pub(crate) shader_param: Option<ShaderParam>,
-    pub(crate) size: Size,
+pub(super) struct StatefulShaderComponent {
+    id: Option<ComponentId>,
+    pub(super) size: Size,
+    pub(super) children: Vec<StatefulComponent>,
+    node: ShaderNode,
+    pub(super) output: NodeTexture,
 }
 
 impl StatefulShaderComponent {
     pub(super) fn component_id(&self) -> Option<&ComponentId> {
-        self.component.id.as_ref()
+        self.id.as_ref()
     }
 
-    pub(super) fn intermediate_node(&self) -> IntermediateNode {
-        let children = self
+    pub(super) fn render(&mut self, ctx: &mut RenderCtx, inputs: &InputTextures, pts: Duration) {
+        for child in self.children.iter_mut() {
+            child.render(ctx, inputs, pts);
+        }
+        let sources: Vec<_> = self
             .children
             .iter()
-            .map(StatefulComponent::intermediate_node)
+            .map(|child| child.texture(inputs))
             .collect();
-
-        IntermediateNode::Shader {
-            shader: self.clone(),
-            children,
-        }
+        self.node.render(ctx, &sources, &mut self.output, pts);
     }
 }
 
@@ -46,6 +42,7 @@ impl ShaderComponent {
         ctx: &BuildStateTreeCtx,
     ) -> Result<StatefulComponent, SceneError> {
         let shader = ctx
+            .render_ctx
             .renderers
             .shaders
             .get(&self.shader_id)
@@ -59,16 +56,20 @@ impl ShaderComponent {
         let children = self
             .children
             .into_iter()
-            .map(|c| Component::stateful_component(c, ctx))
+            .map(|c| Component::stateful_component(c, ctx, None))
             .collect::<Result<_, _>>()?;
+
+        let resolution = self.size.into();
+        let node = ShaderNode::new(ctx.render_ctx, shader, &self.shader_param, &resolution);
+        let mut output = NodeTexture::new();
+        output.ensure_size(ctx.render_ctx.wgpu_ctx, resolution);
+
         Ok(StatefulComponent::Shader(StatefulShaderComponent {
-            component: ShaderComponentParams {
-                id: self.id,
-                shader_param: self.shader_param,
-                size: self.size,
-            },
-            shader,
+            id: self.id,
+            size: self.size,
             children,
+            node,
+            output,
         }))
     }
 }

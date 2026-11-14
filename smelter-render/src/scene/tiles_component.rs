@@ -1,4 +1,4 @@
-use std::{ops::Deref, time::Duration};
+use std::time::Duration;
 
 use crate::transformations::layout::NestedLayout;
 
@@ -8,10 +8,10 @@ use self::{
 };
 
 use super::{
-    Component, ComponentId, HorizontalAlign, IntermediateNode, Position, RGBAColor, SceneError,
-    Size, StatefulComponent, TilesComponent, VerticalAlign,
-    layout::StatefulLayoutComponent,
-    scene_state::BuildStateTreeCtx,
+    Component, ComponentId, HorizontalAlign, Position, RGBAColor, SceneError, Size, TilesComponent,
+    VerticalAlign,
+    layout::{LayoutChild, StatefulLayoutComponent},
+    scene_state::{BuildStateTreeCtx, PrevComponent},
     transition::{TransitionOptions, TransitionState},
     types::interpolation::ContinuousValue,
 };
@@ -20,7 +20,6 @@ mod interpolation;
 mod layout;
 mod tiles;
 
-#[derive(Debug, Clone)]
 pub(super) struct StatefulTilesComponent {
     /// Initial state for transition. To calculate scene at specific PTS you need
     /// to interpolate between this state and `self.component.tiles(...)`.
@@ -33,7 +32,7 @@ pub(super) struct StatefulTilesComponent {
     transition: Option<TransitionState>,
 
     component: TilesComponentParams,
-    children: Vec<StatefulComponent>,
+    children: Vec<LayoutChild>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -73,31 +72,12 @@ impl StatefulTilesComponent {
         }
     }
 
-    pub(super) fn children(&self) -> Vec<&StatefulComponent> {
+    pub(super) fn children(&self) -> Vec<&LayoutChild> {
         self.children.iter().collect()
     }
 
-    pub(super) fn children_mut(&mut self) -> Vec<&mut StatefulComponent> {
+    pub(super) fn children_mut(&mut self) -> Vec<&mut LayoutChild> {
         self.children.iter_mut().collect()
-    }
-
-    pub(super) fn intermediate_node(&self) -> IntermediateNode {
-        let children = self
-            .children
-            .iter()
-            .flat_map(|component| {
-                let node = component.intermediate_node();
-                match node {
-                    IntermediateNode::Layout { root: _, children } => children,
-                    _ => vec![node],
-                }
-            })
-            .collect();
-
-        IntermediateNode::Layout {
-            root: StatefulLayoutComponent::Tiles(self.clone()).into(),
-            children,
-        }
     }
 
     pub(super) fn layout(&mut self, size: Size, pts: Duration) -> NestedLayout {
@@ -118,16 +98,15 @@ impl TilesComponent {
     pub(super) fn stateful_component(
         self,
         ctx: &BuildStateTreeCtx,
-    ) -> Result<StatefulComponent, SceneError> {
+    ) -> Result<StatefulLayoutComponent, SceneError> {
         let previous_state = self
             .id
             .as_ref()
             .and_then(|id| ctx.prev_state.get(id))
             .and_then(|component| match component {
-                StatefulComponent::Layout(boxed_layout) => match boxed_layout.deref() {
-                    StatefulLayoutComponent::Tiles(tiles_state) => Some(tiles_state),
-                    _ => None,
-                },
+                PrevComponent::Layout(StatefulLayoutComponent::Tiles(tiles_state)) => {
+                    Some(tiles_state)
+                }
                 _ => None,
             });
 
@@ -146,7 +125,7 @@ impl TilesComponent {
         let children = self
             .children
             .into_iter()
-            .map(|c| Component::stateful_component(c, ctx))
+            .map(|c| Component::layout_child(c, ctx))
             .collect::<Result<Vec<_>, _>>()?;
 
         let props_changed = previous_state
@@ -175,14 +154,12 @@ impl TilesComponent {
             children,
         };
 
-        Ok(StatefulComponent::Layout(
-            StatefulLayoutComponent::Tiles(tiles).into(),
-        ))
+        Ok(StatefulLayoutComponent::Tiles(tiles))
     }
 
     fn did_child_order_change(
-        previous_children: &[StatefulComponent],
-        current_children: &[StatefulComponent],
+        previous_children: &[LayoutChild],
+        current_children: &[LayoutChild],
     ) -> bool {
         if current_children.len() != previous_children.len() {
             return true;

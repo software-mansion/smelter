@@ -2,19 +2,23 @@ use std::{collections::HashMap, time::Duration};
 
 use tracing::warn;
 
-use crate::{
-    Frame, FrameSet, InputId, OutputId,
-    state::{RenderCtx, node::RenderNode, render_graph::RenderGraph},
-};
+use crate::{Frame, FrameSet, InputId, OutputId, Resolution, scene::SceneState, state::RenderCtx};
 
-use super::{input_texture::InputTexture, node_texture::NodeTexture};
+use super::{input_texture::InputTextures, output_texture::OutputTexture};
+
+pub(super) struct OutputRenderer {
+    /// Id of an output that defines the rendered scene. Own id, or id of the primary output
+    /// for linked outputs.
+    pub(super) scene_output_id: OutputId,
+    pub(super) output_texture: OutputTexture,
+}
 
 pub(super) fn populate_inputs(
     ctx: &mut RenderCtx,
-    scene: &mut RenderGraph,
+    inputs: &mut InputTextures,
     mut frame_set: FrameSet<InputId>,
 ) {
-    for (input_id, (_node_texture, input_textures)) in &mut scene.inputs {
+    for (input_id, (_node_texture, input_textures)) in inputs.iter_mut() {
         let Some(frame) = frame_set.frames.remove(input_id) else {
             input_textures.clear();
             continue;
@@ -22,29 +26,37 @@ pub(super) fn populate_inputs(
         input_textures.upload(ctx.wgpu_ctx, frame);
     }
 
-    for (node_texture, input_textures) in scene.inputs.values_mut() {
+    for (node_texture, input_textures) in inputs.values_mut() {
         input_textures.convert_to_node_texture(ctx.wgpu_ctx, node_texture, &mut ctx.encoder);
     }
     ctx.submit_recorded_commands();
 }
 
+/// Resolutions of frames from the last `populate_inputs` call. Inputs without a frame
+/// are skipped.
+pub(super) fn input_resolutions(inputs: &InputTextures) -> HashMap<InputId, Resolution> {
+    inputs
+        .iter()
+        .filter_map(|(input_id, (node_texture, _))| {
+            Some((input_id.clone(), node_texture.resolution()?))
+        })
+        .collect()
+}
+
 pub(super) fn read_outputs(
     ctx: &mut RenderCtx,
-    render_graph: &mut RenderGraph,
+    outputs: &mut HashMap<OutputId, OutputRenderer>,
+    scene: &SceneState,
+    inputs: &InputTextures,
     pts: Duration,
 ) -> HashMap<OutputId, Frame> {
-    let RenderGraph {
-        render_trees,
-        outputs,
-        inputs,
-    } = render_graph;
     let partial_frames: Vec<_> = outputs
         .iter_mut()
         .map(|(output_id, output)| {
             // `None` if the root is empty, or if a linked output does not render its own scene.
-            let node_texture = render_trees
-                .get(&output.render_tree_id)
-                .and_then(|root| root.output_texture(inputs).state());
+            let node_texture = scene
+                .output_texture(&output.scene_output_id, inputs)
+                .and_then(|texture| texture.state());
             let partial_frame = output.output_texture.read(ctx, node_texture, pts);
             (output_id, partial_frame)
         })
@@ -65,28 +77,12 @@ pub(super) fn read_outputs(
         .collect()
 }
 
-pub(super) fn run_transforms(ctx: &mut RenderCtx, scene: &mut RenderGraph, pts: Duration) {
-    for root in scene.render_trees.values_mut() {
-        render_node(ctx, &scene.inputs, pts, root);
-    }
-    ctx.submit_recorded_commands();
-}
-
-pub(super) fn render_node(
+pub(super) fn render_scenes(
     ctx: &mut RenderCtx,
-    inputs: &HashMap<InputId, (NodeTexture, InputTexture)>,
+    scene: &mut SceneState,
+    inputs: &InputTextures,
     pts: Duration,
-    node: &mut RenderNode,
 ) {
-    for child_node in node.children.iter_mut() {
-        render_node(ctx, inputs, pts, child_node);
-    }
-
-    let input_textures: Vec<_> = node
-        .children
-        .iter()
-        .map(|node| node.output_texture(inputs))
-        .collect();
-    node.renderer
-        .render(ctx, &input_textures, &mut node.output, pts);
+    scene.render(ctx, inputs, pts);
+    ctx.submit_recorded_commands();
 }

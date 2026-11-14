@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use crate::{
     scene::{
-        BorderRadius, HorizontalAlign, RGBAColor, RescaleMode, Size, StatefulComponent,
-        VerticalAlign, layout::StatefulLayoutComponent,
+        BorderRadius, HorizontalAlign, RGBAColor, RescaleMode, Size, VerticalAlign,
+        layout::{LayoutChild, StatefulLayoutComponent},
     },
     transformations::layout::{LayoutContent, Mask, NestedLayout},
 };
@@ -14,7 +14,7 @@ impl RescalerComponentParam {
     pub(super) fn layout(
         &self,
         size: Size,
-        child: &mut StatefulComponent,
+        child: &mut LayoutChild,
         pts: Duration,
     ) -> NestedLayout {
         let content_size = Size {
@@ -60,14 +60,14 @@ impl RescalerComponentParam {
         &self,
         max_size: Size, // without borders
         border_radius: BorderRadius,
-        child: &mut StatefulComponent,
+        child: &mut LayoutChild,
         pts: Duration,
         scale: f32,
     ) -> NestedLayout {
         let child_width = child.width(pts);
         let child_height = child.height(pts);
         let (content, children, child_nodes_count) = match child {
-            StatefulComponent::Layout(layout_component) => {
+            LayoutChild::Layout(layout_component) => {
                 let children_layout = layout_component.layout(
                     Size {
                         width: child_width.unwrap_or(max_size.width / scale),

@@ -1,18 +1,21 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
-use crate::transformations::web_renderer::WebRenderer;
-
-use super::{
-    Component, ComponentId, IntermediateNode, SceneError, Size, StatefulComponent,
-    WebViewComponent, scene_state::BuildStateTreeCtx,
+use crate::{
+    state::{InputTextures, RenderCtx, node_texture::NodeTexture},
+    transformations::web_renderer::{WebRenderer, WebRendererNode},
 };
 
-#[derive(Debug, Clone)]
+use super::{
+    Component, ComponentId, SceneError, Size, StatefulComponent, WebViewComponent,
+    scene_state::BuildStateTreeCtx,
+};
+
 pub(super) struct StatefulWebViewComponent {
-    pub(super) id: Option<ComponentId>,
+    id: Option<ComponentId>,
     pub(super) children: Vec<StatefulComponent>,
-    pub(super) children_ids: Vec<ComponentId>,
-    pub(super) instance: Arc<WebRenderer>,
+    instance: Arc<WebRenderer>,
+    node: WebRendererNode,
+    pub(super) output: NodeTexture,
 }
 
 impl StatefulWebViewComponent {
@@ -24,17 +27,16 @@ impl StatefulWebViewComponent {
         self.instance.resolution().into()
     }
 
-    pub(super) fn intermediate_node(&self) -> IntermediateNode {
-        let children = self
+    pub(super) fn render(&mut self, ctx: &mut RenderCtx, inputs: &InputTextures, pts: Duration) {
+        for child in self.children.iter_mut() {
+            child.render(ctx, inputs, pts);
+        }
+        let sources: Vec<_> = self
             .children
             .iter()
-            .map(StatefulComponent::intermediate_node)
+            .map(|child| child.texture(inputs))
             .collect();
-
-        IntermediateNode::WebView {
-            web: self.clone(),
-            children,
-        }
+        self.node.render(ctx, &sources, &mut self.output);
     }
 }
 
@@ -44,6 +46,7 @@ impl WebViewComponent {
         ctx: &BuildStateTreeCtx,
     ) -> Result<StatefulComponent, SceneError> {
         let instance = ctx
+            .render_ctx
             .renderers
             .web_renderers
             .get(&self.instance_id)
@@ -52,7 +55,7 @@ impl WebViewComponent {
         let children = self
             .children
             .into_iter()
-            .map(|c| Component::stateful_component(c, ctx))
+            .map(|c| Component::stateful_component(c, ctx, None))
             .collect::<Result<Vec<_>, _>>()?;
         let children_ids = children
             .iter()
@@ -62,11 +65,17 @@ impl WebViewComponent {
                     .ok_or(SceneError::WebViewChildWithoutId(self.instance_id.clone()))
             })
             .collect::<Result<_, _>>()?;
+
+        let node = WebRendererNode::new(children_ids, instance.clone());
+        let mut output = NodeTexture::new();
+        output.ensure_size(ctx.render_ctx.wgpu_ctx, instance.resolution());
+
         Ok(StatefulComponent::WebView(StatefulWebViewComponent {
             id: self.id,
-            instance,
             children,
-            children_ids,
+            instance,
+            node,
+            output,
         }))
     }
 }

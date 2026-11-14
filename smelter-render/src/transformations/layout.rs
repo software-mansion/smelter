@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     RenderingMode, Resolution,
@@ -21,13 +21,7 @@ use tracing::error;
 
 pub const DEFAULT_MAX_LAYOUTS_COUNT: usize = 100;
 
-pub(crate) trait LayoutProvider: Send {
-    fn layouts(&mut self, pts: Duration, inputs: &[Option<Resolution>]) -> NestedLayout;
-    fn resolution(&self, pts: Duration) -> Resolution;
-}
-
 pub(crate) struct LayoutNode {
-    layout_provider: Box<dyn LayoutProvider>,
     shader: Arc<LayoutShader>,
     resample_cache: HashMap<usize, ResampledChild>,
 }
@@ -142,30 +136,29 @@ pub struct NestedLayout {
 }
 
 impl LayoutNode {
-    pub fn new(ctx: &RenderCtx, layout_provider: Box<dyn LayoutProvider>) -> Self {
+    pub fn new(ctx: &RenderCtx) -> Self {
         let shader = ctx.renderers.layout.shader.clone();
 
         Self {
-            layout_provider,
             shader,
             resample_cache: HashMap::new(),
         }
     }
 
+    /// Renders `layout` to a `target` texture with `output_resolution`.
     pub fn render(
         &mut self,
         ctx: &mut RenderCtx,
         sources: &[&NodeTexture],
         target: &mut NodeTexture,
-        pts: Duration,
+        layout: NestedLayout,
+        output_resolution: Resolution,
     ) {
         let input_resolutions: Vec<Option<Resolution>> = sources
             .iter()
             .map(|node_texture| node_texture.resolution())
             .collect();
-        let output_resolution = self.layout_provider.resolution(pts);
-        let layouts = self.layout_provider.layouts(pts, &input_resolutions);
-        let mut layouts = layouts.flatten(&input_resolutions, output_resolution);
+        let mut layouts = layout.flatten(&input_resolutions, output_resolution);
 
         self.resample_scaled_children(ctx, sources, &mut layouts);
 

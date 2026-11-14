@@ -1,13 +1,13 @@
-use std::{ops::Deref, time::Duration};
+use std::time::Duration;
 
 use crate::transformations::layout::NestedLayout;
 
 use super::{
-    BorderRadius, BoxShadow, Component, ComponentId, HorizontalAlign, IntermediateNode, Position,
-    RGBAColor, RescaleMode, SceneError, Size, StatefulComponent, VerticalAlign,
+    BorderRadius, BoxShadow, Component, ComponentId, HorizontalAlign, Position, RGBAColor,
+    RescaleMode, SceneError, Size, VerticalAlign,
     components::RescalerComponent,
-    layout::StatefulLayoutComponent,
-    scene_state::BuildStateTreeCtx,
+    layout::{LayoutChild, StatefulLayoutComponent},
+    scene_state::{BuildStateTreeCtx, PrevComponent},
     transition::{TransitionOptions, TransitionState},
     types::interpolation::ContinuousValue,
 };
@@ -15,12 +15,11 @@ use super::{
 mod interpolation;
 mod layout;
 
-#[derive(Debug, Clone)]
 pub(super) struct StatefulRescalerComponent {
     start: Option<RescalerComponentParam>,
     end: RescalerComponentParam,
     transition: Option<TransitionState>,
-    child: Box<StatefulComponent>,
+    child: LayoutChild,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -49,11 +48,11 @@ impl StatefulRescalerComponent {
         ContinuousValue::interpolate(start, &self.end, interpolation_progress)
     }
 
-    pub(super) fn children(&self) -> Vec<&StatefulComponent> {
+    pub(super) fn children(&self) -> Vec<&LayoutChild> {
         vec![&self.child]
     }
 
-    pub(super) fn children_mut(&mut self) -> Vec<&mut StatefulComponent> {
+    pub(super) fn children_mut(&mut self) -> Vec<&mut LayoutChild> {
         vec![&mut self.child]
     }
 
@@ -66,21 +65,6 @@ impl StatefulRescalerComponent {
         self.end.id.as_ref()
     }
 
-    pub(super) fn intermediate_node(&self) -> IntermediateNode {
-        let children = {
-            let node = self.child.intermediate_node();
-            match node {
-                IntermediateNode::Layout { root: _, children } => children,
-                _ => vec![node],
-            }
-        };
-
-        IntermediateNode::Layout {
-            root: StatefulLayoutComponent::Rescaler(self.clone()).into(),
-            children,
-        }
-    }
-
     pub(super) fn layout(&mut self, size: Size, pts: Duration) -> NestedLayout {
         self.transition_snapshot(pts)
             .layout(size, &mut self.child, pts)
@@ -91,16 +75,15 @@ impl RescalerComponent {
     pub(super) fn stateful_component(
         self,
         ctx: &BuildStateTreeCtx,
-    ) -> Result<StatefulComponent, SceneError> {
+    ) -> Result<StatefulLayoutComponent, SceneError> {
         let previous_state = self
             .id
             .as_ref()
             .and_then(|id| ctx.prev_state.get(id))
             .and_then(|component| match component {
-                StatefulComponent::Layout(boxed_layout) => match boxed_layout.deref() {
-                    StatefulLayoutComponent::Rescaler(view_state) => Some(view_state),
-                    _ => None,
-                },
+                PrevComponent::Layout(StatefulLayoutComponent::Rescaler(rescaler_state)) => {
+                    Some(rescaler_state)
+                }
                 _ => None,
             });
 
@@ -138,10 +121,8 @@ impl RescalerComponent {
             start,
             end,
             transition,
-            child: Box::new(Component::stateful_component(*self.child, ctx)?),
+            child: Component::layout_child(*self.child, ctx)?,
         };
-        Ok(StatefulComponent::Layout(
-            StatefulLayoutComponent::Rescaler(rescaler).into(),
-        ))
+        Ok(StatefulLayoutComponent::Rescaler(rescaler))
     }
 }

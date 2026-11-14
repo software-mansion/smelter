@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use crate::{
     scene::{
-        BorderRadius, Overflow, Position, RGBAColor, Size, StatefulComponent,
-        ViewChildrenDirection, layout::StatefulLayoutComponent,
+        BorderRadius, Overflow, Position, RGBAColor, Size, ViewChildrenDirection,
+        layout::{LayoutChild, StatefulLayoutComponent},
     },
     transformations::layout::{LayoutContent, Mask, NestedLayout},
 };
@@ -31,7 +31,7 @@ impl ViewComponentParam {
     pub(super) fn layout(
         &self,
         size: Size, // how much size component has available(includes space for border)
-        children: &mut [StatefulComponent],
+        children: &mut [LayoutChild],
         pts: Duration,
     ) -> NestedLayout {
         let content_size = Size {
@@ -74,10 +74,10 @@ impl ViewComponentParam {
             .iter_mut()
             .map(|child| {
                 let position = match child {
-                    StatefulComponent::Layout(layout) => layout.position(pts),
-                    ref non_layout_component => Position::Static {
-                        width: non_layout_component.width(pts),
-                        height: non_layout_component.height(pts),
+                    LayoutChild::Layout(layout) => layout.position(pts),
+                    LayoutChild::Node(_) => Position::Static {
+                        width: child.width(pts),
+                        height: child.height(pts),
                     },
                 };
                 match position {
@@ -128,7 +128,7 @@ impl ViewComponentParam {
 
     fn layout_static_child(
         &self,
-        child: &mut StatefulComponent,
+        child: &mut LayoutChild,
         opts: StaticChildLayoutOpts,
         pts: Duration,
     ) -> (NestedLayout, f32) {
@@ -157,7 +157,7 @@ impl ViewComponentParam {
         };
 
         let layout = match child {
-            StatefulComponent::Layout(layout_component) => {
+            LayoutChild::Layout(layout_component) => {
                 let children_layouts = layout_component.layout(Size { width, height }, pts);
                 NestedLayout {
                     top,
@@ -205,7 +205,7 @@ impl ViewComponentParam {
     /// height if the direction is `ViewChildrenDirection::Column`.
     ///
     /// size represents dimensions of content (without a border).
-    fn static_child_size(&self, size: Size, children: &[StatefulComponent], pts: Duration) -> f32 {
+    fn static_child_size(&self, size: Size, children: &[LayoutChild], pts: Duration) -> f32 {
         let max_size = match self.direction {
             super::ViewChildrenDirection::Row => size.width - self.padding.horizontal(),
             super::ViewChildrenDirection::Column => size.height - self.padding.vertical(),
@@ -231,7 +231,7 @@ impl ViewComponentParam {
     fn scale_factor_for_overflow_fit(
         &self,
         content_size: Size,
-        children: &[StatefulComponent],
+        children: &[LayoutChild],
         pts: Duration,
     ) -> f32 {
         let sum_size = self
@@ -259,10 +259,10 @@ impl ViewComponentParam {
         )
     }
 
-    fn sum_static_children_sizes(&self, children: &[StatefulComponent], pts: Duration) -> f32 {
+    fn sum_static_children_sizes(&self, children: &[LayoutChild], pts: Duration) -> f32 {
         let size_accessor = match self.direction {
-            super::ViewChildrenDirection::Row => StatefulComponent::width,
-            super::ViewChildrenDirection::Column => StatefulComponent::height,
+            super::ViewChildrenDirection::Row => LayoutChild::width,
+            super::ViewChildrenDirection::Column => LayoutChild::height,
         };
 
         Self::static_children_iter(children, pts)
@@ -271,11 +271,11 @@ impl ViewComponentParam {
     }
 
     fn static_children_iter(
-        children: &[StatefulComponent],
+        children: &[LayoutChild],
         pts: Duration,
-    ) -> impl Iterator<Item = &StatefulComponent> {
+    ) -> impl Iterator<Item = &LayoutChild> {
         children.iter().filter(move |child| match child {
-            StatefulComponent::Layout(layout) => match layout.position(pts) {
+            LayoutChild::Layout(layout) => match layout.position(pts) {
                 super::Position::Static { .. } => true,
                 super::Position::Absolute(_) => false,
             },

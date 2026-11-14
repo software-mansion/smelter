@@ -1,4 +1,4 @@
-use crate::scene::{HorizontalAlign, Size, StatefulComponent, VerticalAlign};
+use crate::scene::{HorizontalAlign, Size, VerticalAlign, layout::LayoutChild};
 
 use super::{TilesComponentParams, interpolation::TileId};
 
@@ -26,7 +26,7 @@ struct TilePosition {
 }
 
 impl TilesComponentParams {
-    pub(super) fn tiles(&self, size: Size, children: &[StatefulComponent]) -> Vec<Option<Tile>> {
+    pub(super) fn tiles(&self, size: Size, children: &[LayoutChild]) -> Vec<Option<Tile>> {
         let input_count = children.len() as u32;
         let rows_cols = self.optimal_row_column_count(input_count, size);
         let tile_size = self.tile_size(rows_cols, size);

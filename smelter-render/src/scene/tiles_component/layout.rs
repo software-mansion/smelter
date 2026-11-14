@@ -1,7 +1,10 @@
 use std::time::Duration;
 
 use crate::{
-    scene::{BorderRadius, RGBAColor, Size, StatefulComponent, layout::StatefulLayoutComponent},
+    scene::{
+        BorderRadius, RGBAColor, Size,
+        layout::{LayoutChild, StatefulLayoutComponent},
+    },
     transformations::layout::{LayoutContent, NestedLayout},
 };
 
@@ -10,7 +13,7 @@ use super::tiles::Tile;
 pub(super) fn layout_tiles(
     tiles: &[Option<Tile>],
     size: Size,
-    children: &mut [StatefulComponent],
+    children: &mut [LayoutChild],
     pts: Duration,
     background_color: RGBAColor,
 ) -> NestedLayout {
@@ -40,19 +43,19 @@ pub(super) fn layout_tiles(
     }
 }
 
-fn layout_child(child: &mut StatefulComponent, tile: Option<Tile>, pts: Duration) -> NestedLayout {
+fn layout_child(child: &mut LayoutChild, tile: Option<Tile>, pts: Duration) -> NestedLayout {
     let Some(tile) = tile else {
         // If tile does not need to be rendered we still need to create empty layout that has
         // child_nodes_count. Without this element children index offsets will not be calculated
         // correctly.
         let child_nodes_count = match child {
-            StatefulComponent::Layout(layout_component) => layout_component.node_children().len(),
+            LayoutChild::Layout(layout_component) => layout_component.nodes_count(),
             _ => 1,
         };
         return NestedLayout::child_nodes_placeholder(child_nodes_count);
     };
     match child {
-        StatefulComponent::Layout(layout_component) => {
+        LayoutChild::Layout(layout_component) => {
             let children_layouts = layout_component.layout(
                 Size {
                     width: tile.width,
@@ -104,7 +107,7 @@ fn layout_child(child: &mut StatefulComponent, tile: Option<Tile>, pts: Duration
     }
 }
 
-fn fit_into_tile(tile: Tile, component: &StatefulComponent, pts: Duration) -> Tile {
+fn fit_into_tile(tile: Tile, component: &LayoutChild, pts: Duration) -> Tile {
     let Some(width) = component.width(pts) else {
         return tile;
     };

@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use glyphon::fontdb;
 use tracing::trace;
@@ -25,18 +28,22 @@ use crate::{
 };
 
 use self::{
-    render_graph::{OutputSpec, RenderGraph},
-    render_loop::{populate_inputs, read_outputs, run_transforms},
+    input_texture::InputTexture,
+    node_texture::NodeTexture,
+    output_texture::OutputTexture,
+    render_loop::{
+        OutputRenderer, input_resolutions, populate_inputs, read_outputs, render_scenes,
+    },
     renderers::Renderers,
 };
+
+pub(crate) use input_texture::InputTextures;
 
 pub mod frame_pre_processor;
 pub mod input_texture;
 pub mod node_texture;
 pub mod output_texture;
 
-pub mod node;
-pub mod render_graph;
 mod render_loop;
 pub mod renderers;
 
@@ -60,7 +67,8 @@ struct InnerRenderer {
 
     chromium_context: Option<Arc<ChromiumContext>>,
 
-    render_graph: RenderGraph,
+    inputs: InputTextures,
+    outputs: HashMap<OutputId, OutputRenderer>,
     scene: SceneState,
 
     renderers: Renderers,
@@ -114,24 +122,21 @@ impl Renderer {
     }
 
     pub fn register_input(&self, input_id: InputId) {
-        self.0.lock().unwrap().render_graph.register_input(input_id);
+        self.0
+            .lock()
+            .unwrap()
+            .inputs
+            .insert(input_id, (NodeTexture::new(), InputTexture::new()));
     }
 
     pub fn unregister_input(&self, input_id: &InputId) {
-        self.0
-            .lock()
-            .unwrap()
-            .render_graph
-            .unregister_input(input_id);
+        self.0.lock().unwrap().inputs.remove(input_id);
     }
 
     pub fn unregister_output(&self, output_id: &OutputId) {
-        self.0
-            .lock()
-            .unwrap()
-            .render_graph
-            .unregister_output(output_id);
-        self.0.lock().unwrap().scene.clear_output_state(output_id)
+        let mut guard = self.0.lock().unwrap();
+        guard.outputs.remove(output_id);
+        guard.scene.clear_output_state(output_id)
     }
 
     pub fn register_renderer(
@@ -216,7 +221,8 @@ impl InnerRenderer {
                 &wgpu_ctx.device,
                 opts.load_system_fonts,
             )),
-            render_graph: RenderGraph::empty(),
+            inputs: HashMap::new(),
+            outputs: HashMap::new(),
             staging_belt: StagingBelt::new(wgpu_ctx.device.clone(), STAGING_BELT_CHUNK_SIZE),
             renderers: Renderers::new(wgpu_ctx, opts.max_layouts_count)?,
             scene: SceneState::new(),
@@ -245,21 +251,15 @@ impl InnerRenderer {
 
         let scope = WgpuErrorScope::push(&ctx.wgpu_ctx.device);
 
-        let input_resolutions = inputs
-            .frames
-            .iter()
-            .map(|(input_id, frame)| (input_id.clone(), frame.resolution))
-            .collect();
-        self.scene
-            .register_render_event(inputs.pts, input_resolutions);
-
         let pts = inputs.pts;
         trace!("Upload input textures");
-        populate_inputs(ctx, &mut self.render_graph, inputs);
-        trace!("Run render graph");
-        run_transforms(ctx, &mut self.render_graph, pts);
+        populate_inputs(ctx, &mut self.inputs, inputs);
+        trace!("Calculate layouts");
+        self.scene.layout(pts, &input_resolutions(&self.inputs));
+        trace!("Render scenes");
+        render_scenes(ctx, &mut self.scene, &self.inputs, pts);
         trace!("Download output textures");
-        let frames = read_outputs(ctx, &mut self.render_graph, pts);
+        let frames = read_outputs(ctx, &mut self.outputs, &self.scene, &self.inputs, pts);
 
         scope.pop()?;
 
@@ -273,23 +273,6 @@ impl InnerRenderer {
         output_format: OutputFrameFormat,
         scene: Scene,
     ) -> Result<(), UpdateSceneError> {
-        let update = match scene {
-            Scene::ComponentTree(component) => {
-                let output = OutputScene {
-                    output_id: output_id.clone(),
-                    scene_root: component,
-                    resolution,
-                };
-                let node =
-                    self.scene
-                        .update_scene(output, &self.renderers, &self.text_renderer_ctx)?;
-                OutputSpec::RenderTree(node)
-            }
-            Scene::LinkedOutput(primary_output_id) => {
-                self.scene.clear_output_state(&output_id);
-                OutputSpec::LinkedOutput(primary_output_id)
-            }
-        };
         let mut ctx = RenderCtx {
             wgpu_ctx: &self.wgpu_ctx,
             text_renderer_ctx: &self.text_renderer_ctx,
@@ -297,11 +280,44 @@ impl InnerRenderer {
             staging_belt: &mut self.staging_belt,
             encoder: self.wgpu_ctx.create_command_encoder("Scene update"),
         };
-        let result =
-            self.render_graph
-                .update_output(&ctx, output_id, resolution, output_format, update);
+        let scope = WgpuErrorScope::push(&ctx.wgpu_ctx.device);
+
+        // State of the renderer is only modified after everything was created without errors.
+        // `scene_update` is `None` if the output does not render its own scene.
+        let (scene_output_id, scene_update) = match scene {
+            Scene::ComponentTree(component) => {
+                let output = OutputScene {
+                    output_id: output_id.clone(),
+                    scene_root: component,
+                    resolution,
+                };
+                let state =
+                    self.scene
+                        .prepare_update(&output, &ctx, &input_resolutions(&self.inputs));
+                (output_id.clone(), state.map(|state| Some((output, state))))
+            }
+            Scene::LinkedOutput(primary_output_id) => (primary_output_id, Ok(None)),
+        };
+        let output_texture = OutputTexture::new(ctx.wgpu_ctx, resolution, output_format);
         // Not required, scene update does not record any commands at the moment.
         ctx.submit_recorded_commands();
-        result
+
+        let wgpu_result = scope.pop();
+        let scene_update = scene_update?;
+        wgpu_result?;
+
+        match scene_update {
+            Some((output, state)) => self.scene.apply_update(output, state),
+            None => self.scene.clear_output_state(&output_id),
+        };
+        self.outputs.insert(
+            output_id,
+            OutputRenderer {
+                scene_output_id,
+                output_texture,
+            },
+        );
+
+        Ok(())
     }
 }

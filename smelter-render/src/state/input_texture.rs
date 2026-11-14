@@ -1,10 +1,12 @@
+use std::collections::HashMap;
+
 use interleaved_uyvy422::InterleavedUyvy422Input;
 use nv12_texture::NV12Input;
 use planar_yuv::PlanarYuvInput;
 use rgba_texture::RgbaTextureInput;
 
 use crate::{
-    Frame, FrameData, Resolution,
+    Frame, FrameData, InputId, Resolution,
     state::input_texture::{
         argb::ArgbInput, bgra::BgraInput, interleaved_yuyv422::InterleavedYuyv422Input,
     },
@@ -26,6 +28,10 @@ mod planar_yuv;
 mod rgba_texture;
 
 mod convert_linear_to_srgb;
+
+/// Textures of all registered inputs. `NodeTexture` holds the frame that is used
+/// for rendering, it is empty if the input does not have a frame.
+pub(crate) type InputTextures = HashMap<InputId, (NodeTexture, InputTexture)>;
 
 enum InputTextureState {
     PlanarYuv(Box<PlanarYuvInput>),

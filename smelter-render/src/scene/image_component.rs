@@ -1,10 +1,15 @@
 use std::{sync::Arc, time::Duration};
 
-use crate::{Resolution, scene::Size, transformations::image::Image};
+use crate::{
+    Resolution,
+    scene::Size,
+    state::{RenderCtx, node_texture::NodeTexture},
+    transformations::image::{Image, ImageNode},
+};
 
 use super::{
-    ComponentId, ImageComponent, IntermediateNode, SceneError, StatefulComponent,
-    scene_state::BuildStateTreeCtx,
+    ComponentId, ImageComponent, SceneError, StatefulComponent,
+    scene_state::{BuildStateTreeCtx, PrevComponent},
 };
 
 #[derive(Debug)]
@@ -14,12 +19,13 @@ pub(crate) struct ImageRenderParams {
     pub(crate) resolution: Resolution,
 }
 
-#[derive(Debug, Clone)]
 pub(super) struct StatefulImageComponent {
-    pub(super) component: ImageComponent,
-    pub(super) image: Image,
-    pub(super) start_pts: Duration,
-    pub(super) resolution: Resolution,
+    component: ImageComponent,
+    image: Image,
+    start_pts: Duration,
+    resolution: Resolution,
+    node: ImageNode,
+    pub(super) output: NodeTexture,
 }
 
 impl StatefulImageComponent {
@@ -27,29 +33,15 @@ impl StatefulImageComponent {
         self.component.id.as_ref()
     }
 
-    pub(super) fn width(&self) -> f32 {
-        self.resolution.width as f32
-    }
-    pub(super) fn height(&self) -> f32 {
-        self.resolution.height as f32
-    }
     pub(super) fn size(&self) -> Size {
         Size {
-            width: self.width(),
-            height: self.height(),
+            width: self.resolution.width as f32,
+            height: self.resolution.height as f32,
         }
     }
 
-    pub(super) fn intermediate_node(&self) -> IntermediateNode {
-        IntermediateNode::Image(self.clone())
-    }
-
-    pub(super) fn image_render_params(self) -> ImageRenderParams {
-        ImageRenderParams {
-            image: self.image,
-            start_pts: self.start_pts,
-            resolution: self.resolution,
-        }
+    pub(super) fn render(&mut self, ctx: &mut RenderCtx, pts: Duration) {
+        self.node.render(ctx, &mut self.output, pts);
     }
 }
 
@@ -59,6 +51,7 @@ impl ImageComponent {
         ctx: &BuildStateTreeCtx,
     ) -> Result<StatefulComponent, SceneError> {
         let image = ctx
+            .render_ctx
             .renderers
             .images
             .get(&self.image_id)
@@ -96,11 +89,11 @@ impl ImageComponent {
             .as_ref()
             .and_then(|id| ctx.prev_state.get(id))
             .and_then(|component| match component {
-                StatefulComponent::Image(image) => Some(image),
+                PrevComponent::Image(image) => Some(*image),
                 _ => None,
             });
 
-        let prev_image = prev_state.as_ref().map(|s| &s.image);
+        let prev_image = prev_state.map(|s| &s.image);
         let are_images_matching = match (prev_image, &image) {
             (Some(Image::Bitmap(previous)), Image::Bitmap(current)) => {
                 Arc::ptr_eq(previous, current)
@@ -112,16 +105,27 @@ impl ImageComponent {
             (_, _) => false,
         };
 
-        let component = match prev_state {
-            Some(state) if self == state.component && are_images_matching => state.clone(),
-            _ => StatefulImageComponent {
-                component: self,
-                image,
-                start_pts: ctx.last_render_pts,
-                resolution,
-            },
+        // Unchanged image keeps its state, e.g. animation continues instead of starting over.
+        let start_pts = match prev_state {
+            Some(state) if self == state.component && are_images_matching => state.start_pts,
+            _ => ctx.last_render_pts,
         };
 
-        Ok(StatefulComponent::Image(component))
+        let node = ImageNode::new(
+            ctx.render_ctx.wgpu_ctx,
+            ImageRenderParams {
+                image: image.clone(),
+                start_pts,
+                resolution,
+            },
+        );
+        Ok(StatefulComponent::Image(StatefulImageComponent {
+            component: self,
+            image,
+            start_pts,
+            resolution,
+            node,
+            output: NodeTexture::new(),
+        }))
     }
 }

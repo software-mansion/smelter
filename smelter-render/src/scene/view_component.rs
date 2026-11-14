@@ -1,13 +1,13 @@
-use std::{ops::Deref, time::Duration};
+use std::time::Duration;
 
 use crate::{scene::ViewChildrenDirection, transformations::layout::NestedLayout};
 
 use super::{
-    BorderRadius, BoxShadow, Component, ComponentId, IntermediateNode, Overflow, Padding, Position,
-    RGBAColor, SceneError, Size, StatefulComponent,
+    BorderRadius, BoxShadow, Component, ComponentId, Overflow, Padding, Position, RGBAColor,
+    SceneError, Size,
     components::ViewComponent,
-    layout::StatefulLayoutComponent,
-    scene_state::BuildStateTreeCtx,
+    layout::{LayoutChild, StatefulLayoutComponent},
+    scene_state::{BuildStateTreeCtx, PrevComponent},
     transition::{TransitionOptions, TransitionState},
     types::interpolation::ContinuousValue,
 };
@@ -15,12 +15,11 @@ use super::{
 mod interpolation;
 mod layout;
 
-#[derive(Debug, Clone)]
 pub(super) struct StatefulViewComponent {
     start: Option<ViewComponentParam>,
     end: ViewComponentParam,
     transition: Option<TransitionState>,
-    children: Vec<StatefulComponent>,
+    children: Vec<LayoutChild>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -50,11 +49,11 @@ impl StatefulViewComponent {
         ContinuousValue::interpolate(start, &self.end, interpolation_progress)
     }
 
-    pub(super) fn children(&self) -> Vec<&StatefulComponent> {
+    pub(super) fn children(&self) -> Vec<&LayoutChild> {
         self.children.iter().collect()
     }
 
-    pub(super) fn children_mut(&mut self) -> Vec<&mut StatefulComponent> {
+    pub(super) fn children_mut(&mut self) -> Vec<&mut LayoutChild> {
         self.children.iter_mut().collect()
     }
 
@@ -70,25 +69,6 @@ impl StatefulViewComponent {
         self.end.id.as_ref()
     }
 
-    pub(super) fn intermediate_node(&self) -> IntermediateNode {
-        let children = self
-            .children
-            .iter()
-            .flat_map(|component| {
-                let node = component.intermediate_node();
-                match node {
-                    IntermediateNode::Layout { root: _, children } => children,
-                    _ => vec![node],
-                }
-            })
-            .collect();
-
-        IntermediateNode::Layout {
-            root: StatefulLayoutComponent::View(self.clone()).into(),
-            children,
-        }
-    }
-
     pub(super) fn layout(&mut self, size: Size, pts: Duration) -> NestedLayout {
         let view = self.view(pts);
         view.layout(size, &mut self.children, pts)
@@ -99,16 +79,15 @@ impl ViewComponent {
     pub(super) fn stateful_component(
         self,
         ctx: &BuildStateTreeCtx,
-    ) -> Result<StatefulComponent, SceneError> {
+    ) -> Result<StatefulLayoutComponent, SceneError> {
         let previous_state = self
             .id
             .as_ref()
             .and_then(|id| ctx.prev_state.get(id))
             .and_then(|component| match component {
-                StatefulComponent::Layout(boxed_layout) => match boxed_layout.deref() {
-                    StatefulLayoutComponent::View(view_state) => Some(view_state),
-                    _ => None,
-                },
+                PrevComponent::Layout(StatefulLayoutComponent::View(view_state)) => {
+                    Some(view_state)
+                }
                 _ => None,
             });
 
@@ -150,11 +129,9 @@ impl ViewComponent {
             children: self
                 .children
                 .into_iter()
-                .map(|c| Component::stateful_component(c, ctx))
+                .map(|c| Component::layout_child(c, ctx))
                 .collect::<Result<_, _>>()?,
         };
-        Ok(StatefulComponent::Layout(
-            StatefulLayoutComponent::View(view).into(),
-        ))
+        Ok(StatefulLayoutComponent::View(view))
     }
 }
