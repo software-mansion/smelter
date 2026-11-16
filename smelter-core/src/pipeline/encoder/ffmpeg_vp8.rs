@@ -103,6 +103,7 @@ impl VideoEncoder for FfmpegVp8Encoder {
                 resolution: options.resolution,
                 output_format: OutputFrameFormat::PlanarYuv420Bytes,
                 extradata: None,
+                b_frames: 0,
             },
         ))
     }

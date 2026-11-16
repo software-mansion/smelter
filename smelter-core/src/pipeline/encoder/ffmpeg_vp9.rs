@@ -134,6 +134,7 @@ impl VideoEncoder for FfmpegVp9Encoder {
                     OutputPixelFormat::YUV444P => OutputFrameFormat::PlanarYuv444Bytes,
                 },
                 extradata: None,
+                b_frames: 0,
             },
         ))
     }
