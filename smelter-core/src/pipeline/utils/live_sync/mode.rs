@@ -211,10 +211,7 @@ impl Mode {
                 independent.secondary_track_offset = None;
             }
             Mode::Independent(independent) => {
-                let secondary = match kind {
-                    TrackKind::Audio => TrackKind::Video,
-                    TrackKind::Video => TrackKind::Audio,
-                };
+                let secondary = TrackKind::other(kind);
                 *independent = IndependentMode {
                     leader_kind: secondary,
                     leader_anchor: SlewingAnchor {

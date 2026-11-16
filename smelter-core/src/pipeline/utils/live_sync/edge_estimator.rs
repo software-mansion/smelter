@@ -256,6 +256,11 @@ impl LiveEdgeEstimator {
         }
     }
 
+    /// Forget every observation, as if newly created.
+    pub fn reset(&mut self) {
+        self.observations = None;
+    }
+
     /// Record a chunk with `pts` that arrived at `now`.
     pub fn observe(&mut self, now: Instant, pts: Timestamp) {
         let arrival_ns = self.sync_point.timestamp_at(now).as_nanos();

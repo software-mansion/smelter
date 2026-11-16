@@ -103,6 +103,38 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         deadline
     }
 
+    /// Releases everything the track buffered and drops it together with its sink.
+    pub(super) fn remove_track(&mut self, kind: TrackKind) {
+        debug!(?kind, "Live sync: removing track");
+        let now = Instant::now();
+        self.reset_track(kind, now);
+        match kind {
+            TrackKind::Audio => self.audio = None,
+            TrackKind::Video => self.video = None,
+        }
+
+        // A track added later can be on a different timeline, so like on a discontinuity the
+        // shared estimate must not size its anchor, and a shared anchor nobody applies must not
+        // be reused by the next start.
+        if let Some(Mode::Shared(shared)) = self.mode {
+            let other = TrackKind::other(kind);
+            self.mode = match shared.is_started(other) {
+                true => Some(Mode::Independent(IndependentMode {
+                    leader_kind: other,
+                    leader_anchor: shared.anchor,
+                    secondary_track_offset: None,
+                })),
+                false => None,
+            };
+        }
+        // Needed when the last track is removed, and harmless in every other case because it does
+        // not force an already started track to wait to start again.
+        self.shared_estimator.reset();
+
+        self.publish_deadlines(now);
+        self.report_stats();
+    }
+
     /// Runs every transition due at `now` (resets, start decisions, corrections) and releases
     /// every releasable chunk. Driven by writes and by the periodic ticker, so time-based
     /// transitions fire during delivery pauses too.
@@ -262,11 +294,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             buffer = ?track.buffer.stats(),
             "Live sync: resetting track"
         );
-        track.estimator = LiveEdgeEstimator::new(
-            track.sync_point,
-            self.options.stabilization_tolerance,
-            self.options.stabilization_period,
-        );
+        track.estimator.reset();
         if let Some(anchor) = flush_anchor {
             while let Some(chunk) = track.buffer.read() {
                 track.release_chunk(chunk, anchor);
@@ -401,10 +429,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         // track's anchor; the other track leads until the tracks converge again. A shared anchor
         // nobody applies belongs to the old timeline and would be reused by the next start.
         if let Some(Mode::Shared(shared)) = self.mode {
-            let other = match kind {
-                TrackKind::Audio => TrackKind::Video,
-                TrackKind::Video => TrackKind::Audio,
-            };
+            let other = TrackKind::other(kind);
             self.mode = match shared.is_started(other) {
                 true => Some(Mode::Independent(IndependentMode {
                     leader_kind: other,
@@ -414,11 +439,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
                 false => None,
             };
         }
-        self.shared_estimator = LiveEdgeEstimator::new(
-            self.sync_point,
-            self.options.stabilization_tolerance,
-            self.options.stabilization_period,
-        );
+        self.shared_estimator.reset();
 
         // After the reset, so flushed old chunks precede the event in the sink.
         let track = match kind {

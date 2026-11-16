@@ -35,6 +35,15 @@ pub(crate) enum TrackKind {
     Video,
 }
 
+impl TrackKind {
+    pub fn other(kind: TrackKind) -> TrackKind {
+        match kind {
+            TrackKind::Audio => TrackKind::Video,
+            TrackKind::Video => TrackKind::Audio,
+        }
+    }
+}
+
 /// Reports the sync state of an input to the stats module.
 #[derive(Debug, Clone)]
 pub(crate) struct InputSyncStatsSender {
