@@ -1,0 +1,15 @@
+[package]
+name = "gpu-video-tests"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+gpu-video = { workspace = true }
+wgpu = { workspace = true }
+ffmpeg-next = { workspace = true }
+crossbeam-channel = { workspace = true }
+bytes = { workspace = true }
+pollster = { workspace = true }
+
+[lints]
+workspace = true

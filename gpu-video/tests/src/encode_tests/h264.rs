@@ -1,4 +1,4 @@
-use crate::gpu_video_tests::harness::encode_test_runner::Codec;
+use crate::harness::encode_test_runner::Codec;
 
 /// Default high quality preset with VBR.
 #[test]
