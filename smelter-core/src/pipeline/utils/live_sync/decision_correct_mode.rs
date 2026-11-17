@@ -18,7 +18,7 @@ pub(super) fn correct_mode_decision<B: LiveSyncBuffer>(
     let ctx = Context::new(state, now);
 
     Some(match mode {
-        Mode::Shared(mode) if ctx.tracks_diverged() && (ctx.audio_started || ctx.video_started) => {
+        Mode::Shared(mode) if ctx.tracks_diverged() => {
             let (Some(audio), Some(video)) = (&ctx.audio_estimation, &ctx.video_estimation) else {
                 // tracks are diverged only when both have an estimate
                 return Some(Mode::Shared(mode));
@@ -135,12 +135,6 @@ fn correct_shared(
             .buffer_in_range(&estimation, shared.anchor.current, ctx.now_pts)
     {
         shared.anchor.target = ctx.strategy.desired_anchor(&estimation, ctx.now_pts);
-    }
-    if !ctx.audio_started && !ctx.video_started {
-        // We need to do it because current will never converge on target (nothing is actively
-        // nudging it)
-        // We can do it because no track is started, so no continuity to preserve
-        shared.anchor.current = shared.anchor.target;
     }
     Mode::Shared(shared)
 }

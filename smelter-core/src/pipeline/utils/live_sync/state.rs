@@ -118,18 +118,14 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         }
 
         // A track added later can be on a different timeline, so like on a discontinuity the
-        // shared estimate must not size its anchor, and a shared anchor nobody applies must not
-        // be reused by the next start.
+        // shared estimate must not size its anchor. Still shared after the reset means the other
+        // track is started, so it leads on its own.
         if let Some(Mode::Shared(shared)) = self.mode {
-            let other = TrackKind::other(kind);
-            self.mode = match shared.is_started(other) {
-                true => Some(Mode::Independent(IndependentMode {
-                    leader_kind: other,
-                    leader_anchor: shared.anchor,
-                    secondary_track_offset: None,
-                })),
-                false => None,
-            };
+            self.mode = Some(Mode::Independent(IndependentMode {
+                leader_kind: TrackKind::other(kind),
+                leader_anchor: shared.anchor,
+                secondary_track_offset: None,
+            }));
         }
 
         self.publish_deadlines(now);
@@ -425,18 +421,14 @@ impl<B: LiveSyncBuffer> SharedState<B> {
 
         self.reset_track(kind, now);
         // The shared estimate mixes both timelines from now on, so it must not size the other
-        // track's anchor; the other track leads until the tracks converge again. A shared anchor
-        // nobody applies belongs to the old timeline and would be reused by the next start.
+        // track's anchor; the other track (started, since the mode is still shared) leads until
+        // the tracks converge again.
         if let Some(Mode::Shared(shared)) = self.mode {
-            let other = TrackKind::other(kind);
-            self.mode = match shared.is_started(other) {
-                true => Some(Mode::Independent(IndependentMode {
-                    leader_kind: other,
-                    leader_anchor: shared.anchor,
-                    secondary_track_offset: None,
-                })),
-                false => None,
-            };
+            self.mode = Some(Mode::Independent(IndependentMode {
+                leader_kind: TrackKind::other(kind),
+                leader_anchor: shared.anchor,
+                secondary_track_offset: None,
+            }));
         }
 
         // After the reset, so flushed old chunks precede the event in the sink.

@@ -199,14 +199,20 @@ impl Mode {
     }
 
     /// Mode after the track of `kind` stops applying its anchor. A shared anchor stays for the
-    /// other track; a secondary track loses its offset; a leader hands the anchor the secondary
-    /// track has been applying over to it, or leaves nothing if it had none.
+    /// other track, or leaves nothing if no track applies it anymore; a secondary track loses its
+    /// offset; a leader hands the anchor the secondary track has been applying over to it, or
+    /// leaves nothing if it had none.
     pub fn reset_track(mut self, kind: TrackKind) -> Option<Mode> {
         match &mut self {
-            Mode::Shared(shared) => match kind {
-                TrackKind::Audio => shared.audio_started = false,
-                TrackKind::Video => shared.video_started = false,
-            },
+            Mode::Shared(shared) => {
+                match kind {
+                    TrackKind::Audio => shared.audio_started = false,
+                    TrackKind::Video => shared.video_started = false,
+                }
+                if !shared.audio_started && !shared.video_started {
+                    return None;
+                }
+            }
             Mode::Independent(independent) if independent.leader_kind != kind => {
                 independent.secondary_track_offset = None;
             }
