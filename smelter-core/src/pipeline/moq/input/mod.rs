@@ -1,6 +1,7 @@
 mod buffer;
+mod catalog;
 mod client_input;
 mod connection;
-mod jitter_buffer;
+mod track_reader;
 
 pub use client_input::MoqClientInput;

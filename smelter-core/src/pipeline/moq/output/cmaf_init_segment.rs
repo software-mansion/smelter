@@ -194,11 +194,13 @@ pub(super) fn aac_cmaf_init_segment(asc: &[u8]) -> Result<Bytes, MoqClientError>
                     // 0x40 = MPEG-4 Audio, 0x05 = AudioStream (MPEG-4 systems tables).
                     object_type_indication: 0x40,
                     stream_type: 0x05,
-                    dec_specific: mp4_atom::esds::DecoderSpecific {
+                    dec_specific: Some(mp4_atom::esds::DecoderSpecific {
                         profile: config.profile,
                         freq_index,
                         chan_conf: config.channel_count,
-                    },
+                        // Re-derived from the fields above on encode.
+                        raw: Vec::new(),
+                    }),
                     ..Default::default()
                 },
                 sl_config: mp4_atom::esds::SLConfig::default(),

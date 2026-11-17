@@ -34,15 +34,11 @@ pub fn wait_for_relay(endpoint_url: &str) -> Result<Option<String>> {
         }
 
         let args = format!(
-            "--server-bind '[::]:{port}' --tls-generate {host} --web-http-listen '[::]:{port}' --auth-public anon"
+            "--listen '[::]:{port}' --listen-tls-generate {host} --web-http-listen '[::]:{port}' --auth-public 'anon/**'"
         );
         println!("No MoQ relay found at {endpoint_url}. Start one in a separate terminal:");
         println!();
-        println!("  # inside nix dev shell, or after `cargo install moq-relay`");
         println!("  moq-relay {args}");
-        println!();
-        println!("  # from the repository root, without the dev shell");
-        println!("  nix run ./tools/nix#moq-relay -- {args}");
         println!();
 
         let retry = Confirm::new("Check again? (n to continue without a local relay) [Y/n]")

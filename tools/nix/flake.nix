@@ -5,7 +5,8 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     # Does not follow our nixpkgs, so the upstream binary cache (kixelated.cachix.org) still
     # matches.
-    moq.url = "github:moq-dev/moq/f1a828ac8c4fe812e145ef838b554a42a364f306";
+    # moq-relay-v0.17.15 (same commit as hang-v0.21.23 and moq-mux-v0.10.23)
+    moq.url = "github:moq-dev/moq/92e6e53c84cdbd3ae8fd903db4e9f091dd18c5cf";
   };
 
   outputs = inputs@{ flake-parts, ... }:
