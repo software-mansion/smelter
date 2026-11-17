@@ -17,34 +17,29 @@ pub(super) fn start_track_decision<B: LiveSyncBuffer>(
     if state.is_started(kind) {
         return None;
     }
-    let track_estimation = state.track(kind)?.estimator.estimate(now)?;
-    let shared_estimation = state.shared_estimator.estimate(now)?;
+    let audio_estimation = state
+        .track(TrackKind::Audio)
+        .and_then(|audio| audio.estimator.estimate(now));
+    let video_estimation = state
+        .track(TrackKind::Video)
+        .and_then(|video| video.estimator.estimate(now));
+    let track_estimation = match kind {
+        TrackKind::Audio => audio_estimation,
+        TrackKind::Video => video_estimation,
+    }?;
+    let shared_estimation =
+        EdgeEstimate::combine(audio_estimation.as_ref(), video_estimation.as_ref())?;
 
-    // The shared estimate mixes both tracks, so once the timelines are known to be unrelated
-    // the leader's own edge is the one to wait for.
-    let reference_estimation = match state.mode {
-        Some(Mode::Independent(mode)) => state
-            .track(mode.leader_kind)
-            .and_then(|leader| leader.estimator.estimate(now))
-            .unwrap_or(shared_estimation), // just for types, leader will always have estimate
-        _ => shared_estimation,
-    };
-
-    let both_stable =
-        track_estimation.upper_bound.stable && reference_estimation.upper_bound.stable;
+    // every track that delivers has to be stable, this one included
+    let all_stable = audio_estimation.is_none_or(|audio| audio.upper_bound.stable)
+        && video_estimation.is_none_or(|video| video.upper_bound.stable);
     let waiting_too_long = track_estimation.delivery.observed_for >= state.options.max_wait;
-    if !both_stable && !waiting_too_long {
+    if !all_stable && !waiting_too_long {
         return None;
     }
 
     let now_pts = state.sync_point.timestamp_at(now);
     let strategy = state.options.buffering_strategy;
-
-    let audio = state.track(TrackKind::Audio);
-    let video = state.track(TrackKind::Video);
-
-    let audio_estimation = audio.and_then(|a| a.estimator.estimate(now));
-    let video_estimation = video.and_then(|a| a.estimator.estimate(now));
 
     let tracks_diverged =
         EdgeEstimate::timelines_diverged(audio_estimation.as_ref(), video_estimation.as_ref());
@@ -148,8 +143,8 @@ pub(super) fn start_track_decision<B: LiveSyncBuffer>(
             IndependentMode {
                 leader_kind: TrackKind::Audio,
                 leader_anchor: match mode {
-                    // when video was starting it might have already polluted shared estimator
-                    // (and so the shared target), so recalculating target from track estimator
+                    // the shared target was sized from both tracks, including the diverged video,
+                    // so recalculate it from audio's own estimate
                     Mode::Shared(shared) => SlewingAnchor {
                         target: strategy.desired_anchor(&audio_estimation, now_pts),
                         ..shared.anchor

@@ -25,7 +25,13 @@ pub(super) fn correct_mode_decision<B: LiveSyncBuffer>(
             };
             split_shared(mode, audio, video, &ctx)
         }
-        Mode::Shared(mode) => correct_shared(mode, state.shared_estimator.estimate(now), &ctx),
+        Mode::Shared(mode) => {
+            let shared_estimation = EdgeEstimate::combine(
+                ctx.audio_estimation.as_ref(),
+                ctx.video_estimation.as_ref(),
+            );
+            correct_shared(mode, shared_estimation, &ctx)
+        }
         Mode::Independent(mode) => {
             let leader_estimation = match mode.leader_kind {
                 TrackKind::Audio => ctx.audio_estimation,
@@ -90,8 +96,7 @@ fn split_shared(
     video: &EdgeEstimate,
     ctx: &Context,
 ) -> Mode {
-    // tracks diverged, so shared estimator might be polluted, so use estimator from the new
-    // leader
+    // tracks diverged, so the shared estimate mixes both timelines; use the new leader's own
     let (leader_kind, leader_estimation) = match ctx.audio_started {
         true => (TrackKind::Audio, audio),
         false => (TrackKind::Video, video),

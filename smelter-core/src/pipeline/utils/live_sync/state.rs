@@ -33,9 +33,6 @@ pub(super) struct SharedState<B: LiveSyncBuffer> {
     pub options: LiveSyncOptions,
     /// Instant that output timestamps are measured from.
     pub sync_point: Instant,
-    /// Estimator observing chunks of all tracks; its edge is defined by the
-    /// freshest track.
-    pub shared_estimator: LiveEdgeEstimator,
     pub mode: Option<Mode>,
     audio: Option<Track<B>>,
     video: Option<Track<B>>,
@@ -51,11 +48,6 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         Self {
             options,
             sync_point,
-            shared_estimator: LiveEdgeEstimator::new(
-                sync_point,
-                options.stabilization_tolerance,
-                options.stabilization_period,
-            ),
             mode: None,
             audio: None,
             video: None,
@@ -72,6 +64,18 @@ impl<B: LiveSyncBuffer> SharedState<B> {
 
     pub fn is_started(&self, kind: TrackKind) -> bool {
         self.mode.is_some_and(|mode| mode.is_started(kind))
+    }
+
+    /// Estimate over all tracks, see [`EdgeEstimate::combine`].
+    pub fn shared_estimate(&self, now: Instant) -> Option<EdgeEstimate> {
+        let estimate = |kind| {
+            self.track(kind)
+                .and_then(|track| track.estimator.estimate(now))
+        };
+        EdgeEstimate::combine(
+            estimate(TrackKind::Audio).as_ref(),
+            estimate(TrackKind::Video).as_ref(),
+        )
     }
 
     pub(super) fn add_track(
@@ -127,12 +131,9 @@ impl<B: LiveSyncBuffer> SharedState<B> {
                 false => None,
             };
         }
-        // Needed when the last track is removed, and harmless in every other case because it does
-        // not force an already started track to wait to start again.
-        self.shared_estimator.reset();
 
         self.publish_deadlines(now);
-        self.report_stats();
+        self.report_stats(now);
     }
 
     /// Runs every transition due at `now` (resets, start decisions, corrections) and releases
@@ -182,7 +183,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         }
 
         self.publish_deadlines(now);
-        self.report_stats();
+        self.report_stats(now);
     }
 
     /// Give up on live edge detection; every track releases what it buffered
@@ -194,7 +195,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             self.reset_track(kind, now);
         }
         self.publish_deadlines(now);
-        self.report_stats();
+        self.report_stats(now);
     }
 
     /// Oldest input pts each track could still release on time under its current anchor.
@@ -239,9 +240,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             track.stats.report_chunk_received(output_pts);
         }
 
-        // both estimators observe for the whole lifetime of the input
         track.estimator.observe(now, chunk.pts());
-        self.shared_estimator.observe(now, chunk.pts());
         trace!(
             ?kind,
             pts=?chunk.pts(),
@@ -439,7 +438,6 @@ impl<B: LiveSyncBuffer> SharedState<B> {
                 false => None,
             };
         }
-        self.shared_estimator.reset();
 
         // After the reset, so flushed old chunks precede the event in the sink.
         let track = match kind {
@@ -452,8 +450,15 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         }
     }
 
-    fn report_stats(&mut self) {
+    fn report_stats(&mut self, now: Instant) {
         for kind in [TrackKind::Audio, TrackKind::Video] {
+            let estimate = match self.mode {
+                Some(Mode::Shared(shared)) if shared.is_started(kind) => self.shared_estimate(now),
+                Some(Mode::Independent(independent)) if independent.anchor(kind).is_some() => self
+                    .track(kind)
+                    .and_then(|track| track.estimator.estimate(now)),
+                _ => None,
+            };
             let track = match kind {
                 TrackKind::Audio => self.audio.as_mut(),
                 TrackKind::Video => self.video.as_mut(),
@@ -465,18 +470,9 @@ impl<B: LiveSyncBuffer> SharedState<B> {
                 .mode
                 .and_then(|mode| Some((mode.anchor(kind)?, mode.target(kind)?)));
             track.stats.report_state_change(kind, self.mode);
-            let estimator = match self.mode {
-                Some(Mode::Shared(shared)) if shared.is_started(kind) => {
-                    Some(&self.shared_estimator)
-                }
-                Some(Mode::Independent(independent)) if independent.anchor(kind).is_some() => {
-                    Some(&track.estimator)
-                }
-                _ => None,
-            };
             track
                 .stats
-                .report_state_snapshot(&track.buffer, anchors, estimator);
+                .report_state_snapshot(&track.buffer, anchors, estimate);
         }
     }
 }

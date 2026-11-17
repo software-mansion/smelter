@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use super::{buffer::LiveSyncBuffer, edge_estimator::LiveEdgeEstimator, mode::Mode};
+use super::{buffer::LiveSyncBuffer, edge_estimator::EdgeEstimate, mode::Mode};
 use crate::{
     InstantExt, Timestamp, TimestampOffset,
     pipeline::utils::input_sync::{InputSyncStatsSender, TrackKind},
@@ -84,13 +84,13 @@ impl LiveSyncTrackStats {
     }
 
     /// Throttled to [`SNAPSHOT_INTERVAL`]. `anchors` is `(current, target)` of the anchor the
-    /// track applies and `estimator` the live edge estimator its mode reads for it (shared in
+    /// track applies and `estimate` the live edge estimate its mode reads for it (combined in
     /// `Mode::Shared`, the track's own in `Mode::Independent`), both `None` before it started.
     pub fn report_state_snapshot(
         &mut self,
         buffer: &impl LiveSyncBuffer,
         anchors: Option<(TimestampOffset, TimestampOffset)>,
-        estimator: Option<&LiveEdgeEstimator>,
+        estimate: Option<EdgeEstimate>,
     ) {
         let now = Instant::now();
         if let Some(last) = self.last_snapshot
@@ -99,7 +99,6 @@ impl LiveSyncTrackStats {
             return;
         }
         self.last_snapshot = Some(now);
-        let estimate = estimator.and_then(|estimator| estimator.estimate(now));
         let target_offset_distance = match anchors {
             Some((current, target)) => current - target,
             None => TimestampOffset::ZERO,

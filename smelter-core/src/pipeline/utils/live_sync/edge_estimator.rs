@@ -145,6 +145,55 @@ impl EdgeEstimate {
         }
     }
 
+    /// Estimate of tracks sharing one timeline. The freshest upper bound defines the upper bound
+    /// and its stability, the slowest stable lower bound the lower one. A lower bound that is not
+    /// stable yet is left out, so a backlog flushed by a track that just joined does not count as
+    /// slow delivery.
+    pub fn combine(
+        audio: Option<&EdgeEstimate>,
+        video: Option<&EdgeEstimate>,
+    ) -> Option<EdgeEstimate> {
+        let (audio, video) = match (audio, video) {
+            (Some(audio), Some(video)) => (audio, video),
+            (audio, video) => return audio.or(video).copied(),
+        };
+        let upper_bound = match audio.upper_bound.pts >= video.upper_bound.pts {
+            true => audio.upper_bound,
+            false => video.upper_bound,
+        };
+        let lower_bound = [audio.lower_bound, video.lower_bound]
+            .into_iter()
+            .filter(|bound| bound.stable)
+            .min_by_key(|bound| bound.pts)
+            .unwrap_or(PtsBound {
+                pts: upper_bound.pts,
+                stable: false,
+            });
+        Some(EdgeEstimate {
+            upper_bound,
+            lower_bound,
+            recent_upper_bound_pts: Option::max(
+                audio.recent_upper_bound_pts,
+                video.recent_upper_bound_pts,
+            ),
+            delivery: DeliveryStats {
+                last_pts: Timestamp::max(audio.delivery.last_pts, video.delivery.last_pts),
+                observed_for: Duration::max(
+                    audio.delivery.observed_for,
+                    video.delivery.observed_for,
+                ),
+                max_arrival_gap: Duration::min(
+                    audio.delivery.max_arrival_gap,
+                    video.delivery.max_arrival_gap,
+                ),
+                since_last_arrival: Duration::min(
+                    audio.delivery.since_last_arrival,
+                    video.delivery.since_last_arrival,
+                ),
+            },
+        })
+    }
+
     /// Whether the tracks are known to be on different timelines.
     pub fn timelines_diverged(audio: Option<&EdgeEstimate>, video: Option<&EdgeEstimate>) -> bool {
         // looser than the converge threshold, so a mode cannot flap between the two
