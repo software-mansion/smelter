@@ -123,6 +123,13 @@ impl<B: LiveSyncBuffer> LiveSync<B> {
         LiveSyncTrack::new(self.shared.clone(), kind, deadline)
     }
 
+    /// Releases everything the track buffered and removes it, dropping its sink. A track of the
+    /// same kind can be added again afterwards.
+    #[allow(dead_code)]
+    pub fn remove_track(&self, kind: TrackKind) {
+        self.shared.lock().unwrap().remove_track(kind);
+    }
+
     /// Give up on live edge detection; every track releases everything it
     /// buffered (e.g. when the stream ended before the live edge was
     /// detected).

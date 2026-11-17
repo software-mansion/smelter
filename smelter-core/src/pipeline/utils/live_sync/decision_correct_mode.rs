@@ -112,8 +112,6 @@ fn split_shared(
         leader_anchor: SlewingAnchor {
             current: shared.anchor.current,
             target: ctx.strategy.desired_anchor(leader_estimation, ctx.now_pts),
-            // the shared value may come from the other track, which would stall the leader's
-            // slew until its own pts pass it
             last_released_pts: None,
         },
         secondary_track_offset,
