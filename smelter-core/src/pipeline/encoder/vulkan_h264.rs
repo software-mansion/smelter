@@ -136,6 +136,7 @@ impl VideoEncoder for VulkanH264Encoder {
                 resolution: options.resolution,
                 output_format: OutputFrameFormat::Nv12WgpuTexture,
                 extradata,
+                b_frames: 0,
             },
         ))
     }

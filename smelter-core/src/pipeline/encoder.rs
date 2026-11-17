@@ -33,6 +33,9 @@ pub(crate) struct VideoEncoderConfig {
     pub resolution: Resolution,
     pub output_format: OutputFrameFormat,
     pub extradata: Option<bytes::Bytes>,
+    /// Max number of consecutive B-frames the encoder can emit.
+    #[allow(dead_code)]
+    pub b_frames: u32,
 }
 
 pub(crate) trait VideoEncoder: Sized {

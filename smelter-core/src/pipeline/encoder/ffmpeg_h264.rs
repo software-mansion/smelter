@@ -73,6 +73,7 @@ impl VideoEncoder for FfmpegH264Encoder {
         let extradata = encoder
             .read_extradata()
             .and_then(|extradata| build_avc_decoder_config(&extradata));
+        let b_frames = read_b_frames(&encoder, codec_name);
 
         Ok((
             Self {
@@ -88,6 +89,7 @@ impl VideoEncoder for FfmpegH264Encoder {
                     OutputPixelFormat::YUV444P => OutputFrameFormat::PlanarYuv444Bytes,
                 },
                 extradata,
+                b_frames,
             },
         ))
     }
@@ -157,6 +159,23 @@ impl FfmpegH264Encoder {
                 }
             }
         }).collect()
+    }
+}
+
+/// Reads the B-frame count from an opened encoder.
+fn read_b_frames(encoder: &ffmpeg_next::encoder::Video, codec_name: &str) -> u32 {
+    let (max_b_frames, has_b_frames) = unsafe {
+        let encoder = &*encoder.0.0.0.as_ptr();
+        (encoder.max_b_frames, encoder.has_b_frames)
+    };
+    match codec_name {
+        // libx264 resets `max_b_frames` to 0 when the preset picks the count, but `has_b_frames`
+        // still tells whether B-frames are enabled. 3 is the count of the default "fast" preset.
+        "libx264" if has_b_frames == 0 => 0,
+        "libx264" if max_b_frames <= 0 => 3,
+        // Negative means the encoder preset picks the count (nvenc, qsv), `has_b_frames` is the
+        // only hint left.
+        _ => u32::try_from(max_b_frames).unwrap_or(u32::try_from(has_b_frames).unwrap_or(0)),
     }
 }
 
