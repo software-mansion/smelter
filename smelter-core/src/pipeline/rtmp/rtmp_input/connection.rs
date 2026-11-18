@@ -31,7 +31,7 @@ use crate::{
             InputSync, InputSyncStatsSender, InputSyncTrack, SimpleSync, TrackEvent, TrackKind,
             TrackSink,
         },
-        live_sync::{BufferingStrategy, ChunkBuffer, LiveSync, LiveSyncOptions},
+        live_sync::{BufferingStrategy, ChunkBuffer, LiveSync, LiveSyncOptions, TrackPriority},
     },
 };
 
@@ -57,6 +57,7 @@ pub(crate) fn start_connection_thread(
         true => InputSync::Live(LiveSync::new(
             LiveSyncOptions {
                 buffering_strategy: BufferingStrategy::Range { min, max, desired },
+                track_priority: TrackPriority::None,
                 stabilization_period: Duration::from_millis(500),
                 stabilization_tolerance: Duration::from_millis(100),
                 max_wait: desired * 2,

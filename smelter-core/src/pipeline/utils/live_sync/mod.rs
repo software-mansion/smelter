@@ -72,7 +72,9 @@ mod state;
 mod stats;
 mod track;
 
-pub(crate) use buffer::{BufferingStrategy, ChunkBuffer, FifoBuffer, LiveSyncBuffer};
+pub(crate) use buffer::{
+    BufferingStrategy, ChunkBuffer, FifoBuffer, LiveSyncBuffer, TrackPriority,
+};
 pub(crate) use track::{LiveSyncDeadline, LiveSyncTrack};
 
 use crate::pipeline::utils::input_sync::{BoxedTrackSink, InputSyncStatsSender, TrackKind};
@@ -81,6 +83,8 @@ use state::SharedState;
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LiveSyncOptions {
     pub buffering_strategy: BufferingStrategy,
+    /// Track whose latency the shared buffer protects, see [`TrackPriority`].
+    pub track_priority: TrackPriority,
     /// How long the live edge estimates have to stay stable before starting.
     pub stabilization_period: Duration,
     /// Estimate improvements smaller than this (delivery jitter) do not reset

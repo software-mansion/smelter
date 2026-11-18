@@ -135,16 +135,6 @@ pub(crate) struct EdgeEstimate {
 }
 
 impl EdgeEstimate {
-    /// Distance between the bounds; how much of a buffer the delivery pattern
-    /// itself (jitter, batch size) takes up. Zero while the lower bound is
-    /// not stable.
-    pub fn spread(&self) -> Timestamp {
-        match self.lower_bound.stable {
-            true => self.upper_bound.pts - self.lower_bound.pts,
-            false => Timestamp::ZERO,
-        }
-    }
-
     /// Estimate of tracks sharing one timeline. The freshest upper bound defines the upper bound
     /// and its stability, the slowest stable lower bound the lower one. A lower bound that is not
     /// stable yet is left out, so a backlog flushed by a track that just joined does not count as

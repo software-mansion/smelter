@@ -22,6 +22,34 @@ pub(crate) enum BufferingStrategy {
     },
 }
 
+/// Track whose latency the shared buffer protects when the tracks need different buffers.
+#[derive(Debug, Copy, Clone)]
+pub(crate) enum TrackPriority {
+    /// The buffer grows until both tracks fit. E.g. tracks delivered over one connection (RTMP)
+    /// are delayed together, so dropping one would not help the other.
+    None,
+    /// The buffer is sized for audio; video that does not fit within `max` is dropped.
+    Audio,
+    /// The buffer is sized for video; audio that does not fit within `max` is dropped.
+    #[allow(dead_code)]
+    Video,
+}
+
+impl TrackPriority {
+    /// Estimate of the priority track; `None` without priority or without that track's estimate.
+    pub(super) fn select<'a>(
+        self,
+        audio: Option<&'a EdgeEstimate>,
+        video: Option<&'a EdgeEstimate>,
+    ) -> Option<&'a EdgeEstimate> {
+        match self {
+            TrackPriority::None => None,
+            TrackPriority::Audio => audio,
+            TrackPriority::Video => video,
+        }
+    }
+}
+
 impl BufferingStrategy {
     pub fn desired_buffer(&self) -> Duration {
         match *self {
@@ -60,19 +88,45 @@ impl BufferingStrategy {
         }
     }
 
-    /// Anchor this strategy aims for: the freshest content at `desired`, or
-    /// further back if the delivery spread does not fit above `min`.
+    /// Anchor this strategy aims for: the upper bound at `desired`, or further back if the
+    /// lower bound would be less than `min` ahead.
+    ///
+    /// `priority` is the estimate of the track whose latency is protected (see
+    /// [`TrackPriority`]).
     pub(super) fn desired_anchor(
         &self,
         estimation: &EdgeEstimate,
+        priority: Option<&EdgeEstimate>,
         now_pts: Timestamp,
     ) -> TimestampOffset {
-        let BufferingStrategy::Range { min, desired, .. } = *self;
-        let spread = estimation.spread();
-        Timestamp::offset(
-            estimation.upper_bound.pts,
-            Timestamp::max(now_pts + desired, now_pts + spread + min),
-        )
+        let BufferingStrategy::Range { min, desired, max } = *self;
+
+        // optimal choice: upper bound (the most optimistic packets) with `desired` buffer
+        let mut offset = Timestamp::offset(estimation.upper_bound.pts, now_pts + desired);
+
+        // lower bound (the most pessimistic packets) with at least `min` buffer
+        offset = TimestampOffset::max(
+            offset,
+            Timestamp::offset(estimation.lower_bound.pts, now_pts + min),
+        );
+
+        if let Some(priority) = priority {
+            // the other track may not shift the priority track's upper bound over `max`
+            offset = TimestampOffset::min(
+                offset,
+                Timestamp::offset(priority.upper_bound.pts, now_pts + max),
+            );
+            if priority.lower_bound.stable {
+                // but the priority track's own lower bound still gets at least `min` buffer, even
+                // if that shifts its upper bound over `max`
+                offset = TimestampOffset::max(
+                    offset,
+                    Timestamp::offset(priority.lower_bound.pts, now_pts + min),
+                );
+            }
+        }
+
+        offset
     }
 
     /// Whether the buffer `anchor` produces is within the range this strategy allows;
@@ -83,15 +137,40 @@ impl BufferingStrategy {
     pub(super) fn buffer_in_range(
         &self,
         estimation: &EdgeEstimate,
+        priority: Option<&EdgeEstimate>,
         anchor: TimestampOffset,
         now_pts: Timestamp,
     ) -> bool {
         let BufferingStrategy::Range { min, max, .. } = *self;
-        let lower_bound = anchor.to_output_pts(estimation.lower_bound.pts);
-        let upper_bound = anchor.to_output_pts(estimation.upper_bound.pts);
-        let spread = estimation.spread();
-        let min_ok = !estimation.lower_bound.stable || lower_bound >= now_pts + min;
-        let max_ok = upper_bound <= Timestamp::max(now_pts + max, now_pts + spread + min);
+
+        // smallest offset: lower bound (the most pessimistic packets) with at least `min` buffer
+        let mut min_offset = Timestamp::offset(estimation.lower_bound.pts, now_pts + min);
+        if let Some(priority) = priority {
+            // the other track may not shift the priority track's upper bound over `max`, so
+            // we are ok with offset going lower than min if priority tracks would go over `max`
+            min_offset = TimestampOffset::min(
+                min_offset,
+                Timestamp::offset(priority.upper_bound.pts, now_pts + max),
+            );
+            if priority.lower_bound.stable {
+                // but the priority track's own lower bound still gets at least `min` buffer, even
+                // if that shifts its upper bound over `max`
+                min_offset = TimestampOffset::max(
+                    min_offset,
+                    Timestamp::offset(priority.lower_bound.pts, now_pts + min),
+                );
+            }
+        }
+
+        // largest offset: upper bound (the most optimistic packets) with at most `max` buffer,
+        // unless the lower bound needs more
+        let max_offset = TimestampOffset::max(
+            Timestamp::offset(estimation.upper_bound.pts, now_pts + max),
+            min_offset,
+        );
+
+        let min_ok = !estimation.lower_bound.stable || anchor >= min_offset;
+        let max_ok = anchor <= max_offset;
         min_ok && max_ok
     }
 }

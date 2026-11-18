@@ -117,17 +117,6 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             TrackKind::Video => self.video = None,
         }
 
-        // A track added later can be on a different timeline, so like on a discontinuity the
-        // shared estimate must not size its anchor. Still shared after the reset means the other
-        // track is started, so it leads on its own.
-        if let Some(Mode::Shared(shared)) = self.mode {
-            self.mode = Some(Mode::Independent(IndependentMode {
-                leader_kind: TrackKind::other(kind),
-                leader_anchor: shared.anchor,
-                secondary_track_offset: None,
-            }));
-        }
-
         self.publish_deadlines(now);
         self.report_stats(now);
     }

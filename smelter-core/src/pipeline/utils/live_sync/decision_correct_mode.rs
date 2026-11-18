@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 use super::{
-    buffer::{BufferingStrategy, LiveSyncBuffer},
+    buffer::{BufferingStrategy, LiveSyncBuffer, TrackPriority},
     edge_estimator::EdgeEstimate,
     mode::{IndependentMode, Mode, SecondaryTrackOffset, SharedMode, SlewingAnchor},
     state::SharedState,
@@ -26,10 +26,8 @@ pub(super) fn correct_mode_decision<B: LiveSyncBuffer>(
             split_shared(mode, audio, video, &ctx)
         }
         Mode::Shared(mode) => {
-            let shared_estimation = EdgeEstimate::combine(
-                ctx.audio_estimation.as_ref(),
-                ctx.video_estimation.as_ref(),
-            );
+            let shared_estimation =
+                EdgeEstimate::combine(ctx.audio_estimation.as_ref(), ctx.video_estimation.as_ref());
             correct_shared(mode, shared_estimation, &ctx)
         }
         Mode::Independent(mode) => {
@@ -50,6 +48,7 @@ pub(super) fn correct_mode_decision<B: LiveSyncBuffer>(
 struct Context {
     now_pts: Timestamp,
     strategy: BufferingStrategy,
+    track_priority: TrackPriority,
     audio_started: bool,
     video_started: bool,
     audio_estimation: Option<EdgeEstimate>,
@@ -66,6 +65,7 @@ impl Context {
         Self {
             now_pts: state.sync_point.timestamp_at(now),
             strategy: state.options.buffering_strategy,
+            track_priority: state.options.track_priority,
             audio_started: state.is_started(TrackKind::Audio),
             video_started: state.is_started(TrackKind::Video),
             audio_estimation: estimation(TrackKind::Audio),
@@ -116,7 +116,9 @@ fn split_shared(
         leader_kind,
         leader_anchor: SlewingAnchor {
             current: shared.anchor.current,
-            target: ctx.strategy.desired_anchor(leader_estimation, ctx.now_pts),
+            target: ctx
+                .strategy
+                .desired_anchor(leader_estimation, None, ctx.now_pts),
             last_released_pts: None,
         },
         secondary_track_offset,
@@ -129,12 +131,17 @@ fn correct_shared(
     shared_estimation: Option<EdgeEstimate>,
     ctx: &Context,
 ) -> Mode {
+    let priority = ctx
+        .track_priority
+        .select(ctx.audio_estimation.as_ref(), ctx.video_estimation.as_ref());
     if let Some(estimation) = shared_estimation
         && !ctx
             .strategy
-            .buffer_in_range(&estimation, shared.anchor.current, ctx.now_pts)
+            .buffer_in_range(&estimation, priority, shared.anchor.current, ctx.now_pts)
     {
-        shared.anchor.target = ctx.strategy.desired_anchor(&estimation, ctx.now_pts);
+        shared.anchor.target = ctx
+            .strategy
+            .desired_anchor(&estimation, priority, ctx.now_pts);
     }
     Mode::Shared(shared)
 }
@@ -149,9 +156,11 @@ fn correct_independent(
     let leader_anchor = &mut independent.leader_anchor;
     if !ctx
         .strategy
-        .buffer_in_range(leader_estimation, leader_anchor.current, ctx.now_pts)
+        .buffer_in_range(leader_estimation, None, leader_anchor.current, ctx.now_pts)
     {
-        leader_anchor.target = ctx.strategy.desired_anchor(leader_estimation, ctx.now_pts);
+        leader_anchor.target = ctx
+            .strategy
+            .desired_anchor(leader_estimation, None, ctx.now_pts);
     }
 
     if ctx.tracks_converged() {
