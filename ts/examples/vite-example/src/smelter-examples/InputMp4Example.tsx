@@ -5,7 +5,7 @@ import SmelterCanvasOutput from '../components/SmelterCanvasOutput';
 import { useSmelter } from '@swmansion/smelter-web-wasm';
 
 const MP4_URL =
-  'https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/BigBuckBunny720p24fpsStereo30s.mp4';
+  'https://raw.githubusercontent.com/smelter-labs/smelter-snapshot-tests/refs/heads/main/assets/BigBuckBunny720p24fpsStereo30s.mp4';
 
 function InputMp4Example() {
   const smelter = useSmelter();

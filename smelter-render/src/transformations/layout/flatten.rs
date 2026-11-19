@@ -150,10 +150,7 @@ impl NestedLayout {
                 {
                     return false;
                 }
-                if crop.top + crop.height < 0.0 || crop.left + crop.width < 0.0 {
-                    return false;
-                }
-                true
+                !(crop.top + crop.height < 0.0 || crop.left + crop.width < 0.0)
             }
             RenderLayoutContent::BoxShadow {
                 color: RGBAColor(_, _, _, 0),

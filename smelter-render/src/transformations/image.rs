@@ -125,9 +125,7 @@ impl Image {
     fn download_file(src: &ImageSource) -> Result<bytes::Bytes, ImageError> {
         match src {
             #[cfg(target_arch = "wasm32")]
-            ImageSource::Url { .. } => {
-                return Err(ImageError::ImageSourceUrlNotSupported);
-            }
+            ImageSource::Url { .. } => Err(ImageError::ImageSourceUrlNotSupported),
             #[cfg(not(target_arch = "wasm32"))]
             ImageSource::Url { url } => {
                 let response = reqwest::blocking::get(url.as_ref())?;

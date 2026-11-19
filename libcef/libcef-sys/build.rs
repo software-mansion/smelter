@@ -31,13 +31,12 @@ fn main() -> Result<()> {
         }
     }
 
-    // target/debug or target/release directory
+    // target/debug or target/release directory. OUT_DIR is either
+    // `<profile>/build/libcef-sys-<hash>/out` or `<profile>/build/libcef-sys/<hash>/out`.
     let target_path = out_dir
-        .parent()
-        .context("libcef_sys build directory not found")?
-        .parent()
-        .context("deps build directory not found")?
-        .parent()
+        .ancestors()
+        .find(|path| path.file_name().is_some_and(|name| name == "build"))
+        .and_then(Path::parent)
         .context("target build directory not found")?;
     let bindings = prepare(&cef_root, target_path)?;
     bindings.write_to_file(PathBuf::from(".").join("src").join("bindings.rs"))?;

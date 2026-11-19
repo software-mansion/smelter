@@ -3,7 +3,7 @@ name = "gpu-video-tests"
 version = "0.1.0"
 edition = "2024"
 
-[dependencies]
+[dev-dependencies]
 gpu-video = { workspace = true }
 wgpu = { workspace = true }
 ffmpeg-next = { workspace = true }
