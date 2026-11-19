@@ -93,6 +93,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
                 self.options.stabilization_tolerance,
                 self.options.stabilization_period,
             ),
+            waits_for_gap_end: false,
             buffer: B::default(),
             sink,
             deadline: deadline.clone(),
@@ -111,7 +112,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
     pub(super) fn remove_track(&mut self, kind: TrackKind) {
         debug!(?kind, "Live sync: removing track");
         let now = Instant::now();
-        self.reset_track(kind, now);
+        self.reset_track(kind, now, false);
         match kind {
             TrackKind::Audio => self.audio = None,
             TrackKind::Video => self.video = None,
@@ -127,18 +128,17 @@ impl<B: LiveSyncBuffer> SharedState<B> {
     pub(super) fn tick(&mut self, now: Instant) {
         self.drop_closed_tracks();
 
-        if let Some(audio) = &self.audio
-            && audio.is_stalled(self.mode, self.options.stale_estimate_threshold, now)
-        {
-            debug!("Live sync: audio track stalled, resetting");
-            self.reset_track(TrackKind::Audio, now);
-        }
-
-        if let Some(video) = &self.video
-            && video.is_stalled(self.mode, self.options.stale_estimate_threshold, now)
-        {
-            debug!("Live sync: video track stalled, resetting");
-            self.reset_track(TrackKind::Video, now);
+        for kind in [TrackKind::Audio, TrackKind::Video] {
+            let stall = self.track(kind).and_then(|track| {
+                track.stall(self.mode, self.options.stale_estimate_threshold, now)
+            });
+            if let Some(stall) = stall {
+                debug!(?kind, ?stall, "Live sync: track stalled, resetting");
+                // the gap is the first sign of the delivery pattern, the estimator has to see the
+                // delivery that ends it
+                let keep_estimator = matches!(stall, Stall::EarlyGap);
+                self.reset_track(kind, now, keep_estimator);
+            }
         }
 
         // audio first, so video's decision can align to it
@@ -177,7 +177,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         debug!("Live sync: flush");
         let now = Instant::now();
         for kind in [TrackKind::Audio, TrackKind::Video] {
-            self.reset_track(kind, now);
+            self.reset_track(kind, now, false);
         }
         self.publish_deadlines(now);
         self.report_stats(now);
@@ -259,8 +259,8 @@ impl<B: LiveSyncBuffer> SharedState<B> {
 
     /// Gives up on the live edge of one track: releases everything it buffered and goes back to
     /// waiting for a start decision. Its own anchor is forgotten; a shared one stays for the
-    /// other track.
-    fn reset_track(&mut self, kind: TrackKind, now: Instant) {
+    /// other track. The estimator starts over unless `keep_estimator`.
+    fn reset_track(&mut self, kind: TrackKind, now: Instant, keep_estimator: bool) {
         let flush_anchor = self
             .track(kind)
             .and_then(|track| track.flush_anchor(self.mode, self.options.buffering_strategy, now));
@@ -278,7 +278,10 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             buffer = ?track.buffer.stats(),
             "Live sync: resetting track"
         );
-        track.estimator.reset();
+        if !keep_estimator {
+            track.estimator.reset();
+        }
+        track.waits_for_gap_end = keep_estimator;
         if let Some(anchor) = flush_anchor {
             while let Some(chunk) = track.buffer.read() {
                 track.release_chunk(chunk, anchor);
@@ -408,7 +411,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         }
         debug!(?kind, ?pts, "Live sync: discontinuity detected");
 
-        self.reset_track(kind, now);
+        self.reset_track(kind, now, false);
         // The shared estimate mixes both timelines from now on, so it must not size the other
         // track's anchor; the other track (started, since the mode is still shared) leads until
         // the tracks converge again.
@@ -458,6 +461,19 @@ impl<B: LiveSyncBuffer> SharedState<B> {
     }
 }
 
+/// Why a started track has to earn its start again.
+#[derive(Debug, Clone, Copy)]
+enum Stall {
+    /// Ran out of content after the delivery pattern was known (stable lower bound), e.g. an
+    /// outage. The backlog that follows must not count as slow delivery.
+    Outage,
+    /// Ran out of content before the delivery pattern was known, e.g. the first gap of batched
+    /// delivery (HLS segments). The delivery that ends the gap reveals the pattern.
+    EarlyGap,
+    /// Its timeline slipped against its own recent deliveries.
+    StaleEstimate,
+}
+
 /// State of a single track, owned by [`SharedState`].
 pub(super) struct Track<B: LiveSyncBuffer> {
     kind: TrackKind,
@@ -467,6 +483,10 @@ pub(super) struct Track<B: LiveSyncBuffer> {
     /// estimate and the estimator is replaced only after the track left the mode
     /// (`reset_track`), so a started track always has an estimate.
     pub estimator: LiveEdgeEstimator,
+    /// Reset on [`Stall::EarlyGap`] with the estimator kept. Its upper bound is already stable,
+    /// so the track starts again only once the delivery that ends the gap made the lower bound
+    /// stable.
+    pub waits_for_gap_end: bool,
     buffer: B,
     /// Receives the chunks this track releases.
     sink: BoxedTrackSink<B::Chunk>,
@@ -531,17 +551,17 @@ impl<B: LiveSyncBuffer> Track<B> {
         ))
     }
 
-    /// Track stalled long enough that it has to earn its start again: it ran out of released
-    /// content, or its timeline slipped against its own recent deliveries.
-    fn is_stalled(
+    /// Why the track stalled long enough that it has to earn its start again; `None` if it did
+    /// not.
+    fn stall(
         &self,
         mode: Option<Mode>,
         stale_estimate_threshold: Duration,
         now: Instant,
-    ) -> bool {
+    ) -> Option<Stall> {
         let started = mode.is_some_and(|mode| mode.is_started(self.kind));
         if !started {
-            return false;
+            return None;
         }
 
         const STALL_TIMEOUT: Duration = Duration::from_secs(1);
@@ -564,7 +584,8 @@ impl<B: LiveSyncBuffer> Track<B> {
 
         // The upper bound still describes an edge the stream is no longer at. The full window
         // would take its whole look-back to notice; a reset starts over on a fresh estimate.
-        let estimate_is_stale = match self.estimator.estimate(now) {
+        let estimate = self.estimator.estimate(now);
+        let estimate_is_stale = match estimate {
             Some(EdgeEstimate {
                 upper_bound,
                 recent_upper_bound_pts: Some(recent_upper_bound_pts),
@@ -576,7 +597,16 @@ impl<B: LiveSyncBuffer> Track<B> {
             _ => false,
         };
 
-        ran_out_of_content || estimate_is_stale
+        if estimate_is_stale {
+            return Some(Stall::StaleEstimate);
+        }
+        if !ran_out_of_content {
+            return None;
+        }
+        match estimate.is_some_and(|estimate| estimate.lower_bound.stable) {
+            true => Some(Stall::Outage),
+            false => Some(Stall::EarlyGap),
+        }
     }
 
     /// Whether `pts` belongs to a different timeline than the one this track

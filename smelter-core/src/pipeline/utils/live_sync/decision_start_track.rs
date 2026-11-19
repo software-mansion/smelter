@@ -30,6 +30,10 @@ pub(super) fn start_track_decision<B: LiveSyncBuffer>(
     let shared_estimation =
         EdgeEstimate::combine(audio_estimation.as_ref(), video_estimation.as_ref())?;
 
+    if state.track(kind)?.waits_for_gap_end && !track_estimation.lower_bound.stable {
+        return None;
+    }
+
     // every track that delivers has to be stable, this one included
     let both_stable = audio_estimation.is_none_or(|audio| audio.upper_bound.stable)
         && video_estimation.is_none_or(|video| video.upper_bound.stable);
