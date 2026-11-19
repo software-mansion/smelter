@@ -4,6 +4,7 @@ use ash::{Entry, vk};
 
 mod command;
 mod debug;
+pub(crate) mod graph;
 mod mem;
 #[cfg(feature = "transcoder")]
 mod pipeline;
