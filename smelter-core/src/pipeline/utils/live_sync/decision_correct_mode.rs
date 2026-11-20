@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 use super::{
-    buffer::{BufferingStrategy, LiveSyncBuffer},
+    buffer::{BufferingStrategy, LiveSyncBuffer, TrackPriority},
     edge_estimator::EdgeEstimate,
     mode::{IndependentMode, Mode, SecondaryTrackOffset, SharedMode, SlewingAnchor},
     state::SharedState,
@@ -18,14 +18,18 @@ pub(super) fn correct_mode_decision<B: LiveSyncBuffer>(
     let ctx = Context::new(state, now);
 
     Some(match mode {
-        Mode::Shared(mode) if ctx.tracks_diverged() && (ctx.audio_started || ctx.video_started) => {
+        Mode::Shared(mode) if ctx.tracks_diverged() => {
             let (Some(audio), Some(video)) = (&ctx.audio_estimation, &ctx.video_estimation) else {
                 // tracks are diverged only when both have an estimate
                 return Some(Mode::Shared(mode));
             };
             split_shared(mode, audio, video, &ctx)
         }
-        Mode::Shared(mode) => correct_shared(mode, state.shared_estimator.estimate(now), &ctx),
+        Mode::Shared(mode) => {
+            let shared_estimation =
+                EdgeEstimate::combine(ctx.audio_estimation.as_ref(), ctx.video_estimation.as_ref());
+            correct_shared(mode, shared_estimation, &ctx)
+        }
         Mode::Independent(mode) => {
             let leader_estimation = match mode.leader_kind {
                 TrackKind::Audio => ctx.audio_estimation,
@@ -44,6 +48,7 @@ pub(super) fn correct_mode_decision<B: LiveSyncBuffer>(
 struct Context {
     now_pts: Timestamp,
     strategy: BufferingStrategy,
+    track_priority: TrackPriority,
     audio_started: bool,
     video_started: bool,
     audio_estimation: Option<EdgeEstimate>,
@@ -60,6 +65,7 @@ impl Context {
         Self {
             now_pts: state.sync_point.timestamp_at(now),
             strategy: state.options.buffering_strategy,
+            track_priority: state.options.track_priority,
             audio_started: state.is_started(TrackKind::Audio),
             video_started: state.is_started(TrackKind::Video),
             audio_estimation: estimation(TrackKind::Audio),
@@ -90,8 +96,7 @@ fn split_shared(
     video: &EdgeEstimate,
     ctx: &Context,
 ) -> Mode {
-    // tracks diverged, so shared estimator might be polluted, so use estimator from the new
-    // leader
+    // tracks diverged, so the shared estimate mixes both timelines; use the new leader's own
     let (leader_kind, leader_estimation) = match ctx.audio_started {
         true => (TrackKind::Audio, audio),
         false => (TrackKind::Video, video),
@@ -111,7 +116,9 @@ fn split_shared(
         leader_kind,
         leader_anchor: SlewingAnchor {
             current: shared.anchor.current,
-            target: ctx.strategy.desired_anchor(leader_estimation, ctx.now_pts),
+            target: ctx
+                .strategy
+                .desired_anchor(leader_estimation, None, ctx.now_pts),
             last_released_pts: None,
         },
         secondary_track_offset,
@@ -124,18 +131,17 @@ fn correct_shared(
     shared_estimation: Option<EdgeEstimate>,
     ctx: &Context,
 ) -> Mode {
+    let priority = ctx
+        .track_priority
+        .select(ctx.audio_estimation.as_ref(), ctx.video_estimation.as_ref());
     if let Some(estimation) = shared_estimation
         && !ctx
             .strategy
-            .buffer_in_range(&estimation, shared.anchor.current, ctx.now_pts)
+            .buffer_in_range(&estimation, priority, shared.anchor.current, ctx.now_pts)
     {
-        shared.anchor.target = ctx.strategy.desired_anchor(&estimation, ctx.now_pts);
-    }
-    if !ctx.audio_started && !ctx.video_started {
-        // We need to do it because current will never converge on target (nothing is actively
-        // nudging it)
-        // We can do it because no track is started, so no continuity to preserve
-        shared.anchor.current = shared.anchor.target;
+        shared.anchor.target = ctx
+            .strategy
+            .desired_anchor(&estimation, priority, ctx.now_pts);
     }
     Mode::Shared(shared)
 }
@@ -150,9 +156,11 @@ fn correct_independent(
     let leader_anchor = &mut independent.leader_anchor;
     if !ctx
         .strategy
-        .buffer_in_range(leader_estimation, leader_anchor.current, ctx.now_pts)
+        .buffer_in_range(leader_estimation, None, leader_anchor.current, ctx.now_pts)
     {
-        leader_anchor.target = ctx.strategy.desired_anchor(leader_estimation, ctx.now_pts);
+        leader_anchor.target = ctx
+            .strategy
+            .desired_anchor(leader_estimation, None, ctx.now_pts);
     }
 
     if ctx.tracks_converged() {

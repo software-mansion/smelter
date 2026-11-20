@@ -28,7 +28,7 @@ use crate::{
         H264AvcDecoderConfig, H264AvccToAnnexB, InitializableThread,
         channel::{Sender, TrySendError},
         input_sync::{InputSyncStatsSender, TrackEvent, TrackKind, TrackSink},
-        live_sync::{BufferingStrategy, LiveSync, LiveSyncOptions},
+        live_sync::{BufferingStrategy, LiveSync, LiveSyncOptions, TrackPriority},
     },
 };
 
@@ -165,6 +165,9 @@ impl BroadcastHandler {
         let input_sync = Arc::new(LiveSync::new(
             LiveSyncOptions {
                 buffering_strategy: BufferingStrategy::Range { min, max, desired },
+                // tracks are delivered separately, so late video can be dropped to keep audio
+                // latency low
+                track_priority: TrackPriority::Audio,
                 stabilization_period: Duration::from_millis(500),
                 stabilization_tolerance: Duration::from_millis(100),
                 max_wait: desired * 2,
