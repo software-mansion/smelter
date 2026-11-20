@@ -176,13 +176,7 @@ async fn encode_video(
 }
 ```
 
-Be sure to check out our examples, especially the `egui-player` example, which is an mp4 player built using this library, the [mp4 crate](https://crates.io/crates/mp4) and [egui](https://www.egui.rs/). You can run the example with:
-
-```sh
-git clone https://github.com/software-mansion/smelter.git
-cd smelter/gpu-video/examples/egui-player
-cargo run
-```
+Be sure to check out our examples. The lighter ones that show simpler API usage are located in the [`examples`](https://github.com/software-mansion/smelter/tree/master/gpu-video/examples) directory. More complex ones that demonstrate integrating gpu-video with GUI frameworks can be found in [gpu-video-examples](https://github.com/smelter-labs/gpu-video-examples).
 
 ## Compatibility
 
