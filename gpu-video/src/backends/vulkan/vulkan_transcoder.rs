@@ -20,7 +20,7 @@ use crate::{
         waiter_thread::{SubmissionTracker, WaiterThreadHandle},
         wrappers::{CommandBufferPoolStorage, EncodeImagePoolConfig},
     },
-    device::DecoderParameters,
+    device::{DecoderParameters, VideoParameters},
     frame_sorter::{DecodeResult, FrameSorter},
     parameters::DecoderUsage,
     parser::decoder_instructions::DecoderInstruction,
@@ -226,20 +226,24 @@ fn encoder_params_from_config(
         .map(|c| match c.encoder_parameters {
             AnyEncoderParameters::H264(params) => device
                 .validate_and_fill_encoder_parameters(
+                    VideoParameters {
+                        width: c.output_width,
+                        height: c.output_height,
+                        target_framerate: config.input_parameters.framerate,
+                    },
                     params,
-                    c.output_width,
-                    c.output_height,
-                    config.input_parameters.framerate,
                     config.max_in_flight_submissions,
                 )
                 .map(AnyFullEncoderParameters::H264),
 
             AnyEncoderParameters::H265(params) => device
                 .validate_and_fill_encoder_parameters(
+                    VideoParameters {
+                        width: c.output_width,
+                        height: c.output_height,
+                        target_framerate: config.input_parameters.framerate,
+                    },
                     params,
-                    c.output_width,
-                    c.output_height,
-                    config.input_parameters.framerate,
                     config.max_in_flight_submissions,
                 )
                 .map(AnyFullEncoderParameters::H265),

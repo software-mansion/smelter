@@ -155,7 +155,7 @@ pub mod h264 {
         }
     }
 
-    fn to_avcc(nalu: &mut [u8]) {
+    pub(crate) fn to_avcc(nalu: &mut [u8]) {
         let len = nalu.len();
         nalu[..4].copy_from_slice(&(len as u32 - 4).to_be_bytes());
     }

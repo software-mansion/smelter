@@ -30,7 +30,8 @@ use crate::{
     },
     device::{ColorRange, ColorSpace, Rational},
     encoders::{VideoEncoderError, VideoEncoderParametersInfoH264, VideoEncoderParametersInfoH265},
-    parameters::RateControl,
+    parameters::{OutputBytestreamFormatH264, RateControl},
+    parser::h264::to_avcc,
 };
 
 pub(crate) mod async_encoder;
@@ -295,6 +296,7 @@ pub(crate) struct EncodeSubmission {
     pub(crate) wait_value: SemaphoreWaitValue,
     pub(crate) pts: Option<u64>,
     prepended_stream_params: Vec<u8>,
+    bytestream_format: OutputBytestreamFormatH264,
     query: ResultQuery<EncodeFeedback>,
     output_buffer: Option<EncodeOutputBuffer>,
     _in_flight_resources: InFlightEncodeResources,
@@ -315,17 +317,25 @@ impl EncodeSubmission {
             return Err(VulkanEncoderError::EncodeOperationFailed(feedback.status));
         }
 
-        let mut output = std::mem::take(&mut self.prepended_stream_params);
-
         let output_buffer = self.output_buffer.as_mut().unwrap();
-        let encoded = unsafe {
+        let mut encoded = unsafe {
             output_buffer.buffer.download_data_from_buffer_at(
                 feedback.offset as usize,
                 feedback.bytes_written as usize,
             )?
         };
 
-        output.extend_from_slice(&encoded);
+        if self.bytestream_format == OutputBytestreamFormatH264::Avcc {
+            annexb_nalu_to_avcc(&mut encoded);
+        }
+
+        let mut stream_params = std::mem::take(&mut self.prepended_stream_params);
+        let output = if stream_params.is_empty() {
+            encoded
+        } else {
+            stream_params.extend_from_slice(&encoded);
+            stream_params
+        };
 
         Ok(EncodedOutputChunk {
             data: output,
@@ -333,6 +343,13 @@ impl EncodeSubmission {
             is_keyframe: self.is_idr,
         })
     }
+}
+
+fn annexb_nalu_to_avcc(nalu: &mut Vec<u8>) {
+    if nalu.starts_with(&[0, 0, 1]) {
+        nalu.insert(0, 0);
+    }
+    to_avcc(nalu);
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -352,6 +369,7 @@ pub(crate) struct FullEncoderParameters<C: EncodeCodec> {
     pub(crate) color_space: ColorSpace,
     pub(crate) color_range: ColorRange,
     pub(crate) max_in_flight_submissions: u32,
+    pub(crate) bytestream_format: OutputBytestreamFormatH264,
 }
 
 impl<C: EncodeCodec> From<&FullEncoderParameters<C>> for vk::VideoEncodeUsageInfoKHR<'_> {
@@ -376,6 +394,7 @@ pub(crate) struct VulkanEncoder<'a, C: EncodeCodec> {
     active_reference_slots: VecDeque<(usize, C::ReferenceInfo)>,
     rate_control: RateControl,
     inline_stream_params: bool,
+    bytestream_format: OutputBytestreamFormatH264,
     encoding_device: Arc<EncodingDevice>,
 }
 
@@ -498,6 +517,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
             output_buffer_pool,
             rate_control: parameters.rate_control,
             inline_stream_params: parameters.inline_stream_params,
+            bytestream_format: parameters.bytestream_format,
         })
     }
 
@@ -735,7 +755,20 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         self.idr_period_counter %= self.idr_period;
 
         let prepended_stream_params = if is_idr && self.inline_stream_params {
-            self.stream_parameters(C::codec_write_parameters_info_all())?
+            match self.bytestream_format {
+                OutputBytestreamFormatH264::AnnexB => {
+                    self.stream_parameters(C::codec_write_parameters_info_all())?
+                }
+                OutputBytestreamFormatH264::Avcc => {
+                    let mut stream_params = Vec::new();
+                    for info in C::codec_write_parameters_info_each() {
+                        let mut nalu = self.stream_parameters(info)?;
+                        annexb_nalu_to_avcc(&mut nalu);
+                        stream_params.append(&mut nalu);
+                    }
+                    stream_params
+                }
+            }
         } else {
             Vec::new()
         };
@@ -753,6 +786,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
             wait_value,
             pts,
             prepended_stream_params,
+            bytestream_format: self.bytestream_format,
             query,
             output_buffer: Some(output_buffer),
             _in_flight_resources: in_flight_resources,

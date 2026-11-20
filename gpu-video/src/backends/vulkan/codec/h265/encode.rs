@@ -372,6 +372,25 @@ impl EncodeCodec for H265Codec {
             write_pps: true,
         }
     }
+    fn codec_write_parameters_info_each() -> Vec<Self::CodecWriteParametersInfo> {
+        vec![
+            Self::CodecWriteParametersInfo {
+                write_vps: true,
+                write_sps: false,
+                write_pps: false,
+            },
+            Self::CodecWriteParametersInfo {
+                write_vps: false,
+                write_sps: true,
+                write_pps: false,
+            },
+            Self::CodecWriteParametersInfo {
+                write_vps: false,
+                write_sps: false,
+                write_pps: true,
+            },
+        ]
+    }
 
     fn resolve_idr_period<'a>(
         quality_level_properties: &Self::CodecSpecificEncodeQualityLevelProperties<'a>,
