@@ -138,7 +138,7 @@ impl Decoder for FfmpegDecoder {
     }
 
     fn decode_bytes(&mut self, data: &[u8]) -> Vec<Nv12Frame> {
-        let access_units = self.parser.parse(&mut self.decoder, data);
+        let access_units = self.parser.parse(data);
         access_units
             .iter()
             .flat_map(|access_unit| self.decode_access_unit(access_unit))
@@ -147,7 +147,7 @@ impl Decoder for FfmpegDecoder {
 
     fn flush_frames(&mut self) -> Vec<Nv12Frame> {
         let mut frames = Vec::new();
-        if let Some(access_unit) = self.parser.flush(&mut self.decoder) {
+        if let Some(access_unit) = self.parser.flush() {
             frames.extend(self.decode_access_unit(&access_unit));
         }
         self.decoder.send_eof().unwrap();
@@ -196,46 +196,43 @@ impl FfmpegDecoder {
     }
 }
 
-struct FfmpegParser(*mut AVCodecParserContext);
+pub(crate) struct FfmpegParser {
+    parser: *mut AVCodecParserContext,
+    context: FfmpegContext,
+}
 
 impl FfmpegParser {
-    fn new(codec_id: Id) -> Self {
+    pub(crate) fn new(codec_id: Id) -> Self {
         // depending on ffmpeg version `av_parser_init` accepts int or enum, hence `as _`
         let parser = unsafe { av_parser_init(AVCodecID::from(codec_id) as _) };
         assert!(!parser.is_null());
-        Self(parser)
+        let mut context = FfmpegContext::new();
+        unsafe { (*context.as_mut_ptr()).codec_id = codec_id.into() };
+        Self { parser, context }
     }
 
-    fn parse(
-        &mut self,
-        decoder: &mut ffmpeg_next::decoder::Opened,
-        mut data: &[u8],
-    ) -> Vec<ffmpeg_next::Packet> {
+    pub(crate) fn parse(&mut self, mut data: &[u8]) -> Vec<ffmpeg_next::Packet> {
         let mut access_units = Vec::new();
         while !data.is_empty() {
-            let (consumed, access_unit) = self.parse_next(decoder, data);
+            let (consumed, access_unit) = self.parse_next(data);
             data = &data[consumed..];
             access_units.extend(access_unit);
         }
         access_units
     }
 
-    fn flush(&mut self, decoder: &mut ffmpeg_next::decoder::Opened) -> Option<ffmpeg_next::Packet> {
-        let (_, access_unit) = self.parse_next(decoder, &[]);
+    pub(crate) fn flush(&mut self) -> Option<ffmpeg_next::Packet> {
+        let (_, access_unit) = self.parse_next(&[]);
         access_unit
     }
 
-    fn parse_next(
-        &mut self,
-        decoder: &mut ffmpeg_next::decoder::Opened,
-        data: &[u8],
-    ) -> (usize, Option<ffmpeg_next::Packet>) {
+    fn parse_next(&mut self, data: &[u8]) -> (usize, Option<ffmpeg_next::Packet>) {
         let mut output = std::ptr::null_mut();
         let mut output_size = 0;
         let consumed = unsafe {
             av_parser_parse2(
-                self.0,
-                decoder.as_mut_ptr(),
+                self.parser,
+                self.context.as_mut_ptr(),
                 &mut output,
                 &mut output_size,
                 data.as_ptr(),
@@ -255,7 +252,7 @@ impl FfmpegParser {
 
 impl Drop for FfmpegParser {
     fn drop(&mut self) {
-        unsafe { av_parser_close(self.0) };
+        unsafe { av_parser_close(self.parser) };
     }
 }
 
