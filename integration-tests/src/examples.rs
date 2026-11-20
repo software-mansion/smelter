@@ -80,7 +80,7 @@ pub fn run_example_server() {
     server::run();
 }
 
-fn wait_for_server_ready(timeout: Duration) -> Result<()> {
+pub fn wait_for_server_ready(timeout: Duration) -> Result<()> {
     let server_status_url = format!("http://127.0.0.1:{}/status", read_config().api_port);
     let wait_start_time = Instant::now();
     loop {

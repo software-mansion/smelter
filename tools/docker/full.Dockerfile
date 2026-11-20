@@ -1,5 +1,5 @@
 # Builder image
-FROM ubuntu:noble-20250716 as builder
+FROM ubuntu:resolute-20261105.1 AS builder
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -11,7 +11,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -y -qq && \
   apt-get install -y \
     build-essential curl pkg-config libssl-dev libclang-dev git sudo \
-    libnss3 libatk1.0-0 libatk-bridge2.0-0 libgdk-pixbuf2.0-0 libgtk-3-0 \
+    libnss3 libatk1.0-0 libatk-bridge2.0-0 libgdk-pixbuf-2.0-0 libgtk-3-0 \
     libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev mesa-vulkan-drivers \
     ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev && \
   rm -rf /var/lib/apt/lists/*
@@ -25,9 +25,9 @@ WORKDIR /root/project
 RUN source ~/.cargo/env && cargo build --release
 
 # Runtime image
-FROM ubuntu:noble-20250716
+FROM ubuntu:resolute-20261105.1
 
-LABEL org.opencontainers.image.source https://github.com/software-mansion/smelter
+LABEL org.opencontainers.image.source=https://github.com/software-mansion/smelter
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -44,7 +44,7 @@ ENV XDG_RUNTIME_DIR=/home/$USERNAME/smelter/xdg_runtime
 RUN apt-get update -y -qq && \
   apt-get install -y \
     sudo adduser ffmpeg \
-    libnss3 libatk1.0-0 libatk-bridge2.0-0 libgdk-pixbuf2.0-0 libgtk-3-0 xvfb && \
+    libnss3 libatk1.0-0 libatk-bridge2.0-0 libgdk-pixbuf-2.0-0 libgtk-3-0 xvfb && \
   rm -rf /var/lib/apt/lists/*
 
 RUN useradd -ms /bin/bash $USERNAME && adduser $USERNAME sudo
