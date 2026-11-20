@@ -31,7 +31,7 @@ jobs:
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
               with:
-                  toolchain: 1.98
+                  toolchain: "1.100"
                   components: rustfmt, clippy
 
             - name: 📥 Checkout repo
@@ -85,7 +85,7 @@ jobs:
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
               with:
-                  toolchain: 1.98
+                  toolchain: "1.100"
                   components: rustfmt, clippy
 
             - name: 📥 Checkout repo
@@ -132,7 +132,7 @@ jobs:
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
               with:
-                  toolchain: 1.98
+                  toolchain: "1.100"
 
             - name: 🔬 Install nextest
               uses: taiki-e/install-action@v2

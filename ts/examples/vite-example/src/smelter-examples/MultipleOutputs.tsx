@@ -6,10 +6,10 @@ import SmelterVideoOutput from '../components/SmelterVideoOutput';
 import { useSmelter } from '@swmansion/smelter-web-wasm';
 
 const FIRST_MP4_URL =
-  'https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/BigBuckBunny720p24fpsStereo30s.mp4';
+  'https://raw.githubusercontent.com/smelter-labs/smelter-snapshot-tests/refs/heads/main/assets/BigBuckBunny720p24fpsStereo30s.mp4';
 
 const SECOND_MP4_URL =
-  'https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/ElephantsDream720p24fps60s.mp4';
+  'https://raw.githubusercontent.com/smelter-labs/smelter-snapshot-tests/refs/heads/main/assets/ElephantsDream720p24fps60s.mp4';
 
 function MultipleOutputs() {
   const smelter = useSmelter();

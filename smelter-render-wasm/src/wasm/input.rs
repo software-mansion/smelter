@@ -62,7 +62,7 @@ impl RendererInputs {
 
         // TODO: MP4 are not calculated correctly, so we are resetting
         // them to the same value as set for now
-        for (_, value) in frames.iter_mut() {
+        for value in frames.values_mut() {
             value.pts = inputs.pts
         }
 
@@ -256,7 +256,7 @@ fn check_plane_layouts(
         }
     }
 
-    return true;
+    true
 }
 
 trait ExtVideoFrame {

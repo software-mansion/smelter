@@ -87,11 +87,11 @@ impl RendererOutputs {
             data.extend(&chunk[..(4 * frame.resolution.width)]);
         }
 
-        return Ok(OutputFrame {
+        Ok(OutputFrame {
             output_id: output_id.clone(),
             resolution,
             data: wasm_bindgen::Clamped(data),
-        });
+        })
     }
 
     fn create_buffer(wgpu_ctx: &WgpuCtx, resolution: Resolution) -> wgpu::Buffer {

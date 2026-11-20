@@ -84,10 +84,6 @@
           ] ++ (
             pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
               wayland
-            ]
-          ) ++ (
-            # Not available on x86_64-darwin
-            pkgs.lib.optionals (inputs'.moq.packages ? moq-relay) [
               inputs'.moq.packages.moq-relay
             ]
           );
