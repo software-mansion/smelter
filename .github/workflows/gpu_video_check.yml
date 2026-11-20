@@ -1,0 +1,257 @@
+name: gpu-video - check
+on:
+    workflow_dispatch: {}
+    push:
+        branches: [master]
+        paths:
+            - 'gpu-video/**'
+            - 'Cargo.toml'
+            - 'Cargo.lock'
+            - '.cargo/**'
+            - '.config/nextest.toml'
+            - '.github/workflows/gpu_video_check.yml'
+    pull_request:
+        types: [opened, synchronize]
+        paths:
+            - 'gpu-video/**'
+            - 'Cargo.toml'
+            - 'Cargo.lock'
+            - '.cargo/**'
+            - '.config/nextest.toml'
+            - '.github/workflows/gpu_video_check.yml'
+    schedule:
+        - cron: "0 1 * * 1"
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+jobs:
+    lint_linux:
+        runs-on: ubuntu-24.04
+        steps:
+            - name: 🔧 Install the rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: 1.98
+                  components: clippy
+
+            - name: 📥 Checkout repo
+              uses: actions/checkout@v6
+
+            - name: 📅 Compute cache week
+              id: cache_week
+              run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+
+            - name: 📁 Rust cache
+              uses: Swatinem/rust-cache@v2
+              with:
+                  shared-key: "linux-gpu-video-lint-${{ steps.cache_week.outputs.week }}"
+                  save-if: ${{ github.ref == 'refs/heads/master' }}
+
+            - name: 📎 Run clippy (gpu-video, no-default-features)
+              run: cargo clippy --package gpu-video --all-targets --no-default-features -- -D clippy::todo -D clippy::uninlined_format_args -D warnings
+
+    lint_macos:
+        runs-on: macos-15
+        steps:
+            - name: 🔧 Install the rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: 1.98
+                  components: clippy
+
+            - name: 📥 Checkout repo
+              uses: actions/checkout@v6
+
+            - name: 📅 Compute cache week
+              id: cache_week
+              run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+
+            - name: 📁 Rust cache
+              uses: Swatinem/rust-cache@v2
+              with:
+                  shared-key: "macos-gpu-video-lint-${{ steps.cache_week.outputs.week }}"
+                  save-if: ${{ github.ref == 'refs/heads/master' }}
+
+            - name: 📎 Run clippy (gpu-video, no-default-features)
+              run: cargo clippy --package gpu-video --all-targets --no-default-features -- -D clippy::todo -D clippy::uninlined_format_args -D warnings
+
+    test_linux:
+        needs: lint_linux
+        runs-on: gpu-gh-hosted-runner
+        steps:
+            - name: 🛠 Install system dependencies
+              run: |
+                  set -e
+                  sudo apt-get update -y -qq
+                  sudo apt-get install -y mesa-vulkan-drivers libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev pkg-config libssl-dev libclang-dev
+                  sudo apt-get clean
+                  sudo rm -rf /var/lib/apt/lists/*
+
+            - name: "Increase disk space"
+              run: |
+                  df -h && docker system prune -a -f && sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup && df -h
+
+            - name: 🔧 Install the rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: 1.98
+
+            - name: 🔬 Install nextest
+              uses: taiki-e/install-action@v2
+              with:
+                  tool: cargo-nextest
+
+            - name: 📥 Checkout repo
+              uses: actions/checkout@v6
+
+            - name: 🧩 Git submodules update
+              run: |
+                  cat > .gitmodules << EOF
+                  [submodule "snapshots"]
+                          path = integration-tests/snapshots
+                          url = https://github.com/smelter-labs/smelter-snapshot-tests.git
+                  EOF
+                  git submodule update --init
+
+            - name: 📅 Compute cache week
+              id: cache_week
+              run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+
+            - name: 📁 Rust cache
+              uses: Swatinem/rust-cache@v2
+              with:
+                  shared-key: "linux-gpu-video-test-${{ steps.cache_week.outputs.week }}"
+                  save-if: ${{ github.ref == 'refs/heads/master' }}
+
+            - name: 🧪 Run gpu-video tests
+              run: |
+                  cargo nextest run --package gpu-video-tests --profile ci
+
+    test_macos:
+        needs: lint_macos
+        runs-on: macos-15
+        steps:
+            - name: 🛠 Install system dependencies
+              run: brew install ffmpeg
+
+            - name: 🔧 Install the rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: 1.98
+
+            - name: 🔬 Install nextest
+              uses: taiki-e/install-action@v2
+              with:
+                  tool: cargo-nextest
+
+            - name: 📥 Checkout repo
+              uses: actions/checkout@v6
+
+            - name: 🧩 Git submodules update
+              run: |
+                  cat > .gitmodules << EOF
+                  [submodule "snapshots"]
+                          path = integration-tests/snapshots
+                          url = https://github.com/smelter-labs/smelter-snapshot-tests.git
+                  EOF
+                  git submodule update --init
+
+            - name: 📅 Compute cache week
+              id: cache_week
+              run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+
+            - name: 📁 Rust cache
+              uses: Swatinem/rust-cache@v2
+              with:
+                  shared-key: "macos-gpu-video-test-${{ steps.cache_week.outputs.week }}"
+                  save-if: ${{ github.ref == 'refs/heads/master' }}
+
+            - name: 🧪 Run gpu-video tests
+              run: |
+                  cargo nextest run --package gpu-video-tests --profile ci
+
+    test_windows:
+        needs: lint_linux
+        runs-on: windows-gpu-2022
+        steps:
+            # The CI's gpu is configured in TCC mode (vulkan no workey).
+            # This magic incantation installs azure's nvidia driver which magically puts the gpu in WDDM mode (vulkan workey).
+            - name: 🛠 Install nvidia driver
+              shell: powershell
+              run: |
+                  $ErrorActionPreference = "Stop"
+                  $model = (nvidia-smi --query-gpu=driver_model.current --format=csv,noheader) -join ""
+                  if ($model -match "TCC") {
+                      $exe = "$env:RUNNER_TEMP\grid.exe"
+                      curl.exe -fsSL -o $exe "https://download.microsoft.com/download/0f21fd13-2390-4c79-876a-87ae3dc724c6/596.86_grid_win10_win11_server2022_server2025_dch_64bit_international_azure_swl.exe"
+                      if ($LASTEXITCODE -ne 0) { throw "download failed" }
+                      Write-Host "downloaded $((Get-Item $exe).Length) bytes"
+                      $p = Start-Process -FilePath $exe -ArgumentList "-s", "-noreboot", "-clean", "-noeula" -PassThru
+                      $null = $p.Handle
+                      if (-not $p.WaitForExit(10 * 60 * 1000)) { throw "installer timed out" }
+                      Write-Host "installer exit code: $($p.ExitCode)"
+                  }
+                  nvidia-smi --query-gpu=driver_version,driver_model.current,driver_model.pending --format=csv
+
+            - name: 🛠 Put Git Bash on PATH
+              shell: powershell
+              run: |
+                  $gitBin = Join-Path (Split-Path (Split-Path (Get-Command git).Source)) "bin"
+                  $gitBin | Out-File -FilePath $env:GITHUB_PATH -Append
+
+            - name: 🔧 Install the rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: 1.98
+
+            - name: 🛠 Install LLVM (libclang for bindgen)
+              uses: KyleMayes/install-llvm-action@v2
+              with:
+                  version: "20.1.8"
+
+            - name: 🛠 Install FFmpeg
+              shell: bash
+              run: |
+                  curl -fsSL -o "$RUNNER_TEMP/ffmpeg.zip" https://github.com/GyanD/codexffmpeg/releases/download/8.1.2/ffmpeg-8.1.2-full_build-shared.zip
+                  unzip -q "$RUNNER_TEMP/ffmpeg.zip" -d "$RUNNER_TEMP"
+                  dir=$(cygpath -w "$RUNNER_TEMP/ffmpeg-8.1.2-full_build-shared")
+                  echo "FFMPEG_DIR=$dir" >> "$GITHUB_ENV"
+                  echo "$dir\\bin" >> "$GITHUB_PATH"
+
+            - name: 🔬 Install nextest
+              shell: bash
+              run: |
+                  curl -LsSf https://get.nexte.st/latest/windows-tar | tar zxf - -C "$(cygpath -u "${CARGO_HOME:-$USERPROFILE/.cargo}")/bin"
+                  cargo nextest --version
+
+            - name: 📥 Checkout repo
+              uses: actions/checkout@v6
+
+            - name: 🧩 Git submodules update
+              shell: bash
+              run: |
+                  cat > .gitmodules << EOF
+                  [submodule "snapshots"]
+                          path = integration-tests/snapshots
+                          url = https://github.com/smelter-labs/smelter-snapshot-tests.git
+                  EOF
+                  git submodule update --init
+
+            - name: 📅 Compute cache week
+              id: cache_week
+              shell: bash
+              run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+
+            - name: 📁 Rust cache
+              uses: Swatinem/rust-cache@v2
+              with:
+                  shared-key: "windows-gpu-video-test-${{ steps.cache_week.outputs.week }}"
+                  save-if: ${{ github.ref == 'refs/heads/master' }}
+
+            - name: 🧪 Run gpu-video tests
+              env:
+                  LIBCLANG_PATH: ${{ env.LLVM_PATH }}\bin
+              run: |
+                  cargo nextest run --package gpu-video-tests --profile ci
