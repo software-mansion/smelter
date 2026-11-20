@@ -103,6 +103,7 @@ pub(crate) trait EncodeCodec: Codec {
         info: Self::CodecWriteParametersInfo,
     ) -> Self::CodecEncodeSessionParametersGetInfo<'a>;
     fn codec_write_parameters_info_all() -> Self::CodecWriteParametersInfo;
+    fn codec_write_parameters_info_each() -> Vec<Self::CodecWriteParametersInfo>;
 
     fn resolve_idr_period<'a>(
         quality_level_properties: &Self::CodecSpecificEncodeQualityLevelProperties<'a>,

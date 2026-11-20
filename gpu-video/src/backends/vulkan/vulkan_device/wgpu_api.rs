@@ -197,10 +197,8 @@ impl VulkanDevice {
         on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<crate::WgpuTexturesEncoderH264, VulkanEncoderError> {
         let parameters = self.validate_and_fill_encoder_parameters(
+            parameters.input_parameters,
             parameters.output_parameters,
-            parameters.input_parameters.width,
-            parameters.input_parameters.height,
-            parameters.input_parameters.target_framerate,
             parameters.max_in_flight_submissions,
         )?;
 
@@ -225,10 +223,8 @@ impl VulkanDevice {
         on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<crate::WgpuTexturesEncoderH265, VulkanEncoderError> {
         let parameters = self.validate_and_fill_encoder_parameters(
+            parameters.input_parameters,
             parameters.output_parameters,
-            parameters.input_parameters.width,
-            parameters.input_parameters.height,
-            parameters.input_parameters.target_framerate,
             parameters.max_in_flight_submissions,
         )?;
 

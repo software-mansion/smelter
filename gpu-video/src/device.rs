@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
 use crate::parameters::{EncoderPreset, EncoderUsage, ProfileH264, ProfileH265, RateControl};
-use crate::parser::h264::InputBytestreamFormatH264;
+use crate::parser::h264::{InputBytestreamFormatH264, OutputBytestreamFormatH264};
 use crate::{
     BytesDecoderH264, BytesEncoderH264, BytesEncoderH265, EncodedOutputChunk, OutputFrame,
     RawFrameData, VideoDecoderError, VideoEncoderError,
@@ -226,6 +226,8 @@ pub struct EncoderOutputParameters<P> {
     /// Color range of the encoded output.
     /// If [`None`], defaults to [`ColorRange::Limited`].
     pub color_range: Option<ColorRange>,
+    /// TODO: docs
+    pub bytestream_format: Option<OutputBytestreamFormatH264>,
 }
 
 /// Parameters for H.264 encoder creation

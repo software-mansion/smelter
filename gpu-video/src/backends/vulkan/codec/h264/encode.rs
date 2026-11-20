@@ -307,6 +307,18 @@ impl EncodeCodec for H264Codec {
             write_pps: true,
         }
     }
+    fn codec_write_parameters_info_each() -> Vec<Self::CodecWriteParametersInfo> {
+        vec![
+            H264WriteParametersInfo {
+                write_sps: true,
+                write_pps: false,
+            },
+            H264WriteParametersInfo {
+                write_sps: false,
+                write_pps: true,
+            },
+        ]
+    }
 
     fn resolve_idr_period<'a>(
         quality_level_properties: &Self::CodecSpecificEncodeQualityLevelProperties<'a>,

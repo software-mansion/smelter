@@ -1,5 +1,4 @@
 use std::ffi::CStr;
-use std::num::NonZeroU32;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -17,7 +16,7 @@ use crate::backends::vulkan::{VulkanCommonError, wrappers::*};
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
 use crate::device::{
     ColorRange, CoreVideoDeviceBackend, DecoderParameters, EncoderOutputParameters,
-    EncoderParametersH264, EncoderParametersH265, Rational, VideoDeviceDescriptor,
+    EncoderParametersH264, EncoderParametersH265, VideoDeviceDescriptor, VideoParameters,
 };
 use crate::parameters::EncoderPreset;
 use crate::{
@@ -267,10 +266,8 @@ impl VulkanDevice {
         on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<BytesEncoderH264, VulkanEncoderError> {
         let parameters = self.validate_and_fill_encoder_parameters(
+            parameters.input_parameters,
             parameters.output_parameters,
-            parameters.input_parameters.width,
-            parameters.input_parameters.height,
-            parameters.input_parameters.target_framerate,
             parameters.max_in_flight_submissions,
         )?;
 
@@ -291,10 +288,8 @@ impl VulkanDevice {
         on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<BytesEncoderH265, VulkanEncoderError> {
         let parameters = self.validate_and_fill_encoder_parameters(
+            parameters.input_parameters,
             parameters.output_parameters,
-            parameters.input_parameters.width,
-            parameters.input_parameters.height,
-            parameters.input_parameters.target_framerate,
             parameters.max_in_flight_submissions,
         )?;
 
@@ -377,19 +372,17 @@ impl VulkanDevice {
 
     pub(crate) fn validate_and_fill_encoder_parameters<C: EncodeCodec>(
         &self,
-        encoder_parameters: EncoderOutputParameters<C::Profile>,
-        width: NonZeroU32,
-        height: NonZeroU32,
-        framerate: Rational,
+        input_parameters: VideoParameters,
+        output_parameters: EncoderOutputParameters<C::Profile>,
         max_in_flight_submissions: Option<u32>,
     ) -> Result<FullEncoderParameters<C>, VulkanEncoderError> {
         let Some(caps) = self.native_encode_capabilities() else {
             return Err(VulkanEncoderError::VulkanEncoderUnsupported);
         };
         let native_profile_caps =
-            C::encode_codec_profile_capabilities(caps, encoder_parameters.profile)?;
+            C::encode_codec_profile_capabilities(caps, output_parameters.profile)?;
 
-        let (quality_level, tuning_mode) = match encoder_parameters.preset {
+        let (quality_level, tuning_mode) = match output_parameters.preset {
             EncoderPreset::HighQuality => (
                 native_profile_caps
                     .quality_level_properties
@@ -409,11 +402,17 @@ impl VulkanDevice {
 
         let idr_period = C::resolve_idr_period(
             &native_quality_level_properties.codec_quality_level_properties,
-            encoder_parameters.idr_period,
+            output_parameters.idr_period,
         );
 
         let min_extent = native_profile_caps.video_capabilities.min_coded_extent;
         let max_extent = native_profile_caps.video_capabilities.max_coded_extent;
+
+        let VideoParameters {
+            width,
+            height,
+            target_framerate,
+        } = input_parameters;
 
         if width.get() < min_extent.width || width.get() > max_extent.width {
             return Err(VulkanEncoderError::ParametersError {
@@ -435,7 +434,7 @@ impl VulkanDevice {
             });
         }
 
-        let rate_control = encoder_parameters.rate_control;
+        let rate_control = output_parameters.rate_control;
         if !native_profile_caps
             .encode_capabilities
             .rate_control_modes
@@ -454,27 +453,27 @@ impl VulkanDevice {
         let max_references = C::resolve_max_references(
             &native_quality_level_properties.codec_quality_level_properties,
             &native_profile_caps.codec_encode_capabilities,
-            encoder_parameters.max_references,
+            output_parameters.max_references,
         );
 
-        if framerate.numerator.checked_mul(2).is_none() {
+        if target_framerate.numerator.checked_mul(2).is_none() {
             return Err(VulkanEncoderError::ParametersError {
                 field: "framerate",
                 problem: "Framerate numerator * 2 must fit in u32".to_string(),
             });
         }
-        if framerate.numerator == 0 {
+        if target_framerate.numerator == 0 {
             return Err(VulkanEncoderError::ParametersError {
                 field: "framerate",
-                problem: format!("Framerate is {framerate:?}. The numerator should be != 0.",),
+                problem: format!(
+                    "Framerate is {target_framerate:?}. The numerator should be != 0.",
+                ),
             });
         }
-        let usage_flags = encoder_parameters.usage_flags.unwrap_or_default().into();
+        let usage_flags = output_parameters.usage_flags.unwrap_or_default().into();
         let content_flags = vk::VideoEncodeContentFlagsKHR::DEFAULT;
-        let color_space = encoder_parameters.color_space.unwrap_or_default();
-        let color_range = encoder_parameters
-            .color_range
-            .unwrap_or(ColorRange::Limited);
+        let color_space = output_parameters.color_space.unwrap_or_default();
+        let color_range = output_parameters.color_range.unwrap_or(ColorRange::Limited);
 
         Ok(FullEncoderParameters {
             idr_period,
@@ -483,15 +482,16 @@ impl VulkanDevice {
             rate_control,
             max_references,
             quality_level,
-            profile: encoder_parameters.profile,
-            framerate,
+            profile: output_parameters.profile,
+            framerate: target_framerate,
             usage_flags,
             tuning_mode,
             content_flags,
-            inline_stream_params: encoder_parameters.inline_stream_params.unwrap_or(true),
+            inline_stream_params: output_parameters.inline_stream_params.unwrap_or(true),
             color_space,
             color_range,
             max_in_flight_submissions: max_in_flight_submissions.unwrap_or(3),
+            bytestream_format: output_parameters.bytestream_format.unwrap_or_default(),
         })
     }
 }

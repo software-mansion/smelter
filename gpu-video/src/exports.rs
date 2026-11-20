@@ -6,7 +6,9 @@ pub mod parameters {
         VideoParameters,
     };
     pub use crate::instance::VideoInstanceDescriptor;
-    pub use crate::parser::h264::{AvccPrefixLength, InputBytestreamFormatH264};
+    pub use crate::parser::h264::{
+        AvccPrefixLength, InputBytestreamFormatH264, OutputBytestreamFormatH264,
+    };
 
     pub type EncoderOutputParametersH264 = crate::device::EncoderOutputParameters<ProfileH264>;
 
@@ -424,6 +426,7 @@ impl VideoDevice {
             inline_stream_params: None,
             color_space: None,
             color_range: None,
+            bytestream_format: None,
         }
     }
 
@@ -441,6 +444,7 @@ impl VideoDevice {
             inline_stream_params: None,
             color_space: None,
             color_range: None,
+            bytestream_format: None,
         }
     }
 }

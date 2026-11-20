@@ -30,7 +30,7 @@ use crate::{
     },
     device::{ColorRange, ColorSpace, Rational},
     encoders::{VideoEncoderError, VideoEncoderParametersInfoH264, VideoEncoderParametersInfoH265},
-    parameters::RateControl,
+    parameters::{OutputBytestreamFormatH264, RateControl},
 };
 
 pub(crate) mod async_encoder;
@@ -74,6 +74,9 @@ pub enum VulkanEncoderError {
     #[error("Encode operation failed with status {0:?}")]
     EncodeOperationFailed(vk::QueryResultStatusKHR),
 
+    #[error("The encoded data does not begin with a NAL unit start code")]
+    MissingStartCode,
+
     #[cfg(feature = "wgpu")]
     #[error(transparent)]
     WgpuTextureEncoderError(#[from] crate::encoders::WgpuTextureEncoderError),
@@ -104,12 +107,11 @@ impl From<VulkanEncoderError> for VideoEncoderError {
             | VulkanEncoderError::NoMemory
             | VulkanEncoderError::VulkanCommonError(_)
             | VulkanEncoderError::UnsupportedDeviceCapabilities(_)
-            | VulkanEncoderError::EncodeOperationFailed(_) => {
-                Self::BackendError(VideoBackendError {
-                    message: err.to_string(),
-                    source: Box::new(err),
-                })
-            }
+            | VulkanEncoderError::EncodeOperationFailed(_)
+            | VulkanEncoderError::MissingStartCode => Self::BackendError(VideoBackendError {
+                message: err.to_string(),
+                source: Box::new(err),
+            }),
         }
     }
 }
@@ -295,6 +297,7 @@ pub(crate) struct EncodeSubmission {
     pub(crate) wait_value: SemaphoreWaitValue,
     pub(crate) pts: Option<u64>,
     prepended_stream_params: Vec<u8>,
+    bytestream_format: OutputBytestreamFormatH264,
     query: ResultQuery<EncodeFeedback>,
     output_buffer: Option<EncodeOutputBuffer>,
     _in_flight_resources: InFlightEncodeResources,
@@ -325,7 +328,10 @@ impl EncodeSubmission {
             )?
         };
 
-        output.extend_from_slice(&encoded);
+        match self.bytestream_format {
+            OutputBytestreamFormatH264::AnnexB => output.extend_from_slice(&encoded),
+            OutputBytestreamFormatH264::Avcc => append_length_prefixed_nalu(&mut output, &encoded)?,
+        }
 
         Ok(EncodedOutputChunk {
             data: output,
@@ -333,6 +339,22 @@ impl EncodeSubmission {
             is_keyframe: self.is_idr,
         })
     }
+}
+
+fn append_length_prefixed_nalu(
+    output: &mut Vec<u8>,
+    annexb_nalu: &[u8],
+) -> Result<(), VulkanEncoderError> {
+    let nalu = annexb_nalu
+        .strip_prefix(&[0, 0, 0, 1])
+        .or_else(|| annexb_nalu.strip_prefix(&[0, 0, 1]))
+        .ok_or(VulkanEncoderError::MissingStartCode)?;
+    debug_assert!(!nalu.windows(3).any(|window| window == [0, 0, 1]));
+
+    output.extend_from_slice(&(nalu.len() as u32).to_be_bytes());
+    output.extend_from_slice(nalu);
+
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -352,6 +374,7 @@ pub(crate) struct FullEncoderParameters<C: EncodeCodec> {
     pub(crate) color_space: ColorSpace,
     pub(crate) color_range: ColorRange,
     pub(crate) max_in_flight_submissions: u32,
+    pub(crate) bytestream_format: OutputBytestreamFormatH264,
 }
 
 impl<C: EncodeCodec> From<&FullEncoderParameters<C>> for vk::VideoEncodeUsageInfoKHR<'_> {
@@ -376,6 +399,7 @@ pub(crate) struct VulkanEncoder<'a, C: EncodeCodec> {
     active_reference_slots: VecDeque<(usize, C::ReferenceInfo)>,
     rate_control: RateControl,
     inline_stream_params: bool,
+    bytestream_format: OutputBytestreamFormatH264,
     encoding_device: Arc<EncodingDevice>,
 }
 
@@ -498,6 +522,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
             output_buffer_pool,
             rate_control: parameters.rate_control,
             inline_stream_params: parameters.inline_stream_params,
+            bytestream_format: parameters.bytestream_format,
         })
     }
 
@@ -735,7 +760,19 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         self.idr_period_counter %= self.idr_period;
 
         let prepended_stream_params = if is_idr && self.inline_stream_params {
-            self.stream_parameters(C::codec_write_parameters_info_all())?
+            match self.bytestream_format {
+                OutputBytestreamFormatH264::AnnexB => {
+                    self.stream_parameters(C::codec_write_parameters_info_all())?
+                }
+                OutputBytestreamFormatH264::Avcc => {
+                    let mut stream_params = Vec::new();
+                    for info in C::codec_write_parameters_info_each() {
+                        let nalu = self.stream_parameters(info)?;
+                        append_length_prefixed_nalu(&mut stream_params, &nalu)?;
+                    }
+                    stream_params
+                }
+            }
         } else {
             Vec::new()
         };
@@ -753,6 +790,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
             wait_value,
             pts,
             prepended_stream_params,
+            bytestream_format: self.bytestream_format,
             query,
             output_buffer: Some(output_buffer),
             _in_flight_resources: in_flight_resources,
