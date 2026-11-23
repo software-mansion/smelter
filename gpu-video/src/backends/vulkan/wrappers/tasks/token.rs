@@ -4,12 +4,12 @@ use ash::vk;
 
 use crate::backends::vulkan::wrappers::{ImageView, ResultQueryData};
 
-use super::{BufferRange, DeclaredResource, GraphError, ImageRange, QueryRef, SubresourceKey};
+use super::{BufferRange, DeclaredResource, ImageRange, QueryRef, SubresourceKey, TaskError};
 
 #[derive(Clone)]
 pub(crate) struct Produced<R: Resource> {
-    pub(super) graph: GraphId,
-    pub(super) pass: PassId,
+    pub(super) task: TaskId,
+    pub(super) step: StepId,
     pub(super) version: u32,
     pub(super) resource: R,
 }
@@ -25,7 +25,7 @@ impl Produced<ImageRange> {
         self,
         view: Arc<ImageView>,
         coded_extent: vk::Extent2D,
-    ) -> Result<Self, GraphError> {
+    ) -> Result<Self, TaskError> {
         todo!()
     }
 }
@@ -64,7 +64,7 @@ impl Input<ImageRange> {
         self,
         view: Arc<ImageView>,
         coded_extent: vk::Extent2D,
-    ) -> Result<Self, GraphError> {
+    ) -> Result<Self, TaskError> {
         todo!()
     }
 }
@@ -123,14 +123,14 @@ pub(crate) struct HostRead<R: HostReadable> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct PassId(pub(super) u32);
+pub(crate) struct StepId(pub(super) u32);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct GraphId(pub(super) u64);
+pub(crate) struct TaskId(pub(super) u64);
 
-static NEXT_GRAPH_ID: AtomicU64 = AtomicU64::new(0);
+static NEXT_TASK_ID: AtomicU64 = AtomicU64::new(0);
 
-impl GraphId {
+impl TaskId {
     pub(super) fn next() -> Self {
         todo!()
     }

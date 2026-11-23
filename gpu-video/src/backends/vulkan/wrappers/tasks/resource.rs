@@ -11,7 +11,7 @@ use crate::backends::vulkan::wrappers::{
     EncodeOutputBuffer, Image, ImageView, ResultQuery, ResultQueryData, VideoSession,
 };
 
-use super::{GraphError, GraphId, Sharing, Timeline};
+use super::{Sharing, TaskError, TaskId, Timeline};
 
 #[derive(Clone)]
 pub(crate) struct ImageRange {
@@ -55,7 +55,7 @@ impl ImageRange {
         self,
         view: Arc<ImageView>,
         coded_extent: vk::Extent2D,
-    ) -> Result<Self, GraphError> {
+    ) -> Result<Self, TaskError> {
         todo!()
     }
 
@@ -74,7 +74,7 @@ impl ImageRange {
 
     pub(super) fn picture_resource(
         &self,
-    ) -> Result<vk::VideoPictureResourceInfoKHR<'static>, GraphError> {
+    ) -> Result<vk::VideoPictureResourceInfoKHR<'static>, TaskError> {
         todo!()
     }
 }
@@ -300,11 +300,11 @@ impl VideoSession {
         todo!()
     }
 
-    pub(super) fn claim_for_graph(&self, graph: GraphId) -> Result<(), GraphError> {
+    pub(super) fn claim_for_task(&self, task: TaskId) -> Result<(), TaskError> {
         todo!()
     }
 
-    pub(super) fn release_from_graph(&self, graph: GraphId) {
+    pub(super) fn release_from_task(&self, task: TaskId) {
         todo!()
     }
 }

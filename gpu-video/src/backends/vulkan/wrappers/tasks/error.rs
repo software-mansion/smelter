@@ -10,7 +10,7 @@ use crate::backends::vulkan::VulkanTranscoderError;
 use super::{ExecError, ResourceUsage, Role, Sharing, Use};
 
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum GraphError {
+pub(crate) enum TaskError {
     #[error("{usage:?} needs one of {needed:?}, the {role:?} family reports {has:?}")]
     StageNotSupportedOnQueue {
         usage: Use,
@@ -28,18 +28,18 @@ pub(crate) enum GraphError {
     UseDirection { usage: Use, direction: &'static str },
     #[error("family {family} is not allowed by the resource's sharing {sharing:?}")]
     FamilyNotShared { family: u32, sharing: Sharing },
-    #[error("subresource declared twice in one pass with {first:?} and {second:?}")]
+    #[error("subresource declared twice in one step with {first:?} and {second:?}")]
     ConflictingAccess { first: Use, second: Use },
-    #[error("subresource declared twice in one pass with different views")]
+    #[error("subresource declared twice in one step with different views")]
     ConflictingView,
-    #[error("the subresource already has version {latest} in this graph; pass the token")]
+    #[error("the subresource already has version {latest} in this task; pass the token")]
     UseProducedToken { latest: u32 },
     #[error("the token is version {token}, the subresource is at version {latest}")]
     StaleVersion { token: u32, latest: u32 },
-    #[error("the token belongs to another graph")]
+    #[error("the token belongs to another task")]
     ForeignToken,
-    #[error("the token's pass was never finished")]
-    UnknownPass,
+    #[error("the token's step was never finished")]
+    UnknownStep,
     #[error("the image was exported to wgpu and may not be used by gpu-video any more")]
     ImageExported,
     #[error("the image is lent to wgpu; bring it back with import_from_wgpu first")]
@@ -50,7 +50,7 @@ pub(crate) enum GraphError {
     TextureImageMismatch,
     #[error("import: the range must cover every layer")]
     PartialImport,
-    #[error("a graph may import at most one image")]
+    #[error("a task may import at most one image")]
     SecondImport,
     #[error("export wants layout {want:?} but the producer leaves {have:?}")]
     ExportLayoutMismatch {
@@ -61,40 +61,40 @@ pub(crate) enum GraphError {
     WrongWgpuDevice,
     #[error("Role::Wgpu cannot be bound with bind(); use bind_wgpu()")]
     NoCommandPool,
-    #[error("the session belongs to family {session} but the pass runs on family {pass}")]
-    SessionFamilyMismatch { session: u32, pass: u32 },
-    #[error("the session is declared by another open graph")]
-    SessionInOpenGraph,
-    #[error("a fresh or poisoned session needs a pass that calls Recorder::control_reset")]
+    #[error("the session belongs to family {session} but the step runs on family {step}")]
+    SessionFamilyMismatch { session: u32, step: u32 },
+    #[error("the session is declared by another open task")]
+    SessionInOpenTask,
+    #[error("a fresh or poisoned session needs a step that calls Recorder::control_reset")]
     SessionNotReset,
     #[error("control_reset: flags lack RESET")]
     ControlWithoutReset,
-    #[error("the pass declared no session")]
+    #[error("the step declared no session")]
     NoSessionDeclared,
     #[error("control_reset must follow begin_coding and precede the coding operation")]
     ControlOutOfPlace,
-    #[error("begin_coding called twice in one pass")]
+    #[error("begin_coding called twice in one step")]
     BeginCodingTwice,
     #[error("no coding scope is open")]
     ScopeNotOpen,
-    #[error("the pass opened a coding scope and did not end it")]
+    #[error("the step opened a coding scope and did not end it")]
     ScopeLeftOpen,
     #[error("with_view: the view belongs to another image")]
     ViewImageMismatch,
     #[error("import: the lent image has an unreached record on another timeline")]
     ImageNotRetired,
-    #[error("the pass recorded no body")]
-    EmptyPass,
-    #[error("the graph already has a completion callback")]
+    #[error("the step recorded no body")]
+    EmptyStep,
+    #[error("the task already has a completion callback")]
     CallbackAlreadySet,
-    #[error("a pass may record only once")]
+    #[error("a step may record only once")]
     RecordAlreadySet,
-    #[error("the pass did not declare this range in this role")]
-    UndeclaredInPass,
+    #[error("the step did not declare this range in this role")]
+    UndeclaredInStep,
     #[error("the range carries no view; build it with slot() or with_view()")]
     NoViewForRange,
-    #[error("a graph of this window is still open")]
-    GraphAlreadyOpen,
+    #[error("a task of this execution context is still open")]
+    TaskAlreadyOpen,
     #[error("this call would block on the executor's own waiter thread")]
     CalledOnWaiterThread,
     #[error("no queue is available for role {0:?}")]
@@ -102,20 +102,20 @@ pub(crate) enum GraphError {
     #[error("this encoder has no transfer binding; it cannot upload bytes")]
     NoTransferBinding,
 
-    #[error("pass {0} was never finished")]
-    UnfinishedPass(&'static str),
+    #[error("step {0} was never finished")]
+    UnfinishedStep(&'static str),
     #[error("host reads are declared but no completion callback is set")]
     HostReadNeverConsumed,
-    #[error("a host read names a version that a later pass overwrote")]
+    #[error("a host read names a version that a later step overwrote")]
     StaleHostRead,
     #[error("EXCLUSIVE resource owned by family {owner} used on family {family} without discard")]
     OwnershipTransferRequired { owner: u32, family: u32 },
     #[error("a read of a subresource that was never written (layout UNDEFINED)")]
     ReadOfUninitialized,
-    #[error("the graph came from another window")]
-    WrongWindow,
-    #[error("the completion belongs to another graph")]
-    WrongGraph,
+    #[error("the task came from another execution context")]
+    WrongExecutionContext,
+    #[error("the completion belongs to another task")]
+    WrongTask,
 
     #[error("Vulkan error: {0}")]
     Vk(#[from] vk::Result),
@@ -127,16 +127,16 @@ pub(crate) enum GraphError {
     #[cfg(feature = "wgpu")]
     #[error("wgpu's queue did not accept the import (device destroyed or lost)")]
     WgpuQueueRejected,
-    #[error("a later pass of this graph failed to submit; the prefix completed")]
+    #[error("a later step of this task failed to submit; the prefix completed")]
     PartialSubmit,
     #[error("the device was lost")]
     DeviceLost,
     #[error("the executor's waiter thread is gone")]
     WaiterThreadDied,
-    #[error("a submit panicked under the executor lock; the window is unusable")]
+    #[error("a submit panicked under the executor lock; the execution context is unusable")]
     SubmitPanicked,
 
-    #[error("the host read was not declared in this graph")]
+    #[error("the host read was not declared in this task")]
     UndeclaredHostRead,
     #[error("a submission failed with query status {0:?}")]
     SubmissionFailed(vk::QueryResultStatusKHR),
@@ -146,31 +146,31 @@ pub(crate) enum GraphError {
     CallbackPanicked,
 }
 
-impl From<ExecError> for GraphError {
+impl From<ExecError> for TaskError {
     fn from(e: ExecError) -> Self {
         match e {
-            ExecError::PartialSubmit => GraphError::PartialSubmit,
-            ExecError::DeviceLost => GraphError::DeviceLost,
-            ExecError::CallbackPanicked => GraphError::CallbackPanicked,
+            ExecError::PartialSubmit => TaskError::PartialSubmit,
+            ExecError::DeviceLost => TaskError::DeviceLost,
+            ExecError::CallbackPanicked => TaskError::CallbackPanicked,
         }
     }
 }
 
-impl From<GraphError> for VulkanDecoderError {
-    fn from(error: GraphError) -> Self {
+impl From<TaskError> for VulkanDecoderError {
+    fn from(error: TaskError) -> Self {
         todo!()
     }
 }
 
-impl From<GraphError> for VulkanEncoderError {
-    fn from(error: GraphError) -> Self {
+impl From<TaskError> for VulkanEncoderError {
+    fn from(error: TaskError) -> Self {
         todo!()
     }
 }
 
 #[cfg(feature = "transcoder")]
-impl From<GraphError> for VulkanTranscoderError {
-    fn from(error: GraphError) -> Self {
+impl From<TaskError> for VulkanTranscoderError {
+    fn from(error: TaskError) -> Self {
         todo!()
     }
 }

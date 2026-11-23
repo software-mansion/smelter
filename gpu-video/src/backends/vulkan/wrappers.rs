@@ -4,12 +4,12 @@ use ash::{Entry, vk};
 
 mod command;
 mod debug;
-pub(crate) mod graph;
 mod mem;
 #[cfg(feature = "transcoder")]
 mod pipeline;
 mod query;
 mod sync;
+pub(crate) mod tasks;
 mod video;
 mod vk_extensions;
 
