@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-const CEF_VERSION: &str = "154.0.34+g14c5a08+chromium-154.0.8037.98";
+const CEF_VERSION: &str = "158.0.3+g8c29be2+chromium-158.0.8127.18";
 
 fn main() -> Result<()> {
     println!("cargo:rerun-if-changed=build.rs");
