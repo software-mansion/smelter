@@ -4,12 +4,12 @@ use ash::vk;
 
 use crate::backends::vulkan::wrappers::{Device, VideoSession, VideoSessionParameters};
 
-use super::{BufferRange, GraphError, ImageRange, Pass};
+use super::{BufferRange, ImageRange, Step, TaskError};
 
 pub(crate) struct Recorder<'a> {
     pub(super) command_buffer: vk::CommandBuffer,
     pub(super) device: &'a Device,
-    pub(super) pass: &'a mut Pass,
+    pub(super) step: &'a mut Step,
     pub(super) scope_open: bool,
     pub(super) coding_op_recorded: bool,
 }
@@ -26,7 +26,7 @@ impl<'a> Recorder<'a> {
     pub(super) fn new(
         command_buffer: vk::CommandBuffer,
         device: &'a Device,
-        pass: &'a mut Pass,
+        step: &'a mut Step,
     ) -> Self {
         todo!()
     }
@@ -39,59 +39,59 @@ impl<'a> Recorder<'a> {
         todo!()
     }
 
-    pub(crate) fn layout_of(&self, range: &ImageRange) -> Result<vk::ImageLayout, GraphError> {
+    pub(crate) fn layout_of(&self, range: &ImageRange) -> Result<vk::ImageLayout, TaskError> {
         todo!()
     }
 
-    pub(crate) fn view(&self, range: &ImageRange) -> Result<vk::ImageView, GraphError> {
+    pub(crate) fn view(&self, range: &ImageRange) -> Result<vk::ImageView, TaskError> {
         todo!()
     }
 
-    pub(crate) fn buffer(&self, range: &BufferRange) -> Result<vk::Buffer, GraphError> {
+    pub(crate) fn buffer(&self, range: &BufferRange) -> Result<vk::Buffer, TaskError> {
         todo!()
     }
 
-    pub(crate) fn begin_coding(&mut self, info: BeginCoding<'_>) -> Result<(), GraphError> {
+    pub(crate) fn begin_coding(&mut self, info: BeginCoding<'_>) -> Result<(), TaskError> {
         todo!()
     }
 
     pub(crate) fn control_reset(
         &mut self,
         info: &vk::VideoCodingControlInfoKHR<'_>,
-    ) -> Result<(), GraphError> {
+    ) -> Result<(), TaskError> {
         todo!()
     }
 
     pub(crate) fn reference(
         &self,
         range: &ImageRange,
-    ) -> Result<vk::VideoPictureResourceInfoKHR<'static>, GraphError> {
+    ) -> Result<vk::VideoPictureResourceInfoKHR<'static>, TaskError> {
         todo!()
     }
 
     pub(crate) fn setup(
         &self,
         range: &ImageRange,
-    ) -> Result<vk::VideoPictureResourceInfoKHR<'static>, GraphError> {
+    ) -> Result<vk::VideoPictureResourceInfoKHR<'static>, TaskError> {
         todo!()
     }
 
     pub(crate) fn picture_resource(
         &self,
         range: &ImageRange,
-    ) -> Result<vk::VideoPictureResourceInfoKHR<'static>, GraphError> {
+    ) -> Result<vk::VideoPictureResourceInfoKHR<'static>, TaskError> {
         todo!()
     }
 
-    pub(crate) fn decode(&mut self, info: &vk::VideoDecodeInfoKHR<'_>) -> Result<(), GraphError> {
+    pub(crate) fn decode(&mut self, info: &vk::VideoDecodeInfoKHR<'_>) -> Result<(), TaskError> {
         todo!()
     }
 
-    pub(crate) fn encode(&mut self, info: &vk::VideoEncodeInfoKHR<'_>) -> Result<(), GraphError> {
+    pub(crate) fn encode(&mut self, info: &vk::VideoEncodeInfoKHR<'_>) -> Result<(), TaskError> {
         todo!()
     }
 
-    pub(crate) fn end_coding(&mut self) -> Result<(), GraphError> {
+    pub(crate) fn end_coding(&mut self) -> Result<(), TaskError> {
         todo!()
     }
 
@@ -99,7 +99,7 @@ impl<'a> Recorder<'a> {
         &self,
         active: u32,
         order: Option<&[u32]>,
-    ) -> Result<Vec<vk::VideoReferenceSlotInfoKHR<'static>>, GraphError> {
+    ) -> Result<Vec<vk::VideoReferenceSlotInfoKHR<'static>>, TaskError> {
         todo!()
     }
 }

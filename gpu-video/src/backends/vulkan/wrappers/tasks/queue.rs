@@ -7,7 +7,7 @@ use ash::vk;
 
 use crate::backends::vulkan::wrappers::{Device, TimelineSemaphore};
 
-use super::{CommandBufferPool, Executor, GraphError};
+use super::{CommandBufferPool, Executor, TaskError};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum Role {
@@ -62,7 +62,7 @@ pub(super) struct TimelineState {
 }
 
 impl Timeline {
-    pub(super) fn new(device: Arc<Device>, label: &str) -> Result<Self, GraphError> {
+    pub(super) fn new(device: Arc<Device>, label: &str) -> Result<Self, TaskError> {
         todo!()
     }
 
@@ -126,7 +126,7 @@ pub(crate) struct WgpuBinding {
 
 #[cfg(feature = "wgpu")]
 impl WgpuBinding {
-    pub(crate) fn check_same_device(&self, device: &wgpu::Device) -> Result<(), GraphError> {
+    pub(crate) fn check_same_device(&self, device: &wgpu::Device) -> Result<(), TaskError> {
         todo!()
     }
 }

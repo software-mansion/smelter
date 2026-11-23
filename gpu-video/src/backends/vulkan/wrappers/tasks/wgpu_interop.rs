@@ -2,13 +2,13 @@ use std::sync::Arc;
 
 use ash::vk;
 
-use super::{ExportDecl, GraphError, ImportDecl, Timeline, waiter::SharedState};
+use super::{ExportDecl, ImportDecl, TaskError, Timeline, waiter::SharedState};
 
-pub(super) fn run_import(import: &mut ImportDecl) -> Result<(), GraphError> {
+pub(super) fn run_import(import: &mut ImportDecl) -> Result<(), TaskError> {
     todo!()
 }
 
-fn check_import_needs(import: &ImportDecl) -> Result<(), GraphError> {
+fn check_import_needs(import: &ImportDecl) -> Result<(), TaskError> {
     todo!()
 }
 
@@ -16,11 +16,11 @@ fn stage_previous_wait(import: &ImportDecl) -> Option<u64> {
     todo!()
 }
 
-fn submit_transition_batch(import: &ImportDecl) -> Result<(), GraphError> {
+fn submit_transition_batch(import: &ImportDecl) -> Result<(), TaskError> {
     todo!()
 }
 
-fn submit_signal_batch(import: &ImportDecl) -> Result<u64, GraphError> {
+fn submit_signal_batch(import: &ImportDecl) -> Result<u64, TaskError> {
     todo!()
 }
 

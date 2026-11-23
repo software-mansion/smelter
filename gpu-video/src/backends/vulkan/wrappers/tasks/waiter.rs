@@ -5,7 +5,7 @@ use std::{
 
 use crate::backends::vulkan::wrappers::{Device, TimelineSemaphore};
 
-use super::{CompletionCallback, ExecError, GraphError, Retired, Timeline, WindowId};
+use super::{CompletionCallback, ExecError, ExecutionContextId, TaskError, TaskResults, Timeline};
 
 pub(super) struct SharedState {
     pub(super) device: Arc<Device>,
@@ -19,7 +19,7 @@ pub(super) struct SharedState {
 }
 
 impl SharedState {
-    pub(super) fn new(device: Arc<Device>) -> Result<Self, GraphError> {
+    pub(super) fn new(device: Arc<Device>) -> Result<Self, TaskError> {
         todo!()
     }
 
@@ -46,8 +46,8 @@ impl SharedState {
 
 pub(super) struct Request {
     pub(super) waits: Vec<(Arc<Timeline>, u64)>,
-    pub(super) window: WindowId,
-    pub(super) retired: Option<Retired>,
+    pub(super) context: ExecutionContextId,
+    pub(super) results: Option<TaskResults>,
     pub(super) on_complete: Option<CompletionCallback>,
     pub(super) outcome: Result<(), ExecError>,
     pub(super) sender: Sender<Result<(), ExecError>>,
@@ -69,7 +69,7 @@ pub(super) struct Waker {
 }
 
 impl Waker {
-    fn new(device: Arc<Device>) -> Result<Self, GraphError> {
+    fn new(device: Arc<Device>) -> Result<Self, TaskError> {
         todo!()
     }
 
@@ -88,7 +88,7 @@ pub(super) struct WaiterThreadHandle {
 }
 
 impl WaiterThreadHandle {
-    pub(super) fn spawn(shared: Arc<SharedState>) -> Result<Self, GraphError> {
+    pub(super) fn spawn(shared: Arc<SharedState>) -> Result<Self, TaskError> {
         todo!()
     }
 

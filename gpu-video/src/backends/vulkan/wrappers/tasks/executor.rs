@@ -6,7 +6,7 @@ use std::{
 use crate::backends::vulkan::{vulkan_device::queues::QueueIndices, wrappers::Device};
 
 use super::{
-    GraphError, InFlightWindow, Queue, QueueBinding, Role, Sharing,
+    ExecutionContext, Queue, QueueBinding, Role, Sharing, TaskError,
     waiter::{Request, SharedState, WaiterThreadHandle},
 };
 
@@ -26,7 +26,7 @@ impl Executor {
     pub(crate) fn new(
         device: Arc<Device>,
         indices: &QueueIndices<'_>,
-    ) -> Result<Arc<Self>, GraphError> {
+    ) -> Result<Arc<Self>, TaskError> {
         todo!()
     }
 
@@ -34,7 +34,7 @@ impl Executor {
         self: &Arc<Self>,
         role: Role,
         label: &str,
-    ) -> Result<QueueBinding, GraphError> {
+    ) -> Result<QueueBinding, TaskError> {
         todo!()
     }
 
@@ -43,15 +43,15 @@ impl Executor {
         self: &Arc<Self>,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-    ) -> Result<WgpuBinding, GraphError> {
+    ) -> Result<WgpuBinding, TaskError> {
         todo!()
     }
 
-    pub(crate) fn window(self: &Arc<Self>, max_in_flight: usize) -> InFlightWindow {
+    pub(crate) fn execution_context(self: &Arc<Self>, max_in_flight: usize) -> ExecutionContext {
         todo!()
     }
 
-    pub(crate) fn sharing(&self, roles: &[Role]) -> Result<Sharing, GraphError> {
+    pub(crate) fn sharing(&self, roles: &[Role]) -> Result<Sharing, TaskError> {
         todo!()
     }
 
@@ -87,7 +87,7 @@ impl Executor {
         todo!()
     }
 
-    fn pick_queue(&self, role: Role) -> Result<Arc<Queue>, GraphError> {
+    fn pick_queue(&self, role: Role) -> Result<Arc<Queue>, TaskError> {
         todo!()
     }
 }

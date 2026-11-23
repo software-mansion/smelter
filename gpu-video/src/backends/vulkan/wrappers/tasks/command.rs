@@ -4,7 +4,7 @@ use ash::vk;
 
 use crate::backends::vulkan::wrappers::Device;
 
-use super::GraphError;
+use super::TaskError;
 
 pub(crate) struct CommandBufferPool {
     inner: Mutex<CommandBufferPoolInner>,
@@ -23,11 +23,11 @@ pub(crate) enum ReleasedState {
 }
 
 impl CommandBufferPool {
-    pub(crate) fn new(device: Arc<Device>, family_index: u32) -> Result<Self, GraphError> {
+    pub(crate) fn new(device: Arc<Device>, family_index: u32) -> Result<Self, TaskError> {
         todo!()
     }
 
-    pub(crate) fn begin(&self) -> Result<vk::CommandBuffer, GraphError> {
+    pub(crate) fn begin(&self) -> Result<vk::CommandBuffer, TaskError> {
         todo!()
     }
 
@@ -35,7 +35,7 @@ impl CommandBufferPool {
         todo!()
     }
 
-    pub(super) fn recording(self: &Arc<Self>) -> Result<RecordingGuard, GraphError> {
+    pub(super) fn recording(self: &Arc<Self>) -> Result<RecordingGuard, TaskError> {
         todo!()
     }
 }
@@ -57,7 +57,7 @@ impl RecordingGuard {
         todo!()
     }
 
-    pub(super) fn end(self) -> Result<vk::CommandBuffer, GraphError> {
+    pub(super) fn end(self) -> Result<vk::CommandBuffer, TaskError> {
         todo!()
     }
 }
