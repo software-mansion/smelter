@@ -766,6 +766,8 @@ Hints mentioned so far (examples, not decisions):
 
 TBD. It has to list every requirement that is abandoned, each with its reasoning (section 1).
 
+`(?)` A full proposal for sections 3-5 is in `DESIGN.md`, next to this file.
+
 Ideas mentioned so far (examples, not decisions):
 
 - Inputs that can't drop packets: on every stall reset to the starting buffer
