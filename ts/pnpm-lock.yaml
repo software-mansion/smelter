@@ -100,7 +100,7 @@ importers:
         specifier: workspace:0.5.0-rc.0
         version: link:../../../smelter
       '@swmansion/smelter-node':
-        specifier: workspace:0.5.0-rc.0
+        specifier: workspace:0.5.0-rc.1
         version: link:../../../smelter-node
       express:
         specifier: ^4.22.0
@@ -134,7 +134,7 @@ importers:
         specifier: workspace:0.5.0-rc.0
         version: link:../../../smelter
       '@swmansion/smelter-node':
-        specifier: workspace:0.5.0-rc.0
+        specifier: workspace:0.5.0-rc.1
         version: link:../../../smelter-node
       react:
         specifier: ^18.3.1
@@ -168,7 +168,7 @@ importers:
         specifier: workspace:0.5.0-rc.0
         version: link:../../../../smelter
       '@swmansion/smelter-node':
-        specifier: workspace:0.5.0-rc.0
+        specifier: workspace:0.5.0-rc.1
         version: link:../../../../smelter-node
       fastify:
         specifier: ^5.12.6
@@ -199,7 +199,7 @@ importers:
         specifier: workspace:0.5.0-rc.0
         version: link:../../../smelter
       '@swmansion/smelter-node':
-        specifier: workspace:0.5.0-rc.0
+        specifier: workspace:0.5.0-rc.1
         version: link:../../../smelter-node
       react:
         specifier: ^18.3.1
@@ -224,7 +224,7 @@ importers:
         specifier: workspace:0.5.0-rc.0
         version: link:../../../smelter
       '@swmansion/smelter-node':
-        specifier: workspace:0.5.0-rc.0
+        specifier: workspace:0.5.0-rc.1
         version: link:../../../smelter-node
       ora:
         specifier: ^5.4.1
@@ -252,7 +252,7 @@ importers:
         specifier: workspace:0.5.0-rc.0
         version: link:../../smelter
       '@swmansion/smelter-node':
-        specifier: workspace:0.5.0-rc.0
+        specifier: workspace:0.5.0-rc.1
         version: link:../../smelter-node
       react:
         specifier: ^18.3.1
@@ -277,7 +277,7 @@ importers:
         specifier: workspace:0.5.0-rc.0
         version: link:../../smelter-core
       '@swmansion/smelter-node':
-        specifier: workspace:0.5.0-rc.0
+        specifier: workspace:0.5.0-rc.1
         version: link:../../smelter-node
       pino:
         specifier: ^9.5.0
@@ -329,7 +329,7 @@ importers:
         specifier: workspace:0.5.0-rc.0
         version: link:../../smelter
       '@swmansion/smelter-node':
-        specifier: workspace:0.5.0-rc.0
+        specifier: workspace:0.5.0-rc.1
         version: link:../../smelter-node
       node-fetch:
         specifier: ^2.6.7
