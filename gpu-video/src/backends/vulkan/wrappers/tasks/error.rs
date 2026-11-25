@@ -65,20 +65,10 @@ pub(crate) enum TaskError {
     SessionFamilyMismatch { session: u32, step: u32 },
     #[error("the session is declared by another open task")]
     SessionInOpenTask,
-    #[error("a fresh or poisoned session needs a step that calls Recorder::control_reset")]
+    #[error("a fresh or poisoned session needs BeginCoding::reset")]
     SessionNotReset,
-    #[error("control_reset: flags lack RESET")]
-    ControlWithoutReset,
-    #[error("the step declared no session")]
-    NoSessionDeclared,
-    #[error("control_reset must follow begin_coding and precede the coding operation")]
-    ControlOutOfPlace,
-    #[error("begin_coding called twice in one step")]
-    BeginCodingTwice,
-    #[error("no coding scope is open")]
-    ScopeNotOpen,
-    #[error("the step opened a coding scope and did not end it")]
-    ScopeLeftOpen,
+    #[error("the session token belongs to another step")]
+    ForeignSessionToken,
     #[error("with_view: the view belongs to another image")]
     ViewImageMismatch,
     #[error("import: the lent image has an unreached record on another timeline")]
@@ -91,8 +81,8 @@ pub(crate) enum TaskError {
     RecordAlreadySet,
     #[error("the step did not declare this range in this role")]
     UndeclaredInStep,
-    #[error("the range carries no view; build it with slot() or with_view()")]
-    NoViewForRange,
+    #[error("{usage:?} needs a PictureRange; build it with slot() or with_view()")]
+    UseNeedsPicture { usage: Use },
     #[error("a task of this execution context is still open")]
     TaskAlreadyOpen,
     #[error("this call would block on the executor's own waiter thread")]

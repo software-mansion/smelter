@@ -8,12 +8,12 @@ use crate::backends::vulkan::wrappers::VideoSession;
 
 use super::{
     AccessSource, DeclaredResource, ExecutionContextShared, Executor, HostRead, HostReadable,
-    Input, Outcome, Produced, QueueBinding, Resource, Step, StepBuilder, StepId, SubresourceKey,
-    TaskError, TaskId,
+    Input, Outcome, Produced, QueueBinding, Resource, SessionToken, Step, StepBuilder, StepId,
+    SubresourceKey, TaskError, TaskId,
 };
 
 #[cfg(feature = "wgpu")]
-use super::{ExportedImage, ImageRange, Timeline, WgpuBinding};
+use super::{ExportedImage, ImageLayer, Timeline, WgpuBinding};
 
 pub(crate) type CompletionCallback = Box<dyn FnOnce(Outcome<'_>) + Send>;
 
@@ -52,7 +52,7 @@ pub(crate) struct HostReadDecl {
 #[cfg(feature = "wgpu")]
 pub(crate) struct ExportDecl {
     pub(super) step: StepId,
-    pub(super) image: ImageRange,
+    pub(super) image: ImageLayer,
     pub(super) queue: wgpu::Queue,
     pub(super) usage: wgpu::TextureUses,
     pub(super) format: wgpu::TextureFormat,
@@ -61,7 +61,7 @@ pub(crate) struct ExportDecl {
 #[cfg(feature = "wgpu")]
 pub(crate) struct ImportDecl {
     pub(super) step: StepId,
-    pub(super) image: ImageRange,
+    pub(super) image: ImageLayer,
     pub(super) texture: wgpu::Texture,
     pub(super) timeline: Arc<Timeline>,
     pub(super) probe: wgpu::Buffer,
@@ -101,7 +101,7 @@ impl Task {
     #[cfg(feature = "wgpu")]
     pub(crate) fn export_to_wgpu(
         &mut self,
-        image: &Produced<ImageRange>,
+        image: &Produced<ImageLayer>,
         wgpu_queue: &wgpu::Queue,
         usage: wgpu::TextureUses,
         format: wgpu::TextureFormat,
@@ -112,10 +112,10 @@ impl Task {
     #[cfg(feature = "wgpu")]
     pub(crate) fn import_from_wgpu(
         &mut self,
-        image: ImageRange,
+        image: ImageLayer,
         texture: &wgpu::Texture,
         binding: &WgpuBinding,
-    ) -> Result<Produced<ImageRange>, TaskError> {
+    ) -> Result<Produced<ImageLayer>, TaskError> {
         todo!()
     }
 
@@ -132,9 +132,10 @@ impl Task {
 
     pub(super) fn register_session(
         &mut self,
+        step: StepId,
         session: &Arc<VideoSession>,
         family_index: u32,
-    ) -> Result<(), TaskError> {
+    ) -> Result<SessionToken, TaskError> {
         todo!()
     }
 

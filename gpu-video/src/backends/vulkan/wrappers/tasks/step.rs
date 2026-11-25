@@ -10,8 +10,9 @@ use crate::backends::vulkan::wrappers::{
 };
 
 use super::{
-    BufferRange, CommandBufferPool, ImageRange, Input, Produced, QueryRef, Queue, QueueBinding,
-    Recorder, Resource, Role, StepId, Task, TaskError, TaskId, Timeline, Use,
+    BufferRange, CommandBufferPool, ImageLayer, Input, Picture, Produced, QueryRef, Queue,
+    QueueBinding, Recorder, Resource, Role, SessionToken, StepId, Task, TaskError, TaskId,
+    Timeline, Use, ViewRef,
 };
 
 pub(crate) struct StepQueue {
@@ -32,26 +33,19 @@ pub(crate) struct Step {
     pub(super) label: &'static str,
     pub(super) queue: StepQueue,
     pub(super) accesses: Vec<Access>,
-    pub(super) binds: Vec<ImageRange>,
+    pub(super) binds: Vec<Picture>,
     pub(super) queries: Vec<DeclaredQuery>,
     pub(super) session: Option<DeclaredSession>,
     pub(super) after: Vec<StepId>,
     pub(super) body: Option<vk::CommandBuffer>,
     pub(super) keep_alive: Vec<Box<dyn Any + Send>>,
-    pub(super) coding_scope: CodingScopeState,
     pub(super) submitted: bool,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) struct CodingScopeState {
-    pub(super) began: bool,
-    pub(super) ended: bool,
-    pub(super) reset: bool,
 }
 
 pub(crate) struct DeclaredSession {
     pub(super) session: Arc<VideoSession>,
     pub(super) parameters: Arc<VideoSessionParameters>,
+    pub(super) resets: bool,
 }
 
 pub(crate) struct Access {
@@ -63,7 +57,10 @@ pub(crate) struct Access {
 
 #[derive(Clone)]
 pub(crate) enum DeclaredResource {
-    Image(ImageRange),
+    Image {
+        range: ImageLayer,
+        view: Option<ViewRef>,
+    },
     Buffer(BufferRange),
     Query {
         pool: vk::QueryPool,
@@ -76,7 +73,6 @@ pub(crate) enum DeclaredResource {
 pub(crate) enum Direction {
     Read,
     Write,
-    WriteDiscarding,
     ReadWrite,
 }
 
@@ -119,15 +115,7 @@ impl<'g> StepBuilder<'g> {
         todo!()
     }
 
-    pub(crate) fn writes_discarding(
-        &mut self,
-        input: impl Into<Input<ImageRange>>,
-        usage: Use,
-    ) -> Produced<ImageRange> {
-        todo!()
-    }
-
-    pub(crate) fn binds(&mut self, range: ImageRange) -> &mut Self {
+    pub(crate) fn binds(&mut self, picture: Picture) -> &mut Self {
         todo!()
     }
 
@@ -142,7 +130,7 @@ impl<'g> StepBuilder<'g> {
         &mut self,
         session: &Arc<VideoSession>,
         parameters: &Arc<VideoSessionParameters>,
-    ) -> Result<&mut Self, TaskError> {
+    ) -> Result<SessionToken, TaskError> {
         todo!()
     }
 
@@ -214,7 +202,7 @@ impl<'g> StepBuilder<'g> {
         todo!()
     }
 
-    fn check_session_reset(&self) -> Result<(), TaskError> {
+    fn check_pictures(&self) -> Result<(), TaskError> {
         todo!()
     }
 }

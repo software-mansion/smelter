@@ -1,31 +1,32 @@
-use std::sync::Arc;
-
 use ash::vk;
 
-use crate::backends::vulkan::wrappers::{Device, VideoSession, VideoSessionParameters};
+use crate::backends::vulkan::wrappers::Device;
 
-use super::{BufferRange, ImageRange, Step, TaskError};
+use super::{BufferRange, ImageLayer, Picture, SessionToken, Step, TaskError, TaskId};
 
 pub(crate) struct Recorder<'a> {
     pub(super) command_buffer: vk::CommandBuffer,
     pub(super) device: &'a Device,
+    pub(super) task: TaskId,
     pub(super) step: &'a mut Step,
-    pub(super) scope_open: bool,
-    pub(super) coding_op_recorded: bool,
 }
 
 pub(crate) struct BeginCoding<'a> {
-    pub(crate) session: &'a Arc<VideoSession>,
-    pub(crate) parameters: &'a Arc<VideoSessionParameters>,
     pub(crate) active: u32,
     pub(crate) order: Option<&'a [u32]>,
     pub(crate) p_next: Option<&'a mut dyn vk::ExtendsVideoBeginCodingInfoKHR>,
+    pub(crate) reset: Option<vk::VideoCodingControlInfoKHR<'a>>,
+}
+
+pub(crate) struct CodingScope<'r, 'a> {
+    recorder: &'r mut Recorder<'a>,
 }
 
 impl<'a> Recorder<'a> {
     pub(super) fn new(
         command_buffer: vk::CommandBuffer,
         device: &'a Device,
+        task: TaskId,
         step: &'a mut Step,
     ) -> Self {
         todo!()
@@ -39,11 +40,11 @@ impl<'a> Recorder<'a> {
         todo!()
     }
 
-    pub(crate) fn layout_of(&self, range: &ImageRange) -> Result<vk::ImageLayout, TaskError> {
+    pub(crate) fn layout_of(&self, range: &ImageLayer) -> Result<vk::ImageLayout, TaskError> {
         todo!()
     }
 
-    pub(crate) fn view(&self, range: &ImageRange) -> Result<vk::ImageView, TaskError> {
+    pub(crate) fn view(&self, picture: &Picture) -> Result<vk::ImageView, TaskError> {
         todo!()
     }
 
@@ -51,34 +52,54 @@ impl<'a> Recorder<'a> {
         todo!()
     }
 
-    pub(crate) fn begin_coding(&mut self, info: BeginCoding<'_>) -> Result<(), TaskError> {
+    pub(crate) fn coding<T>(
+        &mut self,
+        session: SessionToken,
+        begin: BeginCoding<'_>,
+        body: impl FnOnce(&mut CodingScope<'_, 'a>) -> Result<T, TaskError>,
+    ) -> Result<T, TaskError> {
         todo!()
     }
 
-    pub(crate) fn control_reset(
-        &mut self,
-        info: &vk::VideoCodingControlInfoKHR<'_>,
-    ) -> Result<(), TaskError> {
+    fn check_session_token(&self, session: &SessionToken) -> Result<(), TaskError> {
+        todo!()
+    }
+
+    fn reference_slots(
+        &self,
+        active: u32,
+        order: Option<&[u32]>,
+    ) -> Result<Vec<vk::VideoReferenceSlotInfoKHR<'static>>, TaskError> {
+        todo!()
+    }
+}
+
+impl CodingScope<'_, '_> {
+    pub(crate) fn command_buffer(&self) -> vk::CommandBuffer {
+        todo!()
+    }
+
+    pub(crate) fn device(&self) -> &Device {
         todo!()
     }
 
     pub(crate) fn reference(
         &self,
-        range: &ImageRange,
+        picture: &Picture,
     ) -> Result<vk::VideoPictureResourceInfoKHR<'static>, TaskError> {
         todo!()
     }
 
     pub(crate) fn setup(
         &self,
-        range: &ImageRange,
+        picture: &Picture,
     ) -> Result<vk::VideoPictureResourceInfoKHR<'static>, TaskError> {
         todo!()
     }
 
     pub(crate) fn picture_resource(
         &self,
-        range: &ImageRange,
+        picture: &Picture,
     ) -> Result<vk::VideoPictureResourceInfoKHR<'static>, TaskError> {
         todo!()
     }
@@ -88,18 +109,6 @@ impl<'a> Recorder<'a> {
     }
 
     pub(crate) fn encode(&mut self, info: &vk::VideoEncodeInfoKHR<'_>) -> Result<(), TaskError> {
-        todo!()
-    }
-
-    pub(crate) fn end_coding(&mut self) -> Result<(), TaskError> {
-        todo!()
-    }
-
-    fn reference_slots(
-        &self,
-        active: u32,
-        order: Option<&[u32]>,
-    ) -> Result<Vec<vk::VideoReferenceSlotInfoKHR<'static>>, TaskError> {
         todo!()
     }
 }

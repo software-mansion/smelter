@@ -836,8 +836,9 @@ impl Drop for Image {
 
 pub(crate) struct ImageView {
     pub(crate) view: vk::ImageView,
-    pub(crate) _image: Arc<Image>,
+    pub(crate) image: Arc<Image>,
     pub(crate) device: Arc<Device>,
+    pub(crate) subresource_range: vk::ImageSubresourceRange,
 }
 
 impl ImageView {
@@ -850,8 +851,9 @@ impl ImageView {
 
         Ok(ImageView {
             view,
-            _image: image,
+            image,
             device: device.clone(),
+            subresource_range: create_info.subresource_range,
         })
     }
 }

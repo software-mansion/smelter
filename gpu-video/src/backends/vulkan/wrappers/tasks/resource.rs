@@ -14,68 +14,78 @@ use crate::backends::vulkan::wrappers::{
 use super::{Sharing, TaskError, TaskId, Timeline};
 
 #[derive(Clone)]
-pub(crate) struct ImageRange {
+pub(crate) struct ImageLayer {
     pub(crate) image: Arc<Image>,
-    pub(crate) base_layer: u32,
-    pub(crate) layer_count: u32,
-    pub(super) view: Option<ViewRef>,
+    pub(crate) layer: u32,
     pub(super) owner: Option<Arc<dyn Any + Send + Sync>>,
+}
+
+#[derive(Clone)]
+pub(crate) struct Picture {
+    pub(crate) layer: ImageLayer,
+    pub(super) view: ViewRef,
 }
 
 #[derive(Clone)]
 pub(crate) struct ViewRef {
     pub(super) view: vk::ImageView,
-    pub(super) picture_base_layer: u32,
+    pub(super) layer_in_view: u32,
     pub(super) coded_extent: vk::Extent2D,
     pub(super) owner: Arc<dyn Any + Send + Sync>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct RangeKey {
-    image: *const Image,
-    base_layer: u32,
-    layer_count: u32,
-}
-
-unsafe impl Send for RangeKey {}
-unsafe impl Sync for RangeKey {}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum SubresourceKey {
-    ImageLayer { image: *const Image, layer: u32 },
-    Buffer(*const Buffer),
+    ImageLayer { image: vk::Image, layer: u32 },
+    Buffer(vk::Buffer),
     Query { pool: vk::QueryPool, index: u32 },
 }
 
-unsafe impl Send for SubresourceKey {}
-unsafe impl Sync for SubresourceKey {}
-
-impl ImageRange {
+impl ImageLayer {
     pub(crate) fn with_view(
         self,
         view: Arc<ImageView>,
         coded_extent: vk::Extent2D,
-    ) -> Result<Self, TaskError> {
-        todo!()
-    }
+    ) -> Result<Picture, TaskError> {
+        if !Arc::ptr_eq(&self.image, &view.image) {
+            return Err(TaskError::ViewImageMismatch);
+        }
 
-    pub(super) fn key(&self) -> RangeKey {
-        todo!()
-    }
+        let view_base = view.subresource_range.base_array_layer;
+        let view_range = view_base..view_base + view.subresource_range.layer_count;
 
-    pub(super) fn layer_keys(&self) -> impl Iterator<Item = SubresourceKey> + '_ {
-        (self.base_layer..self.base_layer + self.layer_count).map(|layer| {
-            SubresourceKey::ImageLayer {
-                image: Arc::as_ptr(&self.image),
-                layer,
-            }
+        if !view_range.contains(&self.layer) {
+            return Err(TaskError::ViewImageMismatch);
+        }
+
+        Ok(Picture {
+            view: ViewRef {
+                view: view.view,
+                layer_in_view: self.layer - view_base,
+                coded_extent,
+                owner: view,
+            },
+            layer: self,
         })
     }
 
-    pub(super) fn picture_resource(
-        &self,
-    ) -> Result<vk::VideoPictureResourceInfoKHR<'static>, TaskError> {
+    pub(super) fn key(&self) -> SubresourceKey {
+        SubresourceKey::ImageLayer {
+            image: self.image.image,
+            layer: self.layer,
+        }
+    }
+}
+
+impl Picture {
+    pub(super) fn picture_resource(&self) -> vk::VideoPictureResourceInfoKHR<'static> {
         todo!()
+    }
+}
+
+impl From<Picture> for ImageLayer {
+    fn from(picture: Picture) -> Self {
+        picture.layer
     }
 }
 
@@ -89,7 +99,7 @@ pub(crate) struct BufferRange {
 
 impl BufferRange {
     pub(super) fn key(&self) -> SubresourceKey {
-        todo!()
+        SubresourceKey::Buffer(self.buffer.buffer)
     }
 }
 
@@ -107,26 +117,21 @@ impl<T: ResultQueryData> Clone for QueryRef<T> {
 
 impl<T: ResultQueryData> QueryRef<T> {
     pub(super) fn key(&self) -> SubresourceKey {
-        todo!()
-    }
-}
-
-impl<T: ResultQueryData> ResultQuery<T> {
-    pub(crate) fn pool_and_index(&self) -> (vk::QueryPool, u32) {
-        todo!()
+        let (pool, index) = self.query.pool_and_index();
+        SubresourceKey::Query { pool, index }
     }
 }
 
 impl Image {
-    pub(crate) fn layer(self: &Arc<Self>, layer: u32) -> ImageRange {
+    pub(crate) fn layer(self: &Arc<Self>, layer: u32) -> ImageLayer {
         todo!()
     }
 
-    pub(crate) fn layers(self: &Arc<Self>, layers: Range<u32>) -> ImageRange {
+    pub(crate) fn layers(self: &Arc<Self>, layers: Range<u32>) -> ImageLayer {
         todo!()
     }
 
-    pub(crate) fn all_layers(self: &Arc<Self>) -> ImageRange {
+    pub(crate) fn all_layers(self: &Arc<Self>) -> ImageLayer {
         todo!()
     }
 
@@ -170,7 +175,7 @@ impl EncodeOutputBuffer {
 }
 
 impl EncodeInputImage {
-    pub(crate) fn layer(self: &Arc<Self>, layer: u32) -> ImageRange {
+    pub(crate) fn layer(self: &Arc<Self>, layer: u32) -> ImageLayer {
         todo!()
     }
 
@@ -180,21 +185,21 @@ impl EncodeInputImage {
 }
 
 impl CodingImageBundle<'_> {
-    pub(crate) fn slot(&self, i: u32) -> ImageRange {
+    pub(crate) fn slot(&self, i: u32) -> Picture {
         todo!()
     }
 
-    pub(crate) fn slots(&self) -> impl Iterator<Item = ImageRange> + '_ {
+    pub(crate) fn slots(&self) -> impl Iterator<Item = Picture> + '_ {
         (0..self.video_resource_info.len() as u32).map(|i| self.slot(i))
     }
 }
 
 impl DecodedPicturesBuffer<'_> {
-    pub(crate) fn slot(&self, i: u32) -> ImageRange {
+    pub(crate) fn slot(&self, i: u32) -> Picture {
         todo!()
     }
 
-    pub(crate) fn slots(&self) -> impl Iterator<Item = ImageRange> + '_ {
+    pub(crate) fn slots(&self) -> impl Iterator<Item = Picture> + '_ {
         self.image.slots()
     }
 }

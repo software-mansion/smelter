@@ -23,6 +23,7 @@ impl Snapshot {
     }
 }
 
+// TODO: change the name
 pub(super) struct DerivedStep {
     pub(super) image_barriers: Vec<vk::ImageMemoryBarrier2<'static>>,
     pub(super) host_read_barriers: Vec<vk::BufferMemoryBarrier2<'static>>,

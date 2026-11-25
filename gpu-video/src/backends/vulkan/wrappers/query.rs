@@ -70,6 +70,10 @@ impl<T: ResultQueryData> ResultQuery<T> {
         self.pool.end_query(buffer, self.query_index);
     }
 
+    pub(crate) fn pool_and_index(&self) -> (vk::QueryPool, u32) {
+        (self.pool.pool, self.query_index)
+    }
+
     pub(crate) fn get_result_blocking(&self) -> Result<T, VulkanCommonError> {
         let mut result = T::default();
         unsafe {
