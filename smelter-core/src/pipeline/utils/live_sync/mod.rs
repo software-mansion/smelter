@@ -16,7 +16,7 @@
 //! one track's encode latency.
 //!
 //! Shared timeline:
-//! - Both tracks apply one anchor, sized from an estimate over all chunks.
+//! - Both tracks apply one anchor, sized from the combined estimate of both tracks.
 //! - Chunks are released in a common pts order, so a slew moves both tracks the same way.
 //!
 //! Unrelated timelines:
@@ -50,8 +50,8 @@
 //!   is taken at face value. Forward, the output freezes for the length of the jump and the extra
 //!   buffer is slewed away only if it exceeds the maximum. Backward, chunks are late until the
 //!   stale estimate resets the track.
-//! - Old content delivered while the upper bound is stable (e.g. a backlog flushed by a track
-//!   that joins late) counts as slow delivery and inflates the spread until it leaves the window.
+//! - Old content delivered while the upper bound of its track is stable (e.g. a backlog flushed
+//!   after a stall) counts as slow delivery and inflates the spread until it leaves the window.
 //! - Live edges are estimated from pts, so with unrelated timelines the offset between the tracks
 //!   is biased by the video reorder depth (B-frames).
 //!
@@ -72,7 +72,9 @@ mod state;
 mod stats;
 mod track;
 
-pub(crate) use buffer::{BufferingStrategy, ChunkBuffer, FifoBuffer, LiveSyncBuffer};
+pub(crate) use buffer::{
+    BufferingStrategy, ChunkBuffer, FifoBuffer, LiveSyncBuffer, TrackPriority,
+};
 pub(crate) use track::{LiveSyncDeadline, LiveSyncTrack};
 
 use crate::pipeline::utils::input_sync::{BoxedTrackSink, InputSyncStatsSender, TrackKind};
@@ -81,6 +83,8 @@ use state::SharedState;
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LiveSyncOptions {
     pub buffering_strategy: BufferingStrategy,
+    /// Track whose latency the shared buffer protects, see [`TrackPriority`].
+    pub track_priority: TrackPriority,
     /// How long the live edge estimates have to stay stable before starting.
     pub stabilization_period: Duration,
     /// Estimate improvements smaller than this (delivery jitter) do not reset
