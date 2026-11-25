@@ -32,7 +32,10 @@ use crate::{
         VideoEncoderBackend, VideoEncoderParametersInfoH264, VideoEncoderParametersInfoH265,
     },
     in_flight_tracker::{InFlightTracker, SubmissionToken},
-    parameters::{EncoderPreset, EncoderUsage, ProfileH264, ProfileH265, RateControl},
+    parameters::{
+        EncoderPreset, EncoderUsage, OutputBytestreamFormatH264, OutputBytestreamFormatH265,
+        ProfileH264, ProfileH265, RateControl,
+    },
 };
 
 #[cfg(metal_interop)]
@@ -47,6 +50,7 @@ const ANNEX_B_START_CODE: [u8; 4] = [0, 0, 0, 1];
 
 pub(crate) trait EncodeCodec: Send + 'static {
     type Profile: Copy + std::fmt::Debug + Send;
+    type OutputBytestreamFormat: Copy + std::fmt::Debug + Send;
 
     /// parsed out of the session's current `CMFormatDescription`
     type StreamParameters: Send;
@@ -75,6 +79,7 @@ pub(crate) struct ParameterSetInfo {
 
 pub(crate) trait H26xCodec: Send + 'static {
     type Profile: Copy + std::fmt::Debug + Send;
+    type OutputBytestreamFormat: Copy + std::fmt::Debug + Send;
     type ParameterSetKind: Copy + PartialEq + Send + std::fmt::Display;
 
     const CODEC_TYPE: cm::CMVideoCodecType;
@@ -95,6 +100,7 @@ pub(crate) trait H26xCodec: Send + 'static {
 
 impl<C: H26xCodec> EncodeCodec for C {
     type Profile = C::Profile;
+    type OutputBytestreamFormat = C::OutputBytestreamFormat;
     type StreamParameters = H26xStreamParameters<C::ParameterSetKind>;
 
     const CODEC_TYPE: cm::CMVideoCodecType = C::CODEC_TYPE;
@@ -222,6 +228,7 @@ pub(crate) struct H264Codec;
 
 impl H26xCodec for H264Codec {
     type Profile = ProfileH264;
+    type OutputBytestreamFormat = OutputBytestreamFormatH264;
     type ParameterSetKind = ParameterSetH264;
 
     const CODEC_TYPE: cm::CMVideoCodecType = cm::kCMVideoCodecType_H264;
@@ -269,6 +276,7 @@ pub(crate) struct H265Codec;
 
 impl H26xCodec for H265Codec {
     type Profile = ProfileH265;
+    type OutputBytestreamFormat = OutputBytestreamFormatH265;
     type ParameterSetKind = ParameterSetH265;
 
     const CODEC_TYPE: cm::CMVideoCodecType = cm::kCMVideoCodecType_HEVC;
@@ -379,7 +387,7 @@ pub(crate) struct VTEncoder<C: EncodeCodec> {
     picture_byte_size: usize,
     max_in_flight_submissions: u32,
     input_parameters: VideoParameters,
-    output_parameters: EncoderOutputParameters<C::Profile>,
+    output_parameters: EncoderOutputParameters<C::Profile, C::OutputBytestreamFormat>,
     in_flight: InFlightTracker,
     output_state: Arc<Mutex<OutputState<C>>>,
     encode_failed: Arc<AtomicBool>,
@@ -470,7 +478,7 @@ struct OutputState<C: EncodeCodec> {
 impl<C: EncodeCodec> VTEncoder<C> {
     pub(crate) fn new(
         input_parameters: VideoParameters,
-        output_parameters: EncoderOutputParameters<C::Profile>,
+        output_parameters: EncoderOutputParameters<C::Profile, C::OutputBytestreamFormat>,
         max_in_flight_submissions: u32,
         on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<Self, VideoEncoderError> {
@@ -486,7 +494,7 @@ impl<C: EncodeCodec> VTEncoder<C> {
     #[cfg(metal_interop)]
     pub(crate) fn new_metal(
         input_parameters: VideoParameters,
-        output_parameters: EncoderOutputParameters<C::Profile>,
+        output_parameters: EncoderOutputParameters<C::Profile, C::OutputBytestreamFormat>,
         max_in_flight_submissions: u32,
         device: &ProtocolObject<dyn mtl::MTLDevice>,
         on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
@@ -512,7 +520,7 @@ impl<C: EncodeCodec> VTEncoder<C> {
 
     fn create(
         input_parameters: VideoParameters,
-        output_parameters: EncoderOutputParameters<C::Profile>,
+        output_parameters: EncoderOutputParameters<C::Profile, C::OutputBytestreamFormat>,
         max_in_flight_submissions: u32,
         metal_compatible_input: bool,
         on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
@@ -571,7 +579,7 @@ impl<C: EncodeCodec> VTEncoder<C> {
 
     fn build_session(
         input_parameters: VideoParameters,
-        output_parameters: &EncoderOutputParameters<C::Profile>,
+        output_parameters: &EncoderOutputParameters<C::Profile, C::OutputBytestreamFormat>,
         metal_compatible_input: bool,
     ) -> Result<Session, VTEncoderError> {
         let width = dimension_to_i32(input_parameters.width.get(), "input_parameters.width")?;
@@ -1291,7 +1299,7 @@ impl<C: EncodeCodec> StreamFormat<C> {
 fn configure_session<C: EncodeCodec>(
     session: &vt::VTCompressionSession,
     input_parameters: VideoParameters,
-    output_parameters: &EncoderOutputParameters<C::Profile>,
+    output_parameters: &EncoderOutputParameters<C::Profile, C::OutputBytestreamFormat>,
     apply_preset_base: bool,
 ) -> Result<(), VTEncoderError> {
     // the explicit sets below override it
@@ -1364,11 +1372,11 @@ fn configure_session<C: EncodeCodec>(
     Ok(())
 }
 
-fn configure_rate_control<P>(
+fn configure_rate_control<P, F>(
     session: &vt::VTCompressionSession,
     set_required: &impl Fn(&'static str, &cf::CFString, &cf::CFType) -> Result<(), VTEncoderError>,
     set_optional: &impl Fn(&'static str, &cf::CFString, &cf::CFType),
-    output_parameters: &EncoderOutputParameters<P>,
+    output_parameters: &EncoderOutputParameters<P, F>,
 ) -> Result<(), VTEncoderError> {
     match output_parameters.rate_control {
         RateControl::EncoderDefault => {}

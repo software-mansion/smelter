@@ -13,9 +13,11 @@ use crate::{
     backends::vulkan::vulkan_device::caps::{
         NativeEncodeProfileCapabilities, NativeEncodeQualityLevelProperties,
     },
-    backends::vulkan::vulkan_encoder::{FullEncoderParameters, VulkanEncoderError},
+    backends::vulkan::vulkan_encoder::{
+        EncodedBytestreamFormat, FullEncoderParameters, VulkanEncoderError,
+    },
     backends::vulkan::wrappers::ProfileInfo,
-    parameters::RateControl,
+    parameters::{OutputBytestreamFormatH264, RateControl},
 };
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -320,6 +322,8 @@ impl EncodeCodec for H264Codec {
         ]
     }
 
+    type OutputBytestreamFormat = OutputBytestreamFormatH264;
+
     fn resolve_idr_period<'a>(
         quality_level_properties: &Self::CodecSpecificEncodeQualityLevelProperties<'a>,
         user_provided: Option<NonZeroU32>,
@@ -358,5 +362,14 @@ fn primary_pic_type(is_idr: bool) -> vk::native::StdVideoH264PictureType {
         vk::native::StdVideoH264PictureType_STD_VIDEO_H264_PICTURE_TYPE_IDR
     } else {
         vk::native::StdVideoH264PictureType_STD_VIDEO_H264_PICTURE_TYPE_P
+    }
+}
+
+impl From<OutputBytestreamFormatH264> for EncodedBytestreamFormat {
+    fn from(format: OutputBytestreamFormatH264) -> Self {
+        match format {
+            OutputBytestreamFormatH264::AnnexB => Self::AnnexB,
+            OutputBytestreamFormatH264::Avcc => Self::LengthPrefixed,
+        }
     }
 }

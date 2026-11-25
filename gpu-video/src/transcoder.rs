@@ -2,8 +2,11 @@ use std::num::NonZeroU32;
 
 use crate::{
     EncodedInputChunk, EncodedOutputChunk, VideoBackendError, VideoDecoderError, VideoEncoderError,
-    device::{EncoderOutputParameters, Rational},
-    parameters::{InputBytestreamFormatH264, ProfileH264, ProfileH265, ScalingAlgorithm},
+    device::Rational,
+    parameters::{
+        EncoderOutputParametersH264, EncoderOutputParametersH265, InputBytestreamFormatH264,
+        ScalingAlgorithm,
+    },
 };
 
 pub struct VideoTranscoder {
@@ -44,8 +47,8 @@ pub struct TranscodedChunk {
 
 #[derive(Debug, Clone, Copy)]
 pub enum AnyEncoderParameters {
-    H264(EncoderOutputParameters<ProfileH264>),
-    H265(EncoderOutputParameters<ProfileH265>),
+    H264(EncoderOutputParametersH264),
+    H265(EncoderOutputParametersH265),
 }
 
 /// Configuration for a transcoder

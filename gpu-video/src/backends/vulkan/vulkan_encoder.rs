@@ -30,7 +30,7 @@ use crate::{
     },
     device::{ColorRange, ColorSpace, Rational},
     encoders::{VideoEncoderError, VideoEncoderParametersInfoH264, VideoEncoderParametersInfoH265},
-    parameters::{OutputBytestreamFormatH264, RateControl},
+    parameters::RateControl,
     parser::h264::to_avcc,
 };
 
@@ -296,7 +296,7 @@ pub(crate) struct EncodeSubmission {
     pub(crate) wait_value: SemaphoreWaitValue,
     pub(crate) pts: Option<u64>,
     prepended_stream_params: Vec<u8>,
-    bytestream_format: OutputBytestreamFormatH264,
+    bytestream_format: EncodedBytestreamFormat,
     query: ResultQuery<EncodeFeedback>,
     output_buffer: Option<EncodeOutputBuffer>,
     _in_flight_resources: InFlightEncodeResources,
@@ -325,8 +325,8 @@ impl EncodeSubmission {
             )?
         };
 
-        if self.bytestream_format == OutputBytestreamFormatH264::Avcc {
-            annexb_nalu_to_avcc(&mut encoded);
+        if self.bytestream_format == EncodedBytestreamFormat::LengthPrefixed {
+            annexb_nalu_to_length_prefixed(&mut encoded);
         }
 
         let mut stream_params = std::mem::take(&mut self.prepended_stream_params);
@@ -345,7 +345,13 @@ impl EncodeSubmission {
     }
 }
 
-fn annexb_nalu_to_avcc(nalu: &mut Vec<u8>) {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum EncodedBytestreamFormat {
+    AnnexB,
+    LengthPrefixed,
+}
+
+fn annexb_nalu_to_length_prefixed(nalu: &mut Vec<u8>) {
     if nalu.starts_with(&[0, 0, 1]) {
         nalu.insert(0, 0);
     }
@@ -369,7 +375,7 @@ pub(crate) struct FullEncoderParameters<C: EncodeCodec> {
     pub(crate) color_space: ColorSpace,
     pub(crate) color_range: ColorRange,
     pub(crate) max_in_flight_submissions: u32,
-    pub(crate) bytestream_format: OutputBytestreamFormatH264,
+    pub(crate) bytestream_format: EncodedBytestreamFormat,
 }
 
 impl<C: EncodeCodec> From<&FullEncoderParameters<C>> for vk::VideoEncodeUsageInfoKHR<'_> {
@@ -394,7 +400,7 @@ pub(crate) struct VulkanEncoder<'a, C: EncodeCodec> {
     active_reference_slots: VecDeque<(usize, C::ReferenceInfo)>,
     rate_control: RateControl,
     inline_stream_params: bool,
-    bytestream_format: OutputBytestreamFormatH264,
+    bytestream_format: EncodedBytestreamFormat,
     encoding_device: Arc<EncodingDevice>,
 }
 
@@ -755,20 +761,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         self.idr_period_counter %= self.idr_period;
 
         let prepended_stream_params = if is_idr && self.inline_stream_params {
-            match self.bytestream_format {
-                OutputBytestreamFormatH264::AnnexB => {
-                    self.stream_parameters(C::codec_write_parameters_info_all())?
-                }
-                OutputBytestreamFormatH264::Avcc => {
-                    let mut stream_params = Vec::new();
-                    for info in C::codec_write_parameters_info_each() {
-                        let mut nalu = self.stream_parameters(info)?;
-                        annexb_nalu_to_avcc(&mut nalu);
-                        stream_params.append(&mut nalu);
-                    }
-                    stream_params
-                }
-            }
+            self.inline_stream_parameters()?
         } else {
             Vec::new()
         };
@@ -889,6 +882,23 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         }
 
         self.session_resources.rate_control = rate_control;
+    }
+
+    fn inline_stream_parameters(&self) -> Result<Vec<u8>, VulkanEncoderError> {
+        match self.bytestream_format {
+            EncodedBytestreamFormat::AnnexB => {
+                self.stream_parameters(C::codec_write_parameters_info_all())
+            }
+            EncodedBytestreamFormat::LengthPrefixed => {
+                let mut stream_params = Vec::new();
+                for info in C::codec_write_parameters_info_each() {
+                    let mut nalu = self.stream_parameters(info)?;
+                    annexb_nalu_to_length_prefixed(&mut nalu);
+                    stream_params.append(&mut nalu);
+                }
+                Ok(stream_params)
+            }
+        }
     }
 
     pub fn stream_parameters(

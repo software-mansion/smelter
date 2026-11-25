@@ -2,7 +2,9 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use crate::capabilities::{DecodeCapabilities, EncodeCapabilities};
-use crate::parameters::{EncoderPreset, EncoderUsage, ProfileH264, ProfileH265, RateControl};
+use crate::parameters::{
+    EncoderPreset, EncoderUsage, OutputBytestreamFormatH265, ProfileH264, ProfileH265, RateControl,
+};
 use crate::parser::h264::{InputBytestreamFormatH264, OutputBytestreamFormatH264};
 use crate::{
     BytesDecoderH264, BytesEncoderH264, BytesEncoderH265, EncodedOutputChunk, OutputFrame,
@@ -199,7 +201,7 @@ impl From<ColorSpace> for CodecColorDescription {
 
 /// Parameters that describe an encoded output.
 #[derive(Debug, Clone, Copy)]
-pub struct EncoderOutputParameters<P> {
+pub struct EncoderOutputParameters<P, F> {
     /// Number of frames between IDRs. If [`None`], this will be set to an encoder preferred value,
     /// or, if the encoder doesn't provide a preferred value, to 30.
     pub idr_period: Option<NonZeroU32>,
@@ -226,18 +228,17 @@ pub struct EncoderOutputParameters<P> {
     /// Color range of the encoded output.
     /// If [`None`], defaults to [`ColorRange::Limited`].
     pub color_range: Option<ColorRange>,
-    /// Format of the encoded bytestream.
-    /// With [`OutputBytestreamFormatH264::Avcc`], every NAL unit (including inlined parameter
-    /// sets) is prefixed with its length as a 4-byte big-endian integer instead of a start code.
-    /// If [`None`], defaults to [`OutputBytestreamFormatH264::AnnexB`].
-    pub bytestream_format: Option<OutputBytestreamFormatH264>,
+    /// Format of the encoded bytestream, see [`OutputBytestreamFormatH264`] and
+    /// [`OutputBytestreamFormatH265`]. Applies to inlined parameter sets as well.
+    /// If [`None`], defaults to Annex B.
+    pub bytestream_format: Option<F>,
 }
 
 /// Parameters for H.264 encoder creation
 #[derive(Debug, Clone, Copy)]
 pub struct EncoderParametersH264 {
     pub input_parameters: VideoParameters,
-    pub output_parameters: EncoderOutputParameters<ProfileH264>,
+    pub output_parameters: EncoderOutputParameters<ProfileH264, OutputBytestreamFormatH264>,
     /// Maximum number of encode submissions that can be in flight. When the limit is reached,
     /// encoding blocks until the oldest submission finishes.
     /// If [`None`], defaults to 3.
@@ -248,7 +249,7 @@ pub struct EncoderParametersH264 {
 #[derive(Debug, Clone, Copy)]
 pub struct EncoderParametersH265 {
     pub input_parameters: VideoParameters,
-    pub output_parameters: EncoderOutputParameters<ProfileH265>,
+    pub output_parameters: EncoderOutputParameters<ProfileH265, OutputBytestreamFormatH265>,
     /// Maximum number of encode submissions that can be in flight. When the limit is reached,
     /// encoding blocks until the oldest submission finishes.
     /// If [`None`], defaults to 3.

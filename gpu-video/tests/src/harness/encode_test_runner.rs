@@ -92,10 +92,10 @@ impl EncoderOptions {
         }
     }
 
-    fn output_parameters<P>(
+    fn output_parameters<P, F>(
         &self,
-        parameters: EncoderOutputParameters<P>,
-    ) -> EncoderOutputParameters<P> {
+        parameters: EncoderOutputParameters<P, F>,
+    ) -> EncoderOutputParameters<P, F> {
         EncoderOutputParameters {
             preset: self.preset,
             idr_period: self.idr_period,

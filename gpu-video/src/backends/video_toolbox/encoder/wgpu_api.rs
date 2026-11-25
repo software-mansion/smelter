@@ -51,7 +51,7 @@ impl<C: EncodeCodec> VTEncoder<C> {
     pub(crate) fn new_wgpu(
         wgpu_device: &wgpu::Device,
         input_parameters: VideoParameters,
-        output_parameters: EncoderOutputParameters<C::Profile>,
+        output_parameters: EncoderOutputParameters<C::Profile, C::OutputBytestreamFormat>,
         max_in_flight_submissions: u32,
         on_chunk_callback: Box<dyn FnMut(EncodedOutputChunk<Vec<u8>>) + Send>,
     ) -> Result<Self, VTEncoderError> {

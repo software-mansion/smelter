@@ -10,7 +10,10 @@ pub mod parameters {
         AvccPrefixLength, InputBytestreamFormatH264, OutputBytestreamFormatH264,
     };
 
-    pub type EncoderOutputParametersH264 = crate::device::EncoderOutputParameters<ProfileH264>;
+    pub type EncoderOutputParametersH264 =
+        crate::device::EncoderOutputParameters<ProfileH264, OutputBytestreamFormatH264>;
+    pub type EncoderOutputParametersH265 =
+        crate::device::EncoderOutputParameters<ProfileH265, OutputBytestreamFormatH265>;
 
     #[cfg(feature = "transcoder")]
     pub use crate::transcoder::{
@@ -108,6 +111,17 @@ pub mod parameters {
     pub enum ProfileH265 {
         Main,
     }
+
+    /// Format of the H.265 bytestream produced by the encoder
+    #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum OutputBytestreamFormatH265 {
+        /// Each NAL unit is prefixed with a start code (`0x000001` or `0x00000001`)
+        #[default]
+        AnnexB,
+
+        /// Each NAL unit is prefixed with its length as a 4-byte big-endian integer.
+        Hvcc,
+    }
 }
 
 #[cfg(feature = "wgpu")]
@@ -120,7 +134,7 @@ use crate::device::{
     ColorRange, ColorSpace, DecoderParameters, EncoderOutputParameters, EncoderParametersH264,
     EncoderParametersH265, VideoDeviceBackend,
 };
-use crate::parameters::{ProfileH264, ProfileH265, RateControl};
+use crate::parameters::{EncoderOutputParametersH264, EncoderOutputParametersH265, RateControl};
 use crate::parser::h264::AccessUnit;
 use std::sync::Arc;
 
@@ -355,7 +369,7 @@ impl VideoDevice {
     pub fn encoder_output_parameters_h265_low_latency(
         &self,
         rate_control: RateControl,
-    ) -> Result<EncoderOutputParameters<ProfileH265>, VideoEncoderError> {
+    ) -> Result<EncoderOutputParametersH265, VideoEncoderError> {
         let Some(caps) = self.encode_capabilities().h265 else {
             return Err(VideoEncoderError::EncoderUnsupported);
         };
@@ -370,7 +384,7 @@ impl VideoDevice {
     pub fn encoder_output_parameters_h264_low_latency(
         &self,
         rate_control: RateControl,
-    ) -> Result<EncoderOutputParameters<ProfileH264>, VideoEncoderError> {
+    ) -> Result<EncoderOutputParametersH264, VideoEncoderError> {
         let Some(caps) = self.encode_capabilities().h264 else {
             return Err(VideoEncoderError::EncoderUnsupported);
         };
@@ -385,7 +399,7 @@ impl VideoDevice {
     pub fn encoder_output_parameters_h265_high_quality(
         &self,
         rate_control: RateControl,
-    ) -> Result<EncoderOutputParameters<ProfileH265>, VideoEncoderError> {
+    ) -> Result<EncoderOutputParametersH265, VideoEncoderError> {
         let Some(caps) = self.encode_capabilities().h265 else {
             return Err(VideoEncoderError::EncoderUnsupported);
         };
@@ -400,7 +414,7 @@ impl VideoDevice {
     pub fn encoder_output_parameters_h264_high_quality(
         &self,
         rate_control: RateControl,
-    ) -> Result<EncoderOutputParameters<ProfileH264>, VideoEncoderError> {
+    ) -> Result<EncoderOutputParametersH264, VideoEncoderError> {
         let Some(caps) = self.encode_capabilities().h264 else {
             return Err(VideoEncoderError::EncoderUnsupported);
         };
@@ -412,10 +426,10 @@ impl VideoDevice {
         ))
     }
 
-    pub fn encoder_output_parameters_low_latency<P>(
+    pub fn encoder_output_parameters_low_latency<P, F>(
         profile: P,
         rate_control: RateControl,
-    ) -> EncoderOutputParameters<P> {
+    ) -> EncoderOutputParameters<P, F> {
         EncoderOutputParameters {
             profile,
             idr_period: None,
@@ -430,10 +444,10 @@ impl VideoDevice {
         }
     }
 
-    pub fn encoder_output_parameters_high_quality<P>(
+    pub fn encoder_output_parameters_high_quality<P, F>(
         profile: P,
         rate_control: RateControl,
-    ) -> EncoderOutputParameters<P> {
+    ) -> EncoderOutputParameters<P, F> {
         EncoderOutputParameters {
             profile,
             idr_period: None,

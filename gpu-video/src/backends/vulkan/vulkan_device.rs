@@ -373,7 +373,7 @@ impl VulkanDevice {
     pub(crate) fn validate_and_fill_encoder_parameters<C: EncodeCodec>(
         &self,
         input_parameters: VideoParameters,
-        output_parameters: EncoderOutputParameters<C::Profile>,
+        output_parameters: EncoderOutputParameters<C::Profile, C::OutputBytestreamFormat>,
         max_in_flight_submissions: Option<u32>,
     ) -> Result<FullEncoderParameters<C>, VulkanEncoderError> {
         let Some(caps) = self.native_encode_capabilities() else {
@@ -491,7 +491,10 @@ impl VulkanDevice {
             color_space,
             color_range,
             max_in_flight_submissions: max_in_flight_submissions.unwrap_or(3),
-            bytestream_format: output_parameters.bytestream_format.unwrap_or_default(),
+            bytestream_format: output_parameters
+                .bytestream_format
+                .unwrap_or_default()
+                .into(),
         })
     }
 }

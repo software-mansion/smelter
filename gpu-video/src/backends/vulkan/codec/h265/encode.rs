@@ -3,7 +3,7 @@ use std::num::NonZeroU32;
 use ash::vk;
 
 use crate::{
-    backends::vulkan::vulkan_encoder::VulkanEncoderError,
+    backends::vulkan::vulkan_encoder::{EncodedBytestreamFormat, VulkanEncoderError},
     backends::vulkan::{
         codec::{
             EncodeCodec,
@@ -19,7 +19,7 @@ use crate::{
         },
         wrappers::ProfileInfo,
     },
-    parameters::RateControl,
+    parameters::{OutputBytestreamFormatH265, RateControl},
 };
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -392,6 +392,8 @@ impl EncodeCodec for H265Codec {
         ]
     }
 
+    type OutputBytestreamFormat = OutputBytestreamFormatH265;
+
     fn resolve_idr_period<'a>(
         quality_level_properties: &Self::CodecSpecificEncodeQualityLevelProperties<'a>,
         user_provided: Option<std::num::NonZeroU32>,
@@ -436,4 +438,13 @@ fn pic_type(is_idr: bool) -> u32 {
 pub(crate) struct ReferenceListInfoH265 {
     list_info: vk::native::StdVideoEncodeH265ReferenceListsInfo,
     short_term_ref_pic_set: vk::native::StdVideoH265ShortTermRefPicSet,
+}
+
+impl From<OutputBytestreamFormatH265> for EncodedBytestreamFormat {
+    fn from(format: OutputBytestreamFormatH265) -> Self {
+        match format {
+            OutputBytestreamFormatH265::AnnexB => Self::AnnexB,
+            OutputBytestreamFormatH265::Hvcc => Self::LengthPrefixed,
+        }
+    }
 }

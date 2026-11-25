@@ -8,7 +8,7 @@ use crate::{
         NativeEncodeCapabilities, NativeEncodeProfileCapabilities,
         NativeEncodeQualityLevelProperties,
     },
-    backends::vulkan::vulkan_encoder::FullEncoderParameters,
+    backends::vulkan::vulkan_encoder::{EncodedBytestreamFormat, FullEncoderParameters},
     backends::vulkan::wrappers::ProfileInfo,
     parameters::RateControl,
 };
@@ -104,6 +104,8 @@ pub(crate) trait EncodeCodec: Codec {
     ) -> Self::CodecEncodeSessionParametersGetInfo<'a>;
     fn codec_write_parameters_info_all() -> Self::CodecWriteParametersInfo;
     fn codec_write_parameters_info_each() -> Vec<Self::CodecWriteParametersInfo>;
+
+    type OutputBytestreamFormat: Default + Into<EncodedBytestreamFormat>;
 
     fn resolve_idr_period<'a>(
         quality_level_properties: &Self::CodecSpecificEncodeQualityLevelProperties<'a>,
