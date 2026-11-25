@@ -44,25 +44,31 @@ pub(super) struct MoqChunk {
 
 impl InputSyncItem for MoqChunk {
     fn pts(&self) -> Timestamp {
-        self.chunk.pts()
+        self.chunk.pts
     }
 
     fn size(&self) -> usize {
-        self.chunk.size()
+        self.chunk.data.len()
+    }
+
+    /// A group starts with a keyframe.
+    fn is_keyframe(&self) -> bool {
+        self.index == 0 || matches!(self.chunk.kind, MediaKind::Audio(_))
     }
 
     fn apply_anchor(&mut self, anchor: TimestampOffset) {
-        self.chunk.apply_anchor(anchor);
+        self.chunk.pts = anchor.to_output_pts(self.chunk.pts);
+        self.chunk.dts = self.chunk.dts.map(|dts| anchor.to_output_pts(dts));
     }
 
     fn mark_decode_only(&mut self) {
-        self.chunk.mark_decode_only();
+        self.chunk.decode_only = true;
     }
 }
 
 /// Orders frames by group and index. Frames of a group arrive in order, so the only gaps are a
-/// group that is still being delivered and a group that has not arrived at all. `try_read` holds
-/// the next group back behind both; `read` gives up on the missing frames.
+/// group that is still being delivered and a group that has not arrived at all. `pop` gives up
+/// on the missing frames: what arrives later from before the frame it returned is dropped.
 #[derive(Default)]
 pub(super) struct MoqJitterBuffer {
     chunks: BTreeMap<(u64, u32), MoqChunk>,
@@ -95,16 +101,6 @@ impl MoqJitterBuffer {
             (_, None) => false,
         }
     }
-
-    fn pop_first(&mut self) -> Option<MoqChunk> {
-        let (_, chunk) = self.chunks.pop_first()?;
-        self.last_released = Some(Position {
-            group: chunk.group,
-            index: chunk.index,
-            group_info: chunk.group_info.clone(),
-        });
-        Some(chunk)
-    }
 }
 
 impl LiveSyncBuffer for MoqJitterBuffer {
@@ -123,19 +119,18 @@ impl LiveSyncBuffer for MoqJitterBuffer {
         self.chunks.insert(position, chunk);
     }
 
-    fn read(&mut self) -> Option<MoqChunk> {
-        self.pop_first()
+    fn pop(&mut self) -> Option<MoqChunk> {
+        let (_, chunk) = self.chunks.pop_first()?;
+        self.last_released = Some(Position {
+            group: chunk.group,
+            index: chunk.index,
+            group_info: chunk.group_info.clone(),
+        });
+        Some(chunk)
     }
 
-    fn try_read(&mut self) -> Option<MoqChunk> {
-        match self.next_is_continuation() {
-            true => self.pop_first(),
-            false => None,
-        }
-    }
-
-    fn peek_next_pts(&self) -> Option<Timestamp> {
-        self.chunks.values().next().map(|chunk| chunk.pts())
+    fn iter(&self) -> impl Iterator<Item = &MoqChunk> {
+        self.chunks.values()
     }
 
     fn stats(&self) -> LiveSyncBufferStats {

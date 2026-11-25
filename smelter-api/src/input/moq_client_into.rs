@@ -30,6 +30,27 @@ impl TryFrom<MoqClientInput> for core::RegisterInputOptions {
             })
             .transpose()?;
 
+        let (buffer, max_policy) = match buffer {
+            Some(MoqInputBuffer::DesiredMs(desired_ms)) => {
+                (Some(InputBuffer::DesiredMs(desired_ms)), None)
+            }
+            Some(MoqInputBuffer::Options(options)) => {
+                let MoqInputBufferOptions {
+                    desired_ms,
+                    min_ms,
+                    max_ms,
+                    max_policy,
+                } = options;
+                let options = InputBufferOptions {
+                    desired_ms,
+                    min_ms,
+                    max_ms,
+                };
+                (Some(InputBuffer::Options(options)), max_policy)
+            }
+            None => (None, None),
+        };
+
         let input_options = core::MoqClientInputOptions {
             endpoint_url,
             broadcast_path,
@@ -44,6 +65,7 @@ impl TryFrom<MoqClientInput> for core::RegisterInputOptions {
                 .map(TryInto::try_into)
                 .transpose()?
                 .unwrap_or_default(),
+            buffer_max_policy: max_policy.unwrap_or(InputBufferMaxPolicy::Enforce).into(),
         };
 
         Ok(core::RegisterInputOptions::MoqClient(input_options))

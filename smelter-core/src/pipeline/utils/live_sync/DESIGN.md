@@ -11,6 +11,10 @@ Revised on 2026-11-25 after a review by another session. The review is section 1
 Sections 16 and 17 were added on 2026-11-25 by the session that prepares the implementation:
 what has to be settled before the rules can be written in Rust, and the plan for writing them.
 
+Section 18 was added on 2026-11-25 after the implementation: where the code differs from
+sections 4, 5, 16 and 17, and what was checked. Where it differs, section 18 is what the code
+does.
+
 1. The idea
 2. Model: what is measured, what is controlled, the band
 3. Structure: four stages
@@ -28,6 +32,7 @@ what has to be settled before the rules can be written in Rust, and the plan for
 15. Where the review findings went
 16. Before the implementation: contradictions and vague rules
 17. Implementation plan: what stays, the layout, the order of work
+18. As implemented: what differs, what was checked
 
 ## 1. The idea
 
@@ -1630,3 +1635,117 @@ modules until step 5), and the current live sync runs unchanged until then.
    changelog.
 
 Steps 6 and 7 do not depend on each other. Step 8 does not depend on 6 or 7.
+
+## 18. As implemented: what differs, what was checked
+
+The eight steps of 17.3 were written as one change in the working tree. The layout is the one
+of 17.2.
+
+### 18.1 Where the code differs from the text
+
+1. **DC5 (16.3, item 3) holds as written, with three additions** (`timeline.rs`,
+   `release.rs`).
+   - Content more than 5s behind the frontier does not continue what was released: it is a
+     pts jump to earlier that was not stitched (MoQ). It reads the newest `T`, and when it is
+     released the function starts over from there, with the frontier at its pts. Without
+     this a slew would never progress after such a jump.
+   - After a jump, a track handles content that maps before the newest presentation time it
+     has released as late (16.2, item 2). This is one value per track, set at every jump of
+     its timeline.
+   - "Kept" of RL4 holds only for content after the frontier. A re-anchor can't change the
+     `T` of content at or before it, so keeping it would block the track.
+2. **A slew moves `T` per second of content** (DC5). The script moves it per second of wall
+   time, so the code slews up to 4% slower to later and faster to earlier.
+3. **ST3 has one more condition.** For a jump to earlier, the chunk of the other track pairs
+   only when its own pts step is negative. A burst after a stall also gives a negative `J`,
+   and it would pair with a small jump to earlier.
+4. **RL4 before DC1.** Nothing is released and nothing is dropped as late before DC1; only
+   the capacity (RL5) drops. What is late at DC1 is handled then.
+5. **RL5.** The capacity is the distance between the pts of the chunk that is written and
+   the pts at the front of the buffer.
+6. **TR6** (`state.rs`).
+   - Two timelines at most: the one of the input, and one for video while the tracks are
+     apart. Apart is 5s between the edges, together again is under 3s.
+   - Taken apart: video gets a copy of the timeline. A track that starts to count while the
+     other one plays far from it starts on its own edge; when that track is audio, video
+     keeps the timeline it has and audio gets the one of the input.
+   - Joined: within 2ms the timelines are one again. Otherwise video slews when it is at
+     most `max_slew` away and playing, and jumps when not.
+   - When audio is removed, the timeline of video becomes the one of the input.
+   - The hint turned on while the tracks are apart: video jumps to the timeline of audio.
+7. **Stats (5.4; 16.2, item 5).** Per track, in seconds, under the names below. The naming
+   is uniform (the user, 2026-11-25): the public names use the words of this document and of
+   the code, "re-anchor", "jump" and "slew". The descriptions of the fields say what a
+   re-anchor is.
+   - `state`: `waiting_for_start`, `playing`, `interrupted`, `reanchoring`. It is the state
+     of the track: a track that ran out of content is interrupted while the other one plays.
+   - `buffer_seconds`, `target_buffer_seconds`, `buffer_min_seconds`, `buffer_max_seconds`,
+     `regular_lateness_seconds`: of the timeline the track is on, empty before it starts.
+   - `reanchors`: counts by kind (`jumps`, `slews`) and by reason (`buffer_too_small`,
+     `buffer_too_large`, `content_late`, `interrupted`, `added_latency_taken_back`,
+     `tracks_joined`). The start is not counted.
+   - `chunks_dropped`: chunks, not milliseconds (a chunk has no duration in the interface).
+     It counts late chunks, video chunks that wait for a keyframe after a drop, and drops by
+     the capacity.
+   - `late_chunks_shown`, `interrupted_seconds`.
+   - `discontinuities_detected` stays one counter: a stitched discontinuity and an undone
+     one are the same event for the sink.
+   - Gone: `target_offset_distance_seconds` and the three `live_edge_*` fields.
+8. **Public option (5.1; 16.2, item 3).** `max_policy` is a field of the `buffer` of the MoQ
+   input only (`MoqInputBuffer` in `smelter-api`, `maxPolicy` in the TypeScript SDK), default
+   `enforce`. The descriptions of `desired_ms`, `min_ms` and `max_ms` say what they mean now.
+9. **MoQ input.** The hint comes from `clock` of every catalog snapshot. With extend the
+   reader gives up on a group 120s behind the newest one instead of `max` behind (16.3, item
+   7).
+10. **Removed with the old live sync:** the GOP holding of the HLS sink, `TrackKind::other`,
+    and four methods of `TimestampOffset` that only it used.
+11. **Changelog:** not changed. The MoQ input is not in it yet, and the entry of the `buffer`
+    option still holds.
+
+### 18.2 What was checked
+
+- The workspace compiles with its tests, clippy and rustfmt are clean, the schemas and the
+  TypeScript types are generated and the SDK builds. The tests of the repository were not
+  run.
+- **Stages 1 and 2 against the script.** The 56 scenarios of `design_sim.py` were replayed
+  through `edge.rs`, `lateness.rs`, `measure.rs`, `stitch.rs`, `timeline.rs` and `decide.rs`,
+  with the release model of the script, and the two reports were compared.
+  - The same events with the same numbers in every scenario: start, edge moves, re-anchors
+    and their reasons, played, dropped, interrupted.
+  - What differs: the slew of item 2 (a slew ends up to 4% earlier or later, and what follows
+    it shifts by that), an edge move one 10ms step later where the script compares times as
+    floats, and 0.1s of content in three scenarios where the generator of the script writes
+    one pts twice.
+  - It found one error, fixed: with the first version of item 1 a late chunk at the frontier
+    was kept forever, and nothing played after a long HLS stall (item 1, the last point).
+  - 10500s of stream take 11s to replay, so reading the lateness history (17.2) is cheap.
+- **All stages in real time.** The module as it is in the crate (`LiveSync`, FIFO buffers,
+  fake chunks and sinks), 12 scenarios of 12-45s:
+  - RTMP limits: a start with a burst; a 3s stall after which the content continues; a pts
+    jump of +30s and of -30s on both tracks; a jump on audio only; video only with reordered
+    pts.
+  - MoQ limits (100 / 250 / 500ms): video 0.8s behind audio for 4s with enforce and with
+    extend; without the hint, tracks with unrelated timestamps, and a video track that starts
+    4s after audio on the same timeline.
+  - HLS: 2s segments with limits 1s / 4s / 8s, ended by a flush; the same with the origin
+    stopped for 14s, after which the content continues.
+  - Result: equal pts of the two tracks are presented at the same time in every scenario;
+    both pts jumps are stitched without a gap, with one `Discontinuity` per track in front of
+    the first chunk after the jump; the jump on audio only is undone after 2s of video, and
+    audio then waits in the buffer for its new pts (G6, with an artifact); each stall is one
+    gap and one re-anchor while interrupted, and no content is dropped for it;
+    tracks with unrelated timestamps both play, each on its own timeline; the late video
+    track joins the timeline of audio; with enforce audio has no gap while video is late, and
+    with extend there is one jump of 0.8s; the flush releases everything.
+  - After the HLS stall the buffer is at the lower end of its band (2.76s: `L + lower`) and
+    stays there, where it was 4.4s before the stall. The re-anchor is decided while the edge
+    still is the one from before the stall, so `L` holds the whole stall and the target is
+    `L + lower`. The script does the same (61.4s, then 7.4s after the edge moves, in "source
+    paused for 60s").
+  - It found one error, fixed: a jump replaced `T` for content that the other track had
+    already released (equal pts 0.8s apart, now item 1).
+- Both checks are throwaway programs outside the repository; nothing of them is in the
+  crate (17.2).
+- **Not checked:** real inputs of any protocol, the MoQ jitter buffer under live sync (the
+  run above uses FIFO buffers), the decoders behind the sinks, and the TR6 paths other than
+  the two above (taken apart while playing, joined by a slew or a jump, the hint changing).

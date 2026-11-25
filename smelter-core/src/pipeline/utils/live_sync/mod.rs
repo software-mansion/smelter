@@ -1,62 +1,35 @@
-//! Live-edge synchronization for live inputs (RTMP, HLS, MoQ).
+//! Live synchronization for live inputs (RTMP, HLS, MoQ): decides when each chunk of an input
+//! is presented, so that playback stays a chosen time behind live.
 //!
-//! Live protocols rarely deliver data at a real time rate right after connecting. RTMP clients
-//! can flush a few seconds of pre-buffered chunks, HLS delivers whole segments in batches. Timing
-//! playback by arrival alone would stretch, squash or drop that backlog.
+//! What is measured, per track:
+//! - delivery delay of a chunk: `arrival - pts`. Only differences matter.
+//! - live edge: the delivery delay of the fastest delivery. Content can't arrive before it
+//!   exists, so that is where live is.
+//! - regular lateness: how far above the edge the delivery delay gets regularly (jitter, an HLS
+//!   segment, a stall that keeps coming back). One late chunk or one burst is not regular.
 //!
-//! Chunks written to an input are held back until its live edge has been estimated; that estimate
-//! decides where playback starts, far enough behind the edge to keep the configured buffer.
-//! Estimation continues after the start, so an edge that drifted away is corrected by slewing the
-//! anchor that maps input timestamps onto output ones.
+//! What is controlled: the playback timeline `T`. A chunk is presented at `pts + T`, so the
+//! buffer of the fastest packets is `T - edge`. It starts at `start`, and it is left alone while
+//! the regular slowest packets have at least `lower` and the fastest ones at most `upper`
+//! ([`LiveSyncOptions`]). Outside of that band the timeline is re-anchored to the target, by
+//! a slew when possible and by a jump when content is already being lost or nothing is
+//! playing anyway.
 //!
-//! The tracks of an input do not have to share a timeline, so how they are anchored is an
-//! input-wide `Mode`. Live edges further apart than the split threshold mean unrelated
-//! timelines, closer than the merge threshold a shared one. A shift smaller than the split
-//! threshold is taken at face value, since from timing alone it cannot be told from a change in
-//! one track's encode latency.
+//! Four stages, run on every written chunk and on a periodic tick:
 //!
-//! Shared timeline:
-//! - Both tracks apply one anchor, sized from the combined estimate of both tracks.
-//! - Chunks are released in a common pts order, so a slew moves both tracks the same way.
+//! | stage | file | owns |
+//! |---|---|---|
+//! | 0 stitch | `stitch.rs` | the pts offset that hides pts discontinuities |
+//! | 1 measure | `edge.rs`, `lateness.rs`, `measure.rs` | edge and regular lateness of a track |
+//! | 2 decide | `decide.rs`, `timeline.rs` | the playback timeline |
+//! | 3 release | `release.rs` | the buffer of a track: what is released, kept or dropped |
 //!
-//! Unrelated timelines:
-//! - The leader (audio whenever it runs) has an anchor sized from its own estimate.
-//! - The secondary track is aligned to the leader by an offset taken from the two live edges. The
-//!   offset also covers what the leader still has to slew, so the secondary track goes straight
-//!   to its final position instead of following the leader there.
-//! - The offset slews faster than the leader's anchor. A correction that presents video earlier
-//!   applies at once, one that presents it later waits for a tolerance.
-//! - A track that starts once the timelines have converged joins the leader's anchor right away;
-//!   tracks that converge later are merged by the corrections.
+//! Stage 1 does not know what is being played and stage 2 does not see single chunks, so a
+//! late chunk can't move the timeline directly.
 //!
-//! Going back to waiting for a start:
-//! - On a pts discontinuity only the track that jumped starts over, and it tells its sink. The
-//!   other track keeps playing and leads on its own until the timelines converge again.
-//! - A track that stops delivering for long enough to run out of released content starts over
-//!   too, so it has to earn its place on the shared timeline again.
-//!
-//! Decisions (`start_track_decision`, `correct_mode_decision`) read the state and the state
-//! applies them.
-//!
-//! Known issues:
-//! - If the input stream clock drifts faster than the anchor slew rate (3% when shrinking the
-//!   buffer, 4% when growing it), the correction logic will not keep up. Only drift below that
-//!   rate or an immediate timestamp discontinuity larger than 10s is handled.
-//! - While the tracks count as neither converged nor diverged (the distance between their live
-//!   edges, or between their slowest deliveries, sits between the merge (3s) and the split (5s)
-//!   threshold), the secondary track offset is not re-aligned. If the leader was slewing when the
-//!   re-alignment stopped, the offset keeps what the leader had left to slew at that moment.
-//! - A pts jump below the discontinuity threshold (10s) that is not matched by a gap in arrival
-//!   is taken at face value. Forward, the output freezes for the length of the jump and the extra
-//!   buffer is slewed away only if it exceeds the maximum. Backward, chunks are late until the
-//!   stale estimate resets the track.
-//! - Old content delivered while the upper bound of its track is stable (e.g. a backlog flushed
-//!   after a stall) counts as slow delivery and inflates the spread until it leaves the window.
-//! - Live edges are estimated from pts, so with unrelated timelines the offset between the tracks
-//!   is biased by the video reorder depth (B-frames).
-//!
-//! Live edge detection itself is implemented by `LiveEdgeEstimator`, usable on its own by
-//! inputs with different buffering logic.
+//! The rules are specified in `DESIGN.md` next to this file. Comments refer to them by their
+//! ids (`ED1`, `LT3`, `DC7`, ...). `design_sim.py` is a model of stages 1 and 2 that `edge.rs`,
+//! `lateness.rs` and `decide.rs` follow.
 
 use std::{
     sync::{Arc, Mutex, Weak},
@@ -64,52 +37,80 @@ use std::{
 };
 
 mod buffer;
-mod decision_correct_mode;
-mod decision_start_track;
-mod edge_estimator;
-mod mode;
+mod decide;
+mod edge;
+mod lateness;
+mod measure;
+mod release;
 mod state;
 mod stats;
+mod stitch;
+mod timeline;
 mod track;
 
-pub(crate) use buffer::{
-    BufferingStrategy, ChunkBuffer, FifoBuffer, LiveSyncBuffer, TrackPriority,
-};
+pub(crate) use buffer::{FifoBuffer, LiveSyncBuffer};
 pub(crate) use track::{LiveSyncDeadline, LiveSyncTrack};
 
 use crate::pipeline::utils::input_sync::{BoxedTrackSink, InputSyncStatsSender, TrackKind};
 use state::SharedState;
 
+/// RL5: the most content a track holds. Beyond it the oldest content is dropped.
+pub(crate) const CAPACITY: Duration = Duration::from_secs(120);
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LiveSyncOptions {
-    pub buffering_strategy: BufferingStrategy,
-    /// Track whose latency the shared buffer protects, see [`TrackPriority`].
-    pub track_priority: TrackPriority,
-    /// How long the live edge estimates have to stay stable before starting.
-    pub stabilization_period: Duration,
-    /// Estimate improvements smaller than this (delivery jitter) do not reset
-    /// the stabilization timer.
-    pub stabilization_tolerance: Duration,
-    /// Start with the current estimates if the live edge was not detected
-    /// within this much time from the track's first chunk.
-    pub max_wait: Duration,
-    /// Distance between the upper bound and its recent counterpart above which the estimate of a
-    /// started track counts as stale and the track starts over: its timeline slipped and the full
-    /// window still holds the old edge.
-    pub stale_estimate_threshold: Duration,
+    /// The least buffer the regular slowest packets should have.
+    pub lower: Duration,
+    /// The starting buffer of the fastest packets, and where the buffer is brought back to.
+    pub start: Duration,
+    /// The most buffer the fastest packets should have.
+    pub upper: Duration,
+    pub at_upper: AtUpperLimit,
+    /// Hint: content is delivered in segments, so the first chunk after a pause in delivery
+    /// shows how late delivery gets.
+    pub segmented: bool,
+    /// Hint: the tracks share one timeline. Without it, tracks whose live edges are far apart
+    /// are synchronized separately.
+    pub shared_timeline: bool,
+    pub tuning: LiveSyncTuning,
+}
+
+/// What happens when `lower` and `upper` can't both hold.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AtUpperLimit {
+    /// `lower` wins: the buffer grows past `upper` as far as the regular lateness needs.
+    Extend,
+    /// `upper` wins: playback is never more than `upper` behind the live edge of the reference
+    /// track (audio while it delivers). What can't arrive in that time is late.
+    Enforce,
+}
+
+/// Per-protocol constants.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct LiveSyncTuning {
+    /// How long the live edge has to stay where it is to be settled: the burst that a stream
+    /// starts with has ended.
+    pub settle: Duration,
+    /// Differences smaller than this are not acted on.
+    pub tolerance: Duration,
+    /// The shortest time slower delivery has to last before the live edge follows it.
+    pub window_base: Duration,
+    /// Playback starts this long after the first chunk even when the live edge never settles.
+    pub start_timeout: Duration,
+    /// The largest buffer excess that is removed by a slew; more than that is a jump.
+    pub max_slew: Duration,
+    /// Whether pts discontinuities are stitched. Only for buffers that keep the write order.
+    pub stitch: bool,
 }
 
 /// Synchronization of a single input; create per-track handles with
-/// [`LiveSync::add_track`]. The buffer type decides the buffering policy of
-/// the tracks (e.g. [`ChunkBuffer`] for in-order delivery).
+/// [`LiveSync::add_track`]. The buffer type decides the order chunks of a track leave in
+/// (e.g. [`FifoBuffer`] for in-order delivery).
 pub(crate) struct LiveSync<B: LiveSyncBuffer> {
     shared: Arc<Mutex<SharedState<B>>>,
 }
 
-/// How often the internal ticker thread drives time-based transitions. Has
-/// to stay well below `MIN_QUEUE_HEADROOM`: when delivery stalls, deadline
-/// releases are driven only by the ticker, and its granularity eats into the
-/// headroom the released chunks have left.
+/// How often the internal ticker thread runs the stages while nothing is written.
 const TICK_INTERVAL: Duration = Duration::from_millis(20);
 
 impl<B: LiveSyncBuffer> LiveSync<B> {
@@ -120,8 +121,7 @@ impl<B: LiveSyncBuffer> LiveSync<B> {
     }
 
     /// Registers the track of the given kind; `sink` receives its chunks
-    /// once they are synchronized. Tracks share the live edge detection but
-    /// each starts on its own.
+    /// once they are synchronized.
     pub fn add_track(&self, kind: TrackKind, sink: BoxedTrackSink<B::Chunk>) -> LiveSyncTrack<B> {
         let deadline = self.shared.lock().unwrap().add_track(kind, sink);
         LiveSyncTrack::new(self.shared.clone(), kind, deadline)
@@ -133,17 +133,20 @@ impl<B: LiveSyncBuffer> LiveSync<B> {
         self.shared.lock().unwrap().remove_track(kind);
     }
 
-    /// Give up on live edge detection; every track releases everything it
-    /// buffered (e.g. when the stream ended before the live edge was
-    /// detected).
+    /// Every track releases everything it buffered (e.g. when the stream ended).
     pub fn flush(&self) {
         self.shared.lock().unwrap().flush();
     }
+
+    /// Changes the hint [`LiveSyncOptions::shared_timeline`], for inputs that learn it while
+    /// they run.
+    pub fn set_shared_timeline(&self, shared_timeline: bool) {
+        self.shared.lock().unwrap().options.shared_timeline = shared_timeline;
+    }
 }
 
-/// Drives time-based transitions (start decisions, corrections, bounded
-/// waits) while delivery pauses, pushing releasable chunks to the track
-/// callbacks; exits once every handle to the input is dropped.
+/// Runs the stages while delivery pauses, pushing releasable chunks to the track sinks; exits
+/// once every handle to the input is dropped.
 fn spawn_tick_thread<B: LiveSyncBuffer>(shared: Weak<Mutex<SharedState<B>>>) {
     let span = tracing::Span::current();
     std::thread::Builder::new()
@@ -155,7 +158,7 @@ fn spawn_tick_thread<B: LiveSyncBuffer>(shared: Weak<Mutex<SharedState<B>>>) {
                 let Some(shared) = shared.upgrade() else {
                     return;
                 };
-                shared.lock().unwrap().tick(Instant::now());
+                shared.lock().unwrap().tick();
             }
         })
         .unwrap();

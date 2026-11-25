@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::codecs::{AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions};
 use crate::queue::QueueInputOptions;
 
-use super::LiveInputBufferOptions;
+use super::{LiveInputBufferMaxPolicy, LiveInputBufferOptions};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MoqClientInputOptions {
@@ -12,6 +12,7 @@ pub struct MoqClientInputOptions {
     pub decoder_options: MoqInputDecoders,
     pub queue_options: QueueInputOptions,
     pub buffer: LiveInputBufferOptions,
+    pub buffer_max_policy: LiveInputBufferMaxPolicy,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

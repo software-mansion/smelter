@@ -35,15 +35,6 @@ pub(crate) enum TrackKind {
     Video,
 }
 
-impl TrackKind {
-    pub fn other(kind: TrackKind) -> TrackKind {
-        match kind {
-            TrackKind::Audio => TrackKind::Video,
-            TrackKind::Video => TrackKind::Audio,
-        }
-    }
-}
-
 /// Reports the sync state of an input to the stats module.
 #[derive(Debug, Clone)]
 pub(crate) struct InputSyncStatsSender {
@@ -100,9 +91,9 @@ pub(crate) struct TrackClosedError;
 
 /// Synchronization of a single input; register per-track callbacks with
 /// [`InputSync::add_track`]. The buffer type decides how the live variant
-/// buffers chunks (e.g. [`ChunkBuffer`] for in-order delivery).
+/// buffers chunks (e.g. [`FifoBuffer`] for in-order delivery).
 ///
-/// [`ChunkBuffer`]: super::live_sync::ChunkBuffer
+/// [`FifoBuffer`]: super::live_sync::FifoBuffer
 pub(crate) enum InputSync<B: LiveSyncBuffer> {
     Live(LiveSync<B>),
     Simple(SimpleSync),

@@ -28,10 +28,10 @@ use crate::{
         InitializableThread,
         channel::{Sender, TrySendError},
         input_sync::{
-            InputSync, InputSyncStatsSender, InputSyncTrack, SimpleSync, TrackEvent, TrackKind,
-            TrackSink,
+            InputSync, InputSyncItem, InputSyncStatsSender, InputSyncTrack, SimpleSync, TrackEvent,
+            TrackKind, TrackSink,
         },
-        live_sync::{BufferingStrategy, ChunkBuffer, LiveSync, LiveSyncOptions, TrackPriority},
+        live_sync::{AtUpperLimit, FifoBuffer, LiveSync, LiveSyncOptions, LiveSyncTuning},
     },
 };
 
@@ -56,12 +56,22 @@ pub(crate) fn start_connection_thread(
     let input_sync = match is_live {
         true => InputSync::Live(LiveSync::new(
             LiveSyncOptions {
-                buffering_strategy: BufferingStrategy::Range { min, max, desired },
-                track_priority: TrackPriority::None,
-                stabilization_period: Duration::from_millis(500),
-                stabilization_tolerance: Duration::from_millis(100),
-                max_wait: desired * 2,
-                stale_estimate_threshold: Duration::from_secs(2),
+                lower: min,
+                start: desired,
+                upper: max,
+                // tracks are delivered over one connection and delayed together, so dropping
+                // late content of one would not help the other
+                at_upper: AtUpperLimit::Extend,
+                segmented: false,
+                shared_timeline: true,
+                tuning: LiveSyncTuning {
+                    settle: Duration::from_millis(500),
+                    tolerance: Duration::min(Duration::from_millis(100), desired / 10),
+                    window_base: Duration::from_secs(1),
+                    start_timeout: Duration::max(desired * 2, Duration::from_secs(3)),
+                    max_slew: Duration::from_millis(1200),
+                    stitch: true,
+                },
             },
             ctx.queue_ctx.sync_point,
             stats,
@@ -119,16 +129,47 @@ pub(crate) fn start_connection_thread(
     Some(handle)
 }
 
+/// Chunk of an RTMP track, buffered by the sync as it was received.
+struct RtmpChunk {
+    chunk: EncodedInputChunk,
+    is_keyframe: bool,
+}
+
+impl InputSyncItem for RtmpChunk {
+    fn pts(&self) -> Timestamp {
+        self.chunk.pts
+    }
+
+    fn size(&self) -> usize {
+        self.chunk.data.len()
+    }
+
+    fn is_keyframe(&self) -> bool {
+        self.is_keyframe
+    }
+
+    fn apply_anchor(&mut self, anchor: TimestampOffset) {
+        self.chunk.pts = anchor.to_output_pts(self.chunk.pts);
+        self.chunk.dts = self.chunk.dts.map(|dts| anchor.to_output_pts(dts));
+    }
+
+    fn mark_decode_only(&mut self) {
+        self.chunk.decode_only = true;
+    }
+}
+
+type RtmpBuffer = FifoBuffer<RtmpChunk>;
+
 enum TrackState {
     BeforeFirstEvent,
     /// This state can be reached only if the first packet for the track is not a config.
     /// It is a separate state from BeforeFirstEvent to log a warning only once.
     ConfigMissing,
-    Ready(InputSyncTrack<ChunkBuffer>),
+    Ready(InputSyncTrack<RtmpBuffer>),
 }
 
 impl TrackState {
-    fn try_ready(&mut self) -> Option<&mut InputSyncTrack<ChunkBuffer>> {
+    fn try_ready(&mut self) -> Option<&mut InputSyncTrack<RtmpBuffer>> {
         match self {
             TrackState::Ready(track_sync) => Some(track_sync),
             TrackState::BeforeFirstEvent => {
@@ -171,7 +212,7 @@ struct RtmpConnectionState {
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
     decoder_options: RtmpServerInputDecoders,
-    input_sync: InputSync<ChunkBuffer>,
+    input_sync: InputSync<RtmpBuffer>,
     decoder_buffer_size: Duration,
 
     video_track_state: TrackState,
@@ -197,12 +238,15 @@ impl RtmpConnectionState {
         };
 
         trace!(pts=?video.pts, "Received video chunk");
-        let chunk = EncodedInputChunk {
-            data: video.data,
-            pts: video.pts.into(),
-            dts: Some(video.dts.into()),
-            kind: MediaKind::Video(video.codec.into()),
-            decode_only: false,
+        let chunk = RtmpChunk {
+            is_keyframe: video.is_keyframe,
+            chunk: EncodedInputChunk {
+                data: video.data,
+                pts: video.pts.into(),
+                dts: Some(video.dts.into()),
+                kind: MediaKind::Video(video.codec.into()),
+                decode_only: false,
+            },
         };
 
         track_sync
@@ -217,12 +261,15 @@ impl RtmpConnectionState {
         };
 
         trace!(pts=?audio.pts, "Received audio chunk");
-        let chunk = EncodedInputChunk {
-            data: audio.data.clone(),
-            pts: audio.pts.into(),
-            dts: None,
-            kind: MediaKind::Audio(audio.codec.into()),
-            decode_only: false,
+        let chunk = RtmpChunk {
+            is_keyframe: true,
+            chunk: EncodedInputChunk {
+                data: audio.data.clone(),
+                pts: audio.pts.into(),
+                dts: None,
+                kind: MediaKind::Audio(audio.codec.into()),
+                decode_only: false,
+            },
         };
 
         track_sync
@@ -301,10 +348,10 @@ impl RtmpTrackSink {
     }
 }
 
-impl TrackSink<EncodedInputChunk> for RtmpTrackSink {
-    fn on_event(&mut self, event: TrackEvent<EncodedInputChunk>) {
+impl TrackSink<RtmpChunk> for RtmpTrackSink {
+    fn on_event(&mut self, event: TrackEvent<RtmpChunk>) {
         let chunk = match event {
-            TrackEvent::Chunk(chunk) => chunk,
+            TrackEvent::Chunk(chunk) => chunk.chunk,
             // ignore, assume that decoder does not need reset
             TrackEvent::Discontinuity => return,
         };

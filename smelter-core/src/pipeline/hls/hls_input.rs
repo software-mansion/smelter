@@ -25,7 +25,7 @@ use crate::{
                 InputSync, InputSyncItem, InputSyncStatsSender, InputSyncTrack, SimpleSync,
                 TrackEvent, TrackKind, TrackSink,
             },
-            live_sync::{BufferingStrategy, FifoBuffer, LiveSync, LiveSyncOptions, TrackPriority},
+            live_sync::{AtUpperLimit, FifoBuffer, LiveSync, LiveSyncOptions, LiveSyncTuning},
         },
     },
     queue::{QueueInput, QueueSender, QueueTrackGroupOffset, QueueTrackGroupOptions},
@@ -163,17 +163,21 @@ impl HlsDemuxerThread {
         let input_sync = match is_live {
             true => InputSync::Live(LiveSync::new(
                 LiveSyncOptions {
-                    buffering_strategy: BufferingStrategy::Range { min, max, desired },
-                    track_priority: TrackPriority::None,
-                    stabilization_period: Duration::from_millis(1000),
-                    // mostly dead value, chunks are usually larger than stabilization_period
-                    // so tolerance does not matter, stable state will trigger as soon as we have
-                    // a gap between chunks.
-                    stabilization_tolerance: Duration::from_millis(250),
-                    max_wait: Duration::from_secs(10),
-                    // Depending on what is actually producing the HLS or when segment size change
-                    // the upper bound can jump quickly, so threshold has to be large.
-                    stale_estimate_threshold: Duration::from_secs(10),
+                    lower: min,
+                    start: desired,
+                    upper: max,
+                    at_upper: AtUpperLimit::Extend,
+                    segmented: true,
+                    shared_timeline: true,
+                    tuning: LiveSyncTuning {
+                        settle: Duration::from_secs(1),
+                        tolerance: Duration::min(Duration::from_millis(250), desired / 10),
+                        window_base: Duration::from_secs(2),
+                        // the first segments can take long to download
+                        start_timeout: Duration::from_secs(30),
+                        max_slew: Duration::from_millis(2400),
+                        stitch: true,
+                    },
                 },
                 input_ctx.ctx.queue_ctx.sync_point,
                 stats,
@@ -337,8 +341,7 @@ struct BufferTrackWriter {
 struct HlsPacket {
     packet: Packet,
     time_base: Rational,
-    /// Mapping onto the output timeline; identity until the track applies its
-    /// own on read.
+    /// Mapping onto the output timeline: the shifts the sync applied so far.
     anchor: TimestampOffset,
     /// The packet has to be decoded, but the decoded content must not be
     /// presented (see [`InputSyncItem::mark_decode_only`]).
@@ -388,8 +391,12 @@ impl InputSyncItem for HlsPacket {
         self.packet.size()
     }
 
+    fn is_keyframe(&self) -> bool {
+        self.is_key()
+    }
+
     fn apply_anchor(&mut self, anchor: TimestampOffset) {
-        self.anchor = anchor;
+        self.anchor = self.anchor + anchor;
     }
 
     fn mark_decode_only(&mut self) {
@@ -405,9 +412,6 @@ struct DecoderTrackWriter {
     waiting_for_keyframe: bool,
     pending_discontinuity: bool,
     closed: bool,
-    /// Packets of the current GOP not sent yet. Decode-only packets wait here for a presentable
-    /// packet that needs them decoded; the next keyframe drops them if none came.
-    held: Vec<HlsPacket>,
 
     is_live: bool,
 }
@@ -421,7 +425,6 @@ impl DecoderTrackWriter {
             waiting_for_keyframe: true,
             pending_discontinuity: false,
             closed: false,
-            held: Vec::new(),
         }
     }
 
@@ -430,17 +433,6 @@ impl DecoderTrackWriter {
         if self.pending_discontinuity {
             // drop `packet` because discontinuity still not handled
             return;
-        }
-
-        if packet.is_key() {
-            self.held.clear();
-        }
-        if packet.decode_only {
-            self.held.push(packet);
-            return;
-        }
-        for held in std::mem::take(&mut self.held) {
-            self.send_to_decoder(TrackEvent::Chunk(held));
         }
         self.send_to_decoder(TrackEvent::Chunk(packet));
     }
@@ -502,8 +494,6 @@ impl TrackSink<HlsPacket> for DecoderTrackWriter {
             TrackEvent::Discontinuity => {
                 self.pending_discontinuity = true;
                 self.waiting_for_keyframe = true;
-                // old timeline, nothing presentable follows it
-                self.held.clear();
                 self.maybe_handle_discontinuity();
             }
         }

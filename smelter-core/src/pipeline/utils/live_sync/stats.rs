@@ -1,12 +1,15 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use super::{buffer::LiveSyncBuffer, edge_estimator::EdgeEstimate, mode::Mode};
+use super::{
+    buffer::LiveSyncBuffer,
+    decide::{Playback, Reanchor, ReanchorKind, ReanchorReason},
+};
 use crate::{
-    InstantExt, Timestamp, TimestampOffset,
+    Timestamp,
     pipeline::utils::input_sync::{InputSyncStatsSender, TrackKind},
     stats::{
-        InputSyncMode, InputSyncTrackStatsEvent, LiveSyncStatsEvent, LiveSyncTrackState,
-        LiveSyncTrackStateSnapshot,
+        InputSyncMode, InputSyncTrackStatsEvent, LiveSyncPlaybackStats, LiveSyncReanchorKind,
+        LiveSyncReanchorReason, LiveSyncStatsEvent, LiveSyncTrackState, LiveSyncTrackStateSnapshot,
     },
 };
 
@@ -17,13 +20,15 @@ const SNAPSHOT_INTERVAL: Duration = Duration::from_millis(200);
 pub(super) struct LiveSyncTrackStats {
     sender: InputSyncStatsSender,
     kind: TrackKind,
-    sync_point: Instant,
-    last_snapshot: Option<Instant>,
-    last_state: Option<LiveSyncTrackState>,
+    last_snapshot: Option<Timestamp>,
+    /// The state on the last report, and when it was.
+    last_state: Option<(LiveSyncTrackState, Timestamp)>,
+    /// Total time in [`LiveSyncTrackState::Interrupted`].
+    interrupted: Duration,
 }
 
 impl LiveSyncTrackStats {
-    pub fn new(sender: &InputSyncStatsSender, kind: TrackKind, sync_point: Instant) -> Self {
+    pub fn new(sender: &InputSyncStatsSender, kind: TrackKind) -> Self {
         sender.send(
             kind,
             InputSyncTrackStatsEvent::TrackAdded(InputSyncMode::Live),
@@ -31,9 +36,9 @@ impl LiveSyncTrackStats {
         Self {
             sender: sender.clone(),
             kind,
-            sync_point,
             last_snapshot: None,
             last_state: None,
+            interrupted: Duration::ZERO,
         }
     }
 
@@ -42,81 +47,90 @@ impl LiveSyncTrackStats {
             .send(self.kind, InputSyncTrackStatsEvent::BytesReceived(size));
     }
 
-    /// Reports the state a track is in only when it differs from the last
-    /// report, so it can be called after every tick.
-    pub fn report_state_change(&mut self, kind: TrackKind, mode: Option<Mode>) {
-        let state = match mode {
-            Some(Mode::Shared(shared)) if shared.is_started(kind) => {
-                LiveSyncTrackState::StartedShared
-            }
-            Some(Mode::Independent(independent)) if independent.anchor(kind).is_some() => {
-                LiveSyncTrackState::StartedIndependent
-            }
-            _ => LiveSyncTrackState::WaitingForStart,
-        };
-        if self.last_state == Some(state) {
-            return;
-        }
-        self.last_state = Some(state);
-        self.send(LiveSyncStatsEvent::StateChanged(state));
-    }
-
     pub fn report_discontinuity(&self) {
         self.send(LiveSyncStatsEvent::Discontinuity);
     }
 
-    pub fn report_chunk_received(&self, output_pts: Timestamp) {
+    /// `effective_buffer`: how much time the chunk has to reach the queue; negative when it is
+    /// already late.
+    pub fn report_chunk_received(&self, effective_buffer: Timestamp) {
         self.send(LiveSyncStatsEvent::ChunkReceived {
-            effective_buffer_ns: self.effective_buffer(output_pts).as_nanos(),
+            effective_buffer_ns: effective_buffer.as_nanos(),
         });
     }
 
-    pub fn report_chunk_released(&self, output_pts: Timestamp) {
+    pub fn report_chunk_released(&self, effective_buffer: Timestamp) {
         self.send(LiveSyncStatsEvent::ChunkReleased {
-            effective_buffer_ns: self.effective_buffer(output_pts).as_nanos(),
+            effective_buffer_ns: effective_buffer.as_nanos(),
         });
     }
 
-    /// How much time content at `output_pts` has to reach the queue as of now; negative when it
-    /// is already late.
-    fn effective_buffer(&self, output_pts: Timestamp) -> Timestamp {
-        output_pts - self.sync_point.timestamp_now()
+    pub fn report_chunk_dropped(&self) {
+        self.send(LiveSyncStatsEvent::ChunkDropped);
     }
 
-    /// Throttled to [`SNAPSHOT_INTERVAL`]. `anchors` is `(current, target)` of the anchor the
-    /// track applies and `estimate` the live edge estimate its mode reads for it (combined in
-    /// `Mode::Shared`, the track's own in `Mode::Independent`), both `None` before it started.
-    pub fn report_state_snapshot(
+    pub fn report_late_chunk_shown(&self) {
+        self.send(LiveSyncStatsEvent::LateChunkShown);
+    }
+
+    /// A re-anchor of the timeline the track is on started.
+    pub fn report_reanchor(&self, reanchor: Reanchor) {
+        self.send(LiveSyncStatsEvent::Reanchor {
+            kind: match reanchor.kind {
+                ReanchorKind::Jump => LiveSyncReanchorKind::Jump,
+                ReanchorKind::Slew => LiveSyncReanchorKind::Slew,
+            },
+            reason: match reanchor.reason {
+                ReanchorReason::BufferTooSmall => LiveSyncReanchorReason::BufferTooSmall,
+                ReanchorReason::BufferTooLarge => LiveSyncReanchorReason::BufferTooLarge,
+                ReanchorReason::ContentLate => LiveSyncReanchorReason::ContentLate,
+                ReanchorReason::Interrupted => LiveSyncReanchorReason::Interrupted,
+                ReanchorReason::AddedLatencyTakenBack => {
+                    LiveSyncReanchorReason::AddedLatencyTakenBack
+                }
+                ReanchorReason::TracksJoined => LiveSyncReanchorReason::TracksJoined,
+            },
+        });
+    }
+
+    /// Called after every run of the stages. The state is reported when it changes, the snapshot
+    /// once per [`SNAPSHOT_INTERVAL`]. `playback`: the timeline the track is scheduled on.
+    pub fn report_state(
         &mut self,
+        now: Timestamp,
+        state: LiveSyncTrackState,
         buffer: &impl LiveSyncBuffer,
-        anchors: Option<(TimestampOffset, TimestampOffset)>,
-        estimate: Option<EdgeEstimate>,
+        playback: Option<&Playback>,
     ) {
-        let now = Instant::now();
+        let last_state = self.last_state.replace((state, now));
+        if let Some((LiveSyncTrackState::Interrupted, since)) = last_state {
+            self.interrupted += (now - since).to_duration_saturating();
+        }
+        if last_state.is_none_or(|(last_state, _)| last_state != state) {
+            self.send(LiveSyncStatsEvent::StateChanged(state));
+        }
+
         if let Some(last) = self.last_snapshot
-            && now.saturating_duration_since(last) < SNAPSHOT_INTERVAL
+            && now < last + SNAPSHOT_INTERVAL
         {
             return;
         }
         self.last_snapshot = Some(now);
-        let target_offset_distance = match anchors {
-            Some((current, target)) => current - target,
-            None => TimestampOffset::ZERO,
-        };
-        let live_edge_distance = |bound_pts: Timestamp| {
-            let (current, _) = anchors?;
-            Some(self.effective_buffer(current.to_output_pts(bound_pts)))
-        };
+        let playback = playback.and_then(|playback| {
+            let status = playback.status?;
+            Some(LiveSyncPlaybackStats {
+                buffer: playback.timeline.value() - status.edge,
+                target_buffer: status.target - status.edge,
+                buffer_min: status.lowest - status.edge,
+                buffer_max: status.highest - status.edge,
+                regular_lateness: status.lateness,
+            })
+        });
         self.send(LiveSyncStatsEvent::StateSnapshot(
             LiveSyncTrackStateSnapshot {
                 buffer: buffer.stats(),
-                target_offset_distance,
-                live_edge_lower_bound_distance: estimate
-                    .and_then(|estimate| live_edge_distance(estimate.lower_bound.pts)),
-                live_edge_upper_bound_distance: estimate
-                    .and_then(|estimate| live_edge_distance(estimate.upper_bound.pts)),
-                live_edge_recent_upper_bound_distance: estimate
-                    .and_then(|estimate| live_edge_distance(estimate.recent_upper_bound_pts?)),
+                playback,
+                interrupted: self.interrupted,
             },
         ));
     }

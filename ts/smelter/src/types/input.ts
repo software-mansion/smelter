@@ -6,7 +6,7 @@ import type { InputBuffer, SideChannel } from './input/common.js';
 import type { InputWhipVideoOptions } from './input/whip.js';
 import type { InputWhepVideoOptions } from './input/whep.js';
 import type { InputRtmpDecoderMap } from './input/rtmp.js';
-import type { InputMoqDecoderMap } from './input/moq.js';
+import type { InputMoqBuffer, InputMoqDecoderMap } from './input/moq.js';
 
 export * from './input/mp4.js';
 export * from './input/hls.js';
@@ -267,9 +267,9 @@ export type RegisterMoqClientInput = {
   /**
    * Input buffer configuration.
    *
-   * Defaults: `desiredMs=2000`, `minMs=1000`, `maxMs=5000`.
+   * Defaults: `desiredMs=2000`, `minMs=1000`, `maxMs=5000`, `maxPolicy="enforce"`.
    */
-  buffer?: InputBuffer | null;
+  buffer?: InputMoqBuffer | null;
 };
 
 export type RegisterV4l2Input = {

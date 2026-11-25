@@ -1,42 +1,113 @@
-use std::time::{Duration, Instant};
+use std::{collections::VecDeque, time::Duration, time::Instant};
 
 use tracing::{debug, trace};
 
 use super::{
-    LiveSyncOptions,
-    buffer::{BufferingStrategy, LiveSyncBuffer},
-    decision_correct_mode::correct_mode_decision,
-    decision_start_track::start_track_decision,
-    edge_estimator::{EdgeEstimate, LiveEdgeEstimator},
-    mode::{IndependentMode, Mode},
+    AtUpperLimit, LiveSyncOptions,
+    buffer::LiveSyncBuffer,
+    decide::{Playback, REACHED, Reanchor, ReanchorKind, ReanchorReason, TrackView},
+    measure::Measure,
     stats::LiveSyncTrackStats,
+    stitch::Stitch,
+    timeline::Timeline,
     track::LiveSyncDeadline,
 };
-use crate::pipeline::utils::input_sync::{
-    BoxedTrackSink, InputSyncItem, InputSyncStatsSender, TrackClosedError, TrackEvent, TrackKind,
+use crate::{
+    pipeline::utils::input_sync::{
+        BoxedTrackSink, InputSyncItem, InputSyncStatsSender, TrackClosedError, TrackKind,
+    },
+    stats::LiveSyncTrackState,
 };
 
 use crate::prelude::*;
 
-/// pts jump (in either direction) treated as a discontinuity of the input
-/// timeline; the old edge estimate does not describe the new timeline.
-const DISCONTINUITY_THRESHOLD: Duration = Duration::from_secs(10);
+/// TR6: tracks with edges at least this far apart are on unrelated timelines.
+const APART: Duration = Duration::from_secs(5);
 
-/// Lead over the playback position below which chunks are force-released.
-const MIN_QUEUE_HEADROOM: Duration = Duration::from_millis(100);
+/// TR6: tracks with edges closer than this share a timeline again.
+const TOGETHER: Duration = Duration::from_secs(3);
 
 /// The whole mutable state of an input, cross-track and per-track, kept behind one mutex;
 /// [`LiveSync`](super::LiveSync) and [`LiveSyncTrack`](super::track::LiveSyncTrack) are thin
-/// handles to it. Decisions ([`start_track_decision`], [`correct_mode_decision`]) read it and are
-/// applied here.
+/// handles to it. Every write and every tick runs the stages in order: stitch and measure the
+/// written chunk, decide per playback timeline, release per track.
 pub(super) struct SharedState<B: LiveSyncBuffer> {
     pub options: LiveSyncOptions,
     /// Instant that output timestamps are measured from.
-    pub sync_point: Instant,
-    pub mode: Option<Mode>,
+    sync_point: Instant,
     audio: Option<Track<B>>,
     video: Option<Track<B>>,
+    timelines: Timelines,
+    /// Stage 0, when it is on.
+    stitch: Option<Stitch>,
     stats_sender: InputSyncStatsSender,
+}
+
+/// Playback timelines of an input.
+#[derive(Default)]
+struct Timelines {
+    /// The timeline of the input, from the start on (DC1).
+    main: Option<Playback>,
+    /// TR6: the timeline of video while the tracks are apart.
+    video_apart: Option<Playback>,
+}
+
+impl Timelines {
+    fn of(&mut self, kind: TrackKind) -> Option<&mut Playback> {
+        match kind {
+            TrackKind::Video if self.video_apart.is_some() => self.video_apart.as_mut(),
+            _ => self.main.as_mut(),
+        }
+    }
+}
+
+/// State of a single track, owned by [`SharedState`].
+pub(super) struct Track<B: LiveSyncBuffer> {
+    pub kind: TrackKind,
+    /// Stage 1, from the first chunk on.
+    pub measure: Option<Measure>,
+    pub buffer: B,
+    /// Receives what this track releases.
+    pub sink: BoxedTrackSink<B::Chunk>,
+    /// Shared with the input, see [`LiveSyncDeadline`].
+    deadline: LiveSyncDeadline,
+    /// TR3, TR6: its chunks are scheduled on a playback timeline.
+    placed: bool,
+    /// DC6: newest presentation time among the chunks that were released to be shown.
+    pub released_until: Option<Timestamp>,
+    /// Content presented before it is late: where the released content ended at a jump.
+    pub floor: Option<Timestamp>,
+    /// RL4: chunks before the next keyframe can't be decoded.
+    pub needs_keyframe: bool,
+    /// Chunks written to the buffer and taken from it. A FIFO returns them in write order.
+    written: u64,
+    pub taken: u64,
+    /// ST2: `written` of the chunks that the sink gets a discontinuity in front of.
+    pub discontinuities: VecDeque<u64>,
+    pub stats: LiveSyncTrackStats,
+}
+
+impl<B: LiveSyncBuffer> Track<B> {
+    fn view(&mut self, now: Timestamp) -> Option<TrackView> {
+        let measure = self.measure.as_mut()?;
+        Some(TrackView {
+            kind: self.kind,
+            edge: measure.edge(),
+            lateness: measure.regular_lateness(now),
+            candidate: measure.candidate(now),
+            counts: measure.counts(),
+            idle: measure.is_idle(now),
+            playing: self.released_until.is_some_and(|until| until > now),
+        })
+    }
+
+    /// The timeline the track is on was re-anchored.
+    fn reanchored(&mut self, reanchor: Reanchor) {
+        self.stats.report_reanchor(reanchor);
+        if reanchor.kind == ReanchorKind::Jump {
+            self.floor = self.released_until;
+        }
+    }
 }
 
 impl<B: LiveSyncBuffer> SharedState<B> {
@@ -48,34 +119,12 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         Self {
             options,
             sync_point,
-            mode: None,
             audio: None,
             video: None,
+            timelines: Timelines::default(),
+            stitch: options.tuning.stitch.then(Stitch::default),
             stats_sender,
         }
-    }
-
-    pub fn track(&self, kind: TrackKind) -> Option<&Track<B>> {
-        match kind {
-            TrackKind::Audio => self.audio.as_ref(),
-            TrackKind::Video => self.video.as_ref(),
-        }
-    }
-
-    pub fn is_started(&self, kind: TrackKind) -> bool {
-        self.mode.is_some_and(|mode| mode.is_started(kind))
-    }
-
-    /// Estimate over all tracks, see [`EdgeEstimate::combine`].
-    pub fn shared_estimate(&self, now: Instant) -> Option<EdgeEstimate> {
-        let estimate = |kind| {
-            self.track(kind)
-                .and_then(|track| track.estimator.estimate(now))
-        };
-        EdgeEstimate::combine(
-            estimate(TrackKind::Audio).as_ref(),
-            estimate(TrackKind::Video).as_ref(),
-        )
     }
 
     pub(super) fn add_track(
@@ -87,18 +136,18 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         let deadline = LiveSyncDeadline::new();
         let track = Track {
             kind,
-            sync_point: self.sync_point,
-            estimator: LiveEdgeEstimator::new(
-                self.sync_point,
-                self.options.stabilization_tolerance,
-                self.options.stabilization_period,
-            ),
+            measure: None,
             buffer: B::default(),
             sink,
             deadline: deadline.clone(),
-            last_released_pts: None,
-            last_written: None,
-            stats: LiveSyncTrackStats::new(&self.stats_sender, kind, self.sync_point),
+            placed: false,
+            released_until: None,
+            floor: None,
+            needs_keyframe: true,
+            written: 0,
+            taken: 0,
+            discontinuities: VecDeque::new(),
+            stats: LiveSyncTrackStats::new(&self.stats_sender, kind),
         };
         match kind {
             TrackKind::Audio => self.audio = Some(track),
@@ -110,94 +159,29 @@ impl<B: LiveSyncBuffer> SharedState<B> {
     /// Releases everything the track buffered and drops it together with its sink.
     pub(super) fn remove_track(&mut self, kind: TrackKind) {
         debug!(?kind, "Live sync: removing track");
-        let now = Instant::now();
-        self.reset_track(kind, now);
-        match kind {
-            TrackKind::Audio => self.audio = None,
-            TrackKind::Video => self.video = None,
-        }
-
+        let now = self.sync_point.timestamp_now();
+        self.flush_track(kind, now);
+        self.forget_track(kind);
         self.publish_deadlines(now);
         self.report_stats(now);
     }
 
-    /// Runs every transition due at `now` (resets, start decisions, corrections) and releases
-    /// every releasable chunk. Driven by writes and by the periodic ticker, so time-based
-    /// transitions fire during delivery pauses too.
-    pub(super) fn tick(&mut self, now: Instant) {
-        self.drop_closed_tracks();
-
-        if let Some(audio) = &self.audio
-            && audio.is_stalled(self.mode, self.options.stale_estimate_threshold, now)
-        {
-            debug!("Live sync: audio track stalled, resetting");
-            self.reset_track(TrackKind::Audio, now);
-        }
-
-        if let Some(video) = &self.video
-            && video.is_stalled(self.mode, self.options.stale_estimate_threshold, now)
-        {
-            debug!("Live sync: video track stalled, resetting");
-            self.reset_track(TrackKind::Video, now);
-        }
-
-        // audio first, so video's decision can align to it
-        for kind in [TrackKind::Audio, TrackKind::Video] {
-            if let Some(mode) = start_track_decision(self, kind, now) {
-                self.start_track(kind, mode);
-            }
-        }
-
-        let corrected_mode = correct_mode_decision(self, now);
-        if let Some(change) = Mode::diff(self.mode, corrected_mode) {
-            match change.is_minor() {
-                true => trace!(?change, "Live sync: mode corrected"),
-                false => debug!(?change, "Live sync: mode corrected"),
-            }
-            self.mode = corrected_mode;
-        }
-
-        // push every releasable chunk to the track callbacks, in pts order
-        // across the tracks sharing the anchor
-        loop {
-            let released_audio = self.try_release_chunk(TrackKind::Audio, now);
-            let released_video = self.try_release_chunk(TrackKind::Video, now);
-            if !released_audio && !released_video {
-                break;
-            }
-        }
-
-        self.publish_deadlines(now);
-        self.report_stats(now);
-    }
-
-    /// Give up on live edge detection; every track releases what it buffered
-    /// through its callback. Shared live edge state stays intact.
+    /// RL6: the stream ended, so every track releases everything it buffered.
     pub(super) fn flush(&mut self) {
         debug!("Live sync: flush");
-        let now = Instant::now();
+        let now = self.sync_point.timestamp_now();
+        self.start(now, true);
+        self.place_tracks(None);
         for kind in [TrackKind::Audio, TrackKind::Video] {
-            self.reset_track(kind, now);
+            self.flush_track(kind, now);
         }
         self.publish_deadlines(now);
         self.report_stats(now);
     }
 
-    /// Oldest input pts each track could still release on time under its current anchor.
-    fn publish_deadlines(&mut self, now: Instant) {
-        let now_pts = self.sync_point.timestamp_at(now);
-        for kind in [TrackKind::Audio, TrackKind::Video] {
-            let anchor = self.mode.and_then(|mode| mode.anchor(kind));
-            let track = match kind {
-                TrackKind::Audio => self.audio.as_ref(),
-                TrackKind::Video => self.video.as_ref(),
-            };
-            if let Some(track) = track {
-                let deadline =
-                    anchor.map(|anchor| anchor.to_input_pts(now_pts + MIN_QUEUE_HEADROOM));
-                track.deadline.set(deadline);
-            }
-        }
+    /// Driven by the periodic ticker, so decisions and releases happen while delivery pauses.
+    pub(super) fn tick(&mut self) {
+        self.run(self.sync_point.timestamp_now());
     }
 
     /// Fails once the sink of the track is gone, so the input can stop
@@ -205,11 +189,13 @@ impl<B: LiveSyncBuffer> SharedState<B> {
     pub(super) fn write_chunk(
         &mut self,
         kind: TrackKind,
-        chunk: B::Chunk,
+        mut chunk: B::Chunk,
     ) -> Result<(), TrackClosedError> {
-        let now = Instant::now();
-        self.reset_on_discontinuity(kind, now, chunk.pts());
-
+        let now = self.sync_point.timestamp_now();
+        let has_other = match kind {
+            TrackKind::Audio => self.video.is_some(),
+            TrackKind::Video => self.audio.is_some(),
+        };
         let track = match kind {
             TrackKind::Audio => self.audio.as_mut(),
             TrackKind::Video => self.video.as_mut(),
@@ -217,128 +203,309 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         let Some(track) = track else {
             return Err(TrackClosedError);
         };
-
-        track.last_written = Some((chunk.pts(), now));
         track.stats.report_bytes_received(chunk.size());
-        if let Some(anchor) = self.mode.and_then(|mode| mode.anchor(kind)) {
-            let output_pts = anchor.to_output_pts(chunk.pts());
-            track.stats.report_chunk_received(output_pts);
+
+        // stage 0
+        if let Some(stitch) = &mut self.stitch {
+            let stitched = stitch.observe(kind, chunk.pts(), now, has_other);
+            if stitched.discontinuity {
+                debug!(
+                    ?kind,
+                    pts=?chunk.pts(),
+                    offset=?stitched.offset,
+                    "Live sync: discontinuity"
+                );
+                track.discontinuities.push_back(track.written);
+            }
+            if !stitched.offset.is_zero() {
+                chunk.apply_anchor(Timestamp::offset(Timestamp::ZERO, stitched.offset));
+            }
         }
 
-        track.estimator.observe(now, chunk.pts());
-        trace!(
-            ?kind,
-            pts=?chunk.pts(),
-            now_pts=?self.sync_point.timestamp_at(now),
-            "Live sync: observed chunk"
-        );
-        track.buffer.write(chunk);
+        // stage 1
+        let pts = chunk.pts();
+        let delay = now - pts;
+        trace!(?kind, ?pts, ?delay, "Live sync: chunk written");
+        let playback = match track.placed {
+            true => self.timelines.of(kind),
+            false => None,
+        };
+        match &mut track.measure {
+            Some(measure) => {
+                let taken_back = measure.observe(now, delay);
+                if let Some(playback) = playback
+                    && measure.counts()
+                    && taken_back.is_positive()
+                {
+                    playback.rise_taken_back(taken_back);
+                }
+            }
+            None => track.measure = Some(Measure::new(&self.options, now, delay)),
+        }
+        if let Some(playback) = self.timelines.of(kind)
+            && track.placed
+        {
+            let presented = pts + playback.timeline.at(pts);
+            track.stats.report_chunk_received(presented - now);
+        }
 
-        self.tick(now);
+        track.buffer.write(chunk);
+        track.written += 1;
+        track.enforce_capacity(pts);
+
+        self.run(now);
         Ok(())
     }
 
-    /// Applies a start decision: `mode` holds the anchor the track starts with; the buffered
-    /// backlog is released with it by the regular release in the same tick.
-    fn start_track(&mut self, kind: TrackKind, mode: Mode) {
-        let Some(anchor) = mode.anchor(kind) else {
-            return;
-        };
-        let Some(track) = self.track(kind) else {
-            return;
-        };
-        debug!(
-            ?kind,
-            ?anchor,
-            buffer = ?track.buffer.stats(),
-            ?mode,
-            "Live sync: track started"
-        );
-        self.mode = Some(mode);
+    fn run(&mut self, now: Timestamp) {
+        self.drop_closed_tracks();
+
+        let started = self.timelines.main.is_some();
+        for track in [&mut self.audio, &mut self.video].into_iter().flatten() {
+            if let Some(measure) = &mut track.measure {
+                measure.tick(now, started);
+            }
+        }
+
+        self.start(now, false);
+        self.decide(now);
+        self.release(now);
+
+        self.publish_deadlines(now);
+        self.report_stats(now);
     }
 
-    /// Gives up on the live edge of one track: releases everything it buffered and goes back to
-    /// waiting for a start decision. Its own anchor is forgotten; a shared one stays for the
-    /// other track.
-    fn reset_track(&mut self, kind: TrackKind, now: Instant) {
-        let flush_anchor = self
-            .track(kind)
-            .and_then(|track| track.flush_anchor(self.mode, self.options.buffering_strategy, now));
-        self.mode = self.mode.and_then(|mode| mode.reset_track(kind));
-        let track = match kind {
-            TrackKind::Audio => self.audio.as_mut(),
-            TrackKind::Video => self.video.as_mut(),
+    /// DC1: playback starts when the first burst of every track that has delivered is over.
+    /// `force` starts it on whatever the tracks have delivered.
+    fn start(&mut self, now: Timestamp, force: bool) {
+        if self.timelines.main.is_some() {
+            return;
+        }
+        let edge_of = |track: &Option<Track<B>>| {
+            let measure = track.as_ref()?.measure.as_ref()?;
+            Some(measure.edge())
         };
-        let Some(track) = track else {
+        let (audio_edge, video_edge) = (edge_of(&self.audio), edge_of(&self.video));
+
+        let delivering = || {
+            [&self.audio, &self.video]
+                .into_iter()
+                .flatten()
+                .filter_map(|track| track.measure.as_ref())
+        };
+        let Some(first_arrival) = delivering().map(|measure| measure.first_arrival()).min() else {
             return;
         };
+        let settled = delivering().all(|measure| measure.settled(now));
+        let timed_out = first_arrival + self.options.tuning.start_timeout <= now;
+        if !(settled || timed_out || force) {
+            return;
+        }
+
+        let LiveSyncOptions { start, upper, .. } = self.options;
+        match (audio_edge, video_edge) {
+            // TR6
+            (Some(audio_edge), Some(video_edge))
+                if !self.options.shared_timeline
+                    && (audio_edge - video_edge).abs_duration() >= APART =>
+            {
+                self.timelines.main = Some(Playback::start(audio_edge + start));
+                self.timelines.video_apart = Some(Playback::start(video_edge + start));
+            }
+            _ => {
+                let Some(mut edge) = Option::max(audio_edge, video_edge) else {
+                    return;
+                };
+                // 2.4: the cut-off, on audio when the input has it
+                let reference_edge = match self.audio {
+                    Some(_) => audio_edge,
+                    None => video_edge,
+                };
+                if self.options.at_upper == AtUpperLimit::Enforce
+                    && let Some(reference_edge) = reference_edge
+                {
+                    edge = Timestamp::min(edge, reference_edge + upper - start);
+                }
+                self.timelines.main = Some(Playback::start(edge + start));
+            }
+        }
         debug!(
-            ?kind,
-            ?flush_anchor,
-            buffer = ?track.buffer.stats(),
-            "Live sync: resetting track"
+            ?audio_edge,
+            ?video_edge,
+            settled,
+            apart = self.timelines.video_apart.is_some(),
+            "Live sync: playback started"
         );
-        track.estimator.reset();
-        if let Some(anchor) = flush_anchor {
-            while let Some(chunk) = track.buffer.read() {
-                track.release_chunk(chunk, anchor);
+
+        for track in [&mut self.audio, &mut self.video].into_iter().flatten() {
+            if let Some(measure) = &mut track.measure {
+                measure.start_counting();
+                track.placed = true;
             }
         }
     }
 
-    fn try_release_chunk(&mut self, kind: TrackKind, now: Instant) -> bool {
-        if self.should_wait_for_other_track(kind, now) {
-            return false;
+    /// TR3, TR6: puts tracks on a playback timeline. `distance`: how far apart the edges of the
+    /// tracks are, when both count.
+    fn place_tracks(&mut self, distance: Option<Duration>) {
+        if self.timelines.main.is_none() {
+            return;
+        }
+        if self.options.shared_timeline {
+            for track in [&mut self.audio, &mut self.video].into_iter().flatten() {
+                track.placed = true;
+            }
+            if self.timelines.video_apart.take().is_some()
+                && let Some(video) = &mut self.video
+            {
+                debug!("Live sync: tracks share a timeline, video jumps");
+                video.reanchored(Reanchor {
+                    kind: ReanchorKind::Jump,
+                    reason: ReanchorReason::TracksJoined,
+                });
+            }
+            return;
         }
 
+        // Without the hint a track is scheduled once it counts: its first burst has ended, so
+        // its edge says whether it is on the timeline of the other track.
+        let start = self.options.start;
+        let apart = distance.is_some_and(|distance| distance >= APART);
+        let placed_edge = |track: &mut Option<Track<B>>| {
+            let track = track.as_mut()?;
+            let measure = track.measure.as_ref()?;
+            let newly_placed = !track.placed && measure.counts();
+            track.placed |= newly_placed;
+            newly_placed.then_some(measure.edge())
+        };
+        let audio_was_placed = self.audio.as_ref().is_some_and(|track| track.placed);
+        let video_was_placed = self.video.as_ref().is_some_and(|track| track.placed);
+        if let Some(edge) = placed_edge(&mut self.audio)
+            && video_was_placed
+            && apart
+        {
+            // audio gets the timeline of the input, and video keeps the one it has
+            let own = Playback::start(edge + start);
+            self.timelines.video_apart = self.timelines.main.replace(own);
+        }
+        if let Some(edge) = placed_edge(&mut self.video)
+            && audio_was_placed
+            && apart
+        {
+            self.timelines.video_apart = Some(Playback::start(edge + start));
+        }
+        if audio_was_placed && video_was_placed && apart && self.timelines.video_apart.is_none() {
+            // taken apart, both keep the `T` they have
+            debug!(
+                ?distance,
+                "Live sync: tracks are apart, video gets its own timeline"
+            );
+            self.timelines.video_apart = self.timelines.main.clone();
+        }
+    }
+
+    /// Stage 2, for each playback timeline with the tracks that are on it (TR2, TR6).
+    fn decide(&mut self, now: Timestamp) {
+        let audio = self.audio.as_mut().and_then(|track| track.view(now));
+        let video = self.video.as_mut().and_then(|track| track.view(now));
+        let distance = match (audio, video) {
+            (Some(audio), Some(video)) if audio.counts && video.counts => {
+                Some((audio.edge - video.edge).abs_duration())
+            }
+            _ => None,
+        };
+        self.place_tracks(distance);
+
+        let placed = |track: &Option<Track<B>>| track.as_ref().is_some_and(|track| track.placed);
+        let audio = audio.filter(|_| placed(&self.audio));
+        let video = video.filter(|_| placed(&self.video));
+        let Some(main) = &mut self.timelines.main else {
+            return;
+        };
+
+        let Some(apart) = &mut self.timelines.video_apart else {
+            if let Some(reanchor) = main.decide(&self.options, [audio, video]) {
+                for track in [&mut self.audio, &mut self.video].into_iter().flatten() {
+                    if track.placed {
+                        track.reanchored(reanchor);
+                    }
+                }
+            }
+            return;
+        };
+
+        if let Some(reanchor) = main.decide(&self.options, [audio, None])
+            && let Some(audio) = &mut self.audio
+        {
+            audio.reanchored(reanchor);
+        }
+        let Some(video_track) = &mut self.video else {
+            return;
+        };
+        if distance.is_none_or(|distance| distance >= TOGETHER) {
+            if let Some(reanchor) = apart.decide(&self.options, [video, None]) {
+                video_track.reanchored(reanchor);
+            }
+            return;
+        }
+
+        // TR6: the tracks are joined again, so the timeline of video moves to the one of audio
+        let gap = main.timeline.value() - apart.timeline.value();
+        let playing = video.is_some_and(|video| video.playing);
+        if gap.abs() <= REACHED {
+            debug!("Live sync: tracks are together again");
+            self.timelines.video_apart = None;
+        } else if gap.abs_duration() <= self.options.tuning.max_slew && playing {
+            if let Some(reanchor) = apart.join(main.timeline.value()) {
+                debug!(?gap, "Live sync: tracks are together again, video slews");
+                video_track.reanchored(reanchor);
+            }
+        } else {
+            debug!(?gap, "Live sync: tracks are together again, video jumps");
+            self.timelines.video_apart = None;
+            video_track.reanchored(Reanchor {
+                kind: ReanchorKind::Jump,
+                reason: ReanchorReason::TracksJoined,
+            });
+        }
+    }
+
+    /// Stage 3
+    fn release(&mut self, now: Timestamp) {
+        for kind in [TrackKind::Audio, TrackKind::Video] {
+            let track = match kind {
+                TrackKind::Audio => self.audio.as_mut(),
+                TrackKind::Video => self.video.as_mut(),
+            };
+            if let Some(track) = track
+                && track.placed
+                && let Some(playback) = self.timelines.of(kind)
+            {
+                track.release(playback, now);
+            }
+        }
+    }
+
+    /// RL6 for one track. A track that is not scheduled yet is released the way a start by
+    /// timeout would schedule it, on its edge of now.
+    fn flush_track(&mut self, kind: TrackKind, now: Timestamp) {
         let track = match kind {
             TrackKind::Audio => self.audio.as_mut(),
             TrackKind::Video => self.video.as_mut(),
         };
         let Some(track) = track else {
-            return false;
+            return;
         };
-        let Some(mode) = &mut self.mode else {
-            return false;
+        let Some(measure) = &track.measure else {
+            return;
         };
-        let Some(anchor) = mode.anchor(kind) else {
-            return false;
+        let mut own = Timeline::new(measure.edge() + self.options.start);
+        let timeline = match self.timelines.of(kind) {
+            Some(playback) if track.placed => &mut playback.timeline,
+            _ => &mut own,
         };
-        let Some(next_pts) = track.buffer.peek_next_pts() else {
-            return false;
-        };
-        // a chunk about to miss the queue is released even if it is behind a gap that might
-        // still be filled
-        let now_pts = self.sync_point.timestamp_at(now);
-        let next_output_pts = anchor.to_output_pts(next_pts);
-        // Releasing far ahead only moves the buffer downstream, where it waits for the queue
-        // anyway but is out of reach of anchor corrections; held here it is still remapped.
-        if next_output_pts > now_pts + Duration::from_secs(5) {
-            return false;
-        }
-        let is_about_to_miss = next_output_pts <= now_pts + MIN_QUEUE_HEADROOM;
-        let chunk = match is_about_to_miss {
-            true => track.buffer.read(),
-            false => track.buffer.try_read(),
-        };
-        let Some(mut chunk) = chunk else {
-            return false;
-        };
-
-        // Late content is only decoded, so the decoder catches up instead of the queue playing
-        // it back sped up. The newest video frame is always presented, so the output shows
-        // something right away.
-        let is_last_video_frame =
-            kind == TrackKind::Video && track.buffer.peek_next_pts().is_none();
-        let decode_only = !is_last_video_frame && anchor.to_output_pts(chunk.pts()) <= now_pts;
-        if decode_only {
-            chunk.mark_decode_only();
-        }
-
-        mode.nudge_anchor_toward_target(kind, chunk.pts(), self.options.buffering_strategy);
-        let anchor = mode.anchor(kind).unwrap_or(anchor);
-        track.release_chunk(chunk, anchor);
-        true
+        debug!(?kind, buffer=?track.buffer.stats(), "Live sync: releasing everything");
+        track.flush(timeline, now);
     }
 
     fn drop_closed_tracks(&mut self) {
@@ -349,97 +516,65 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             };
             if track.is_some_and(|track| track.sink.is_closed()) {
                 debug!(?kind, "Live sync: track sink closed, dropping track");
-                self.mode = self.mode.and_then(|mode| mode.reset_track(kind));
-                match kind {
-                    TrackKind::Audio => self.audio = None,
-                    TrackKind::Video => self.video = None,
-                }
+                self.forget_track(kind);
             }
         }
     }
 
-    // Tracks sharing the anchor have to release their chunks in pts order, so
-    // a single anchor can be slewed as chunks are released. Without that
-    // ordering it would require a far more complex setup, or the tracks would
-    // desync while the anchor converges on its target.
-    fn should_wait_for_other_track(&self, kind: TrackKind, now: Instant) -> bool {
-        let Some(Mode::Shared(shared)) = self.mode else {
-            return false;
-        };
-        let (track, other, other_kind) = match kind {
-            TrackKind::Audio => (self.audio.as_ref(), self.video.as_ref(), TrackKind::Video),
-            TrackKind::Video => (self.video.as_ref(), self.audio.as_ref(), TrackKind::Audio),
-        };
-        let (Some(track), Some(other)) = (track, other) else {
-            return false;
-        };
-        if !shared.is_started(kind) || !shared.is_started(other_kind) {
-            return false;
+    /// TR1: a removed track stops counting at once.
+    fn forget_track(&mut self, kind: TrackKind) {
+        match kind {
+            TrackKind::Audio => {
+                self.audio = None;
+                // video is the only track left, so its timeline is the one of the input
+                if let Some(apart) = self.timelines.video_apart.take() {
+                    self.timelines.main = Some(apart);
+                }
+            }
+            TrackKind::Video => {
+                self.video = None;
+                self.timelines.video_apart = None;
+            }
         }
-        let Some(pts) = track.buffer.peek_next_pts() else {
-            return false;
-        };
-
-        let now_pts = self.sync_point.timestamp_at(now);
-        if shared.anchor.current.to_output_pts(pts) <= now_pts + MIN_QUEUE_HEADROOM {
-            // the chunk is about to miss the queue; release it now instead of
-            // waiting for the other track
-            return false;
-        }
-        match other.buffer.peek_next_pts() {
-            Some(other_pts) => other_pts < pts,
-            None => true,
+        if let Some(stitch) = &mut self.stitch {
+            stitch.remove_track(kind);
         }
     }
 
-    /// Drops the live edge state built for the old timeline when `pts` does not belong to it
-    /// anymore. Only the track that jumped is reset; the other track keeps playing and, if it
-    /// was sharing the anchor, leads on its own until the tracks converge again.
-    fn reset_on_discontinuity(&mut self, kind: TrackKind, now: Instant, pts: Timestamp) {
-        let track = match kind {
-            TrackKind::Audio => self.audio.as_ref(),
-            TrackKind::Video => self.video.as_ref(),
-        };
-        let Some(track) = track else {
-            return;
-        };
-        if !track.is_discontinuity(now, pts) {
-            return;
-        }
-        debug!(?kind, ?pts, "Live sync: discontinuity detected");
-
-        self.reset_track(kind, now);
-        // The shared estimate mixes both timelines from now on, so it must not size the other
-        // track's anchor; the other track (started, since the mode is still shared) leads until
-        // the tracks converge again.
-        if let Some(Mode::Shared(shared)) = self.mode {
-            self.mode = Some(Mode::Independent(IndependentMode {
-                leader_kind: TrackKind::other(kind),
-                leader_anchor: shared.anchor,
-                secondary_track_offset: None,
-            }));
-        }
-
-        // After the reset, so flushed old chunks precede the event in the sink.
-        let track = match kind {
-            TrackKind::Audio => self.audio.as_mut(),
-            TrackKind::Video => self.video.as_mut(),
-        };
-        if let Some(track) = track {
-            track.sink.on_event(TrackEvent::Discontinuity);
-            track.stats.report_discontinuity();
-        }
-    }
-
-    fn report_stats(&mut self, now: Instant) {
+    /// RL7: the oldest pts each track would still take.
+    fn publish_deadlines(&mut self, now: Timestamp) {
         for kind in [TrackKind::Audio, TrackKind::Video] {
-            let estimate = match self.mode {
-                Some(Mode::Shared(shared)) if shared.is_started(kind) => self.shared_estimate(now),
-                Some(Mode::Independent(independent)) if independent.anchor(kind).is_some() => self
-                    .track(kind)
-                    .and_then(|track| track.estimator.estimate(now)),
-                _ => None,
+            let track = match kind {
+                TrackKind::Audio => self.audio.as_ref(),
+                TrackKind::Video => self.video.as_ref(),
             };
+            let Some(track) = track else {
+                continue;
+            };
+            let playback = match track.placed {
+                true => self.timelines.of(kind),
+                false => None,
+            };
+            let deadline = playback.and_then(|playback| {
+                // TR5: for the best-effort track lateness is no reason to stop reading
+                let best_effort = self.options.at_upper == AtUpperLimit::Enforce
+                    && playback
+                        .status
+                        .is_some_and(|status| status.reference != kind);
+                if best_effort {
+                    return None;
+                }
+                let value = playback.timeline.value();
+                // RL4: while nothing plays, content that a restart would still play is kept
+                let oldest_kept = Timestamp::max(value, playback.restart.unwrap_or(value));
+                Some(now - oldest_kept)
+            });
+            track.deadline.set(deadline);
+        }
+    }
+
+    fn report_stats(&mut self, now: Timestamp) {
+        for kind in [TrackKind::Audio, TrackKind::Video] {
             let track = match kind {
                 TrackKind::Audio => self.audio.as_mut(),
                 TrackKind::Video => self.video.as_mut(),
@@ -447,149 +582,20 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             let Some(track) = track else {
                 continue;
             };
-            let anchors = self
-                .mode
-                .and_then(|mode| Some((mode.anchor(kind)?, mode.target(kind)?)));
-            track.stats.report_state_change(kind, self.mode);
+            let playback = match track.placed {
+                true => self.timelines.of(kind),
+                false => None,
+            };
+            let playback = playback.as_deref();
+            let state = match (playback, track.released_until) {
+                (None, _) | (_, None) => LiveSyncTrackState::WaitingForStart,
+                (_, Some(until)) if until <= now => LiveSyncTrackState::Interrupted,
+                (Some(playback), _) if playback.is_reanchoring() => LiveSyncTrackState::Reanchoring,
+                _ => LiveSyncTrackState::Playing,
+            };
             track
                 .stats
-                .report_state_snapshot(&track.buffer, anchors, estimate);
+                .report_state(now, state, &track.buffer, playback);
         }
-    }
-}
-
-/// State of a single track, owned by [`SharedState`].
-pub(super) struct Track<B: LiveSyncBuffer> {
-    kind: TrackKind,
-    /// Instant that output timestamps are measured from.
-    sync_point: Instant,
-    /// Estimator observing only this track's chunks. A track starts only once it has an
-    /// estimate and the estimator is replaced only after the track left the mode
-    /// (`reset_track`), so a started track always has an estimate.
-    pub estimator: LiveEdgeEstimator,
-    buffer: B,
-    /// Receives the chunks this track releases.
-    sink: BoxedTrackSink<B::Chunk>,
-    /// Shared with the input, see [`LiveSyncDeadline`].
-    deadline: LiveSyncDeadline,
-    /// Output pts the released content ends at. Used to maintain continuity after
-    /// reset so it has to survive the reset itself.
-    pub last_released_pts: Option<Timestamp>,
-    /// pts of the last written chunk and its arrival time. Deliberately not
-    /// cleared on reset, so a discontinuity is detectable right after one.
-    last_written: Option<(Timestamp, Instant)>,
-    stats: LiveSyncTrackStats,
-}
-
-impl<B: LiveSyncBuffer> Track<B> {
-    /// Pushes a chunk out, with its timestamps mapped onto the output
-    /// timeline by `anchor`.
-    fn release_chunk(&mut self, mut chunk: B::Chunk, anchor: TimestampOffset) {
-        let input_pts = chunk.pts();
-        chunk.apply_anchor(anchor);
-        let output_pts = chunk.pts();
-
-        trace!(
-            kind=?self.kind,
-            ?input_pts,
-            ?output_pts,
-            lead=?(output_pts - self.sync_point.timestamp_now()),
-            "Live sync: releasing chunk"
-        );
-        self.stats.report_chunk_released(output_pts);
-        self.last_released_pts = Some(match self.last_released_pts {
-            Some(previous) => Timestamp::max(previous, chunk.pts()),
-            None => chunk.pts(),
-        });
-        self.sink.on_event(TrackEvent::Chunk(chunk));
-    }
-
-    /// Anchor to release the buffered chunks with on reset; `None` when nothing was observed.
-    fn flush_anchor(
-        &self,
-        mode: Option<Mode>,
-        strategy: BufferingStrategy,
-        now: Instant,
-    ) -> Option<TimestampOffset> {
-        if let Some(anchor) = mode.and_then(|mode| mode.anchor(self.kind)) {
-            return Some(anchor);
-        }
-
-        let now_pts = self.sync_point.timestamp_at(now);
-        // continue where the released content ended, if that is still ahead of the queue
-        if let Some(last_pts) = self.last_released_pts
-            && last_pts > now_pts + MIN_QUEUE_HEADROOM
-        {
-            return Some(Timestamp::offset(self.buffer.peek_next_pts()?, last_pts));
-        }
-
-        // otherwise like a fresh start: last observed chunk at the desired buffer
-        let (last_written_pts, _) = self.last_written?;
-        Some(Timestamp::offset(
-            last_written_pts,
-            now_pts + strategy.desired_buffer(),
-        ))
-    }
-
-    /// Track stalled long enough that it has to earn its start again: it ran out of released
-    /// content, or its timeline slipped against its own recent deliveries.
-    fn is_stalled(
-        &self,
-        mode: Option<Mode>,
-        stale_estimate_threshold: Duration,
-        now: Instant,
-    ) -> bool {
-        let started = mode.is_some_and(|mode| mode.is_started(self.kind));
-        if !started {
-            return false;
-        }
-
-        const STALL_TIMEOUT: Duration = Duration::from_secs(1);
-        let now_pts = self.sync_point.timestamp_at(now);
-
-        // Chunks that keep arriving but map late are not a stall: the anchor is undersized for
-        // this track, and a restart on a shared anchor would only rejoin it and be late again.
-        let delivery_stopped = match self.last_written {
-            Some((_, arrived_at)) => now.saturating_duration_since(arrived_at) >= STALL_TIMEOUT,
-            None => true,
-        };
-        // Slightly late track can still recover; reset would cause a gap of at least the
-        // stabilization period.
-        let released_content_ran_out = match self.last_released_pts {
-            Some(last_pts) => last_pts + STALL_TIMEOUT <= now_pts,
-            None => false,
-        };
-        let ran_out_of_content =
-            delivery_stopped && self.buffer.peek_next_pts().is_none() && released_content_ran_out;
-
-        // The upper bound still describes an edge the stream is no longer at. The full window
-        // would take its whole look-back to notice; a reset starts over on a fresh estimate.
-        let estimate_is_stale = match self.estimator.estimate(now) {
-            Some(EdgeEstimate {
-                upper_bound,
-                recent_upper_bound_pts: Some(recent_upper_bound_pts),
-                ..
-            }) => {
-                upper_bound.pts - recent_upper_bound_pts
-                    >= Timestamp::from(stale_estimate_threshold)
-            }
-            _ => false,
-        };
-
-        ran_out_of_content || estimate_is_stale
-    }
-
-    /// Whether `pts` belongs to a different timeline than the one this track
-    /// has been observing.
-    fn is_discontinuity(&self, now: Instant, pts: Timestamp) -> bool {
-        let Some((last_pts, arrived_at)) = self.last_written else {
-            return false;
-        };
-        // pts expected if the stream kept producing in real time since the
-        // newest received chunk
-        let expected_pts = last_pts + now.saturating_duration_since(arrived_at);
-        let forward_jump = pts > expected_pts + DISCONTINUITY_THRESHOLD;
-        let backward_jump = pts + DISCONTINUITY_THRESHOLD < last_pts;
-        forward_jump || backward_jump
     }
 }

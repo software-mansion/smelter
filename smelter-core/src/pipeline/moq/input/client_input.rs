@@ -94,6 +94,7 @@ impl MoqClientInput {
                     broadcast: broadcast.clone(),
                     decoder_options: options.decoder_options,
                     buffer: options.buffer,
+                    buffer_max_policy: options.buffer_max_policy,
                     should_close: should_close.clone(),
                 },
             )

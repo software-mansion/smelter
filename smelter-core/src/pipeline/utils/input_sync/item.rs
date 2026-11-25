@@ -12,32 +12,16 @@ pub(crate) trait InputSyncItem {
     /// Size of the payload in bytes, for bitrate stats.
     fn size(&self) -> usize;
 
-    /// Maps all timestamps of the item (pts, and dts if present) onto the
-    /// output timeline `anchor` describes. Called by the track when the item
-    /// is read.
+    /// Whether the item can be decoded without the items before it. Always true for audio.
+    fn is_keyframe(&self) -> bool;
+
+    /// Shifts all timestamps of the item (pts, and dts if present) by `anchor`. Shifts add up:
+    /// the live sync applies one when the item is written (a stitched discontinuity) and one
+    /// when it is read (the mapping onto the output timeline).
     fn apply_anchor(&mut self, anchor: TimestampOffset);
 
     /// Marks the item as decode-only: it still has to reach the decoder
     /// (later items need it decoded, e.g. video reference frames), but the
     /// content decoded from it must not be presented.
     fn mark_decode_only(&mut self);
-}
-
-impl InputSyncItem for EncodedInputChunk {
-    fn pts(&self) -> Timestamp {
-        self.pts
-    }
-
-    fn size(&self) -> usize {
-        self.data.len()
-    }
-
-    fn apply_anchor(&mut self, anchor: TimestampOffset) {
-        self.pts = anchor.to_output_pts(self.pts);
-        self.dts = self.dts.map(|dts| anchor.to_output_pts(dts));
-    }
-
-    fn mark_decode_only(&mut self) {
-        self.decode_only = true;
-    }
 }

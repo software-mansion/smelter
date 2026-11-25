@@ -119,9 +119,9 @@ export type RegisterInput =
       /**
        * Input buffer configuration.
        *
-       * Defaults: `desired_ms=2000`, `min_ms=1000`, `max_ms=5000`.
+       * Defaults: `desired_ms=2000`, `min_ms=1000`, `max_ms=5000`, `max_policy=enforce`.
        */
-      buffer?: InputBuffer | null;
+      buffer?: MoqInputBuffer | null;
     }
   | {
       type: "mp4";
@@ -353,6 +353,11 @@ export type RtmpIngestMode = "realtime" | "offline";
  */
 export type InputBuffer = number | InputBufferOptions;
 export type MoqClientVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
+/**
+ * Buffer a MoQ input keeps between the live edge of the stream and playback. A larger buffer adds latency, but tolerates more delivery jitter and network stalls.
+ */
+export type MoqInputBuffer = number | MoqInputBufferOptions;
+export type InputBufferMaxPolicy = "extend" | "enforce";
 export type Mp4VideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
 export type WhipVideoDecoderOptions = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
 export type WhepVideoDecoderOptions = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
@@ -1735,7 +1740,7 @@ export type InputSyncTrackStatsReport =
        */
       bitrate_1_minute: number;
       /**
-       * State of the live edge synchronization.
+       * State of the synchronization.
        */
       state: LiveSyncTrackState;
       /**
@@ -1743,21 +1748,41 @@ export type InputSyncTrackStatsReport =
        */
       discontinuities_detected: number;
       /**
-       * Remaining shift of the playback position until the timestamp offset of the track reaches its target. Positive when the buffer is being shrunk, negative when it is being grown, zero when converged. For the secondary track of `started_independent` it is the remaining shift relative to the leader's final position.
+       * How far playback is behind the live edge of the stream (content arriving as fast as the fastest chunks). It is the latency added by the synchronization, and the value that the `buffer` option of the input controls. `None` before the track starts.
        */
-      target_offset_distance_seconds: number;
+      buffer_seconds?: number | null;
       /**
-       * How far the playback position is behind the pessimistic live edge estimate (content arriving as slow as the slowest recent chunk). Margin before the playback runs out of content. Measured against the estimate of both tracks combined in `started_shared` and of this track alone in `started_independent`. `None` before the track starts.
+       * Value that `buffer_seconds` is brought to by a re-anchor. It is the desired buffer, or more when chunks are late on a regular basis. `None` before the track starts.
        */
-      live_edge_lower_bound_distance_seconds?: number | null;
+      target_buffer_seconds?: number | null;
       /**
-       * How far the playback position is behind the optimistic live edge estimate (content arriving as fast as the fastest recent chunk). Total latency introduced by the synchronization. Measured against the estimate of both tracks combined in `started_shared` and of this track alone in `started_independent`. `None` before the track starts.
+       * Smallest `buffer_seconds` that does not start a re-anchor. `None` before the track starts.
        */
-      live_edge_upper_bound_distance_seconds?: number | null;
+      buffer_min_seconds?: number | null;
       /**
-       * Like `live_edge_upper_bound_distance_seconds`, but the estimate only looks back over the last few seconds instead of the full window, so it reacts to a latency change within seconds. Never larger than the full-window value; it drops below it when the stream slipped (content arriving slower than real time) and the full window still remembers the earlier, faster delivery. `None` before the track starts or when nothing arrived within the window.
+       * Largest `buffer_seconds` that does not start a re-anchor. `None` before the track starts.
        */
-      live_edge_recent_upper_bound_distance_seconds?: number | null;
+      buffer_max_seconds?: number | null;
+      /**
+       * How much later than the fastest chunks the chunks that are late on a regular basis arrive. `None` before the track starts.
+       */
+      regular_lateness_seconds?: number | null;
+      /**
+       * Re-anchors since the track was added.
+       */
+      reanchors: LiveSyncReanchorsStatsReport;
+      /**
+       * Total count of chunks that were dropped: they arrived after the time they should have been played at, they could not be decoded without a chunk that was dropped, or more than 120 seconds of content was waiting.
+       */
+      chunks_dropped: number;
+      /**
+       * Total count of video frames that arrived after the time they should have been played at and were shown late.
+       */
+      late_chunks_shown: number;
+      /**
+       * Total time the track had nothing to play since it started.
+       */
+      interrupted_seconds: number;
       /**
        * Content currently held back by the sync.
        */
@@ -1772,9 +1797,9 @@ export type InputSyncTrackStatsReport =
  */
 export type SimpleSyncTrackState = "running" | "initial_buffering";
 /**
- * State of the live edge synchronization of a track.
+ * State of the synchronization of a live track.
  */
-export type LiveSyncTrackState = "waiting_for_start" | "started_shared" | "started_independent";
+export type LiveSyncTrackState = "playing" | "waiting_for_start" | "interrupted" | "reanchoring";
 /**
  * Stats report for the content currently held in the sync buffer.
  */
@@ -1909,17 +1934,40 @@ export interface SideChannel {
  */
 export interface InputBufferOptions {
   /**
-   * Buffer the input aims to keep, in milliseconds. At the start it should buffer at least that much media before producing first chunk.
+   * Buffer the input starts with, in milliseconds, measured for the chunks that arrive the fastest. It is also the value the buffer is brought back to when `min_ms` or `max_ms` is not met.
    */
   desired_ms?: number | null;
   /**
-   * Lower range of what is considered stable state. If buffer is smaller than this value then media will be slightly "stretched" so the buffer converges on desired value.
+   * Smallest buffer, in milliseconds, that chunks arriving late on a regular basis (network jitter, stalls that keep coming back) should be left with. When they have less, the buffer grows.
    */
   min_ms?: number | null;
   /**
-   * Upper range of what is considered stable state. If buffer is larger than this value then media will be slightly "squashed" so the buffer converges on desired value.
+   * Largest buffer, in milliseconds, measured for the chunks that arrive the fastest. When the buffer is larger, it shrinks back to `desired_ms`. The buffer still grows past this value when it is needed to keep `min_ms` for the chunks that are late on a regular basis.
    */
   max_ms?: number | null;
+}
+/**
+ * Values that are not provided are derived from the provided ones and the protocol defaults.
+ */
+export interface MoqInputBufferOptions {
+  /**
+   * Buffer the input starts with, in milliseconds, measured for the chunks that arrive the fastest. It is also the value the buffer is brought back to when `min_ms` or `max_ms` is not met.
+   */
+  desired_ms?: number | null;
+  /**
+   * Smallest buffer, in milliseconds, that chunks arriving late on a regular basis (network jitter, stalls that keep coming back) should be left with. When they have less, the buffer grows.
+   */
+  min_ms?: number | null;
+  /**
+   * Largest buffer, in milliseconds, measured for the chunks that arrive the fastest. When the buffer is larger, it shrinks back to `desired_ms`.
+   */
+  max_ms?: number | null;
+  /**
+   * What happens when the stream can't be on time with a buffer of `max_ms`.
+   *
+   * Defaults to `enforce`.
+   */
+  max_policy?: InputBufferMaxPolicy | null;
 }
 export interface InputWhipVideoOptions {
   decoder_preferences?: WhipVideoDecoderOptions[] | null;
@@ -2574,6 +2622,43 @@ export interface HlsInputVideoTrackStatsReport {
    * Stats for the synchronization. `None` when the track is not active.
    */
   sync?: InputSyncTrackStatsReport | null;
+}
+/**
+ * Counts of the re-anchors of a live track. A re-anchor changes the time the content of the stream is played at, to bring `buffer_seconds` back into its range. Every re-anchor is counted once by how it was done (`jumps`, `slews`) and once by its reason (the other fields).
+ */
+export interface LiveSyncReanchorsStatsReport {
+  /**
+   * Re-anchors done at once. Content is skipped or playback pauses.
+   */
+  jumps: number;
+  /**
+   * Re-anchors done over time, by playing content slightly faster or slower.
+   */
+  slews: number;
+  /**
+   * Chunks that are late on a regular basis had less buffer than the configured minimum.
+   */
+  buffer_too_small: number;
+  /**
+   * The buffer was above the configured maximum.
+   */
+  buffer_too_large: number;
+  /**
+   * Chunks that are late on a regular basis arrived after the time they should have been played at.
+   */
+  content_late: number;
+  /**
+   * The buffer was outside of its range while nothing was playing.
+   */
+  interrupted: number;
+  /**
+   * Buffer that was added for a delay in delivery was taken back after the delay went away.
+   */
+  added_latency_taken_back: number;
+  /**
+   * Tracks that were synchronized separately turned out to share a timeline.
+   */
+  tracks_joined: number;
 }
 /**
  * Stats report for the given time window in a live stream track.

@@ -32,8 +32,9 @@ pub(crate) use media::InputMediaStatsEvent;
 pub(crate) use rtmp::RtmpInputStatsEvent;
 pub(crate) use rtp::{RtpInputStatsEvent, RtpJitterBufferStatsEvent};
 pub(crate) use sync::{
-    InputSyncMode, InputSyncTrackStatsEvent, LiveSyncBufferStats, LiveSyncStatsEvent,
-    LiveSyncTrackStateSnapshot, SimpleSyncStatsEvent,
+    InputSyncMode, InputSyncTrackStatsEvent, LiveSyncBufferStats, LiveSyncPlaybackStats,
+    LiveSyncReanchorKind, LiveSyncReanchorReason, LiveSyncStatsEvent, LiveSyncTrackStateSnapshot,
+    SimpleSyncStatsEvent,
 };
 pub(crate) use whep::WhepInputStatsEvent;
 pub(crate) use whip::WhipInputStatsEvent;

@@ -43,7 +43,8 @@ impl<B: LiveSyncBuffer> LiveSyncTrack<B> {
 }
 
 /// Oldest input pts the track can still present. Lets the input stop reading content that has
-/// no chance of playing without locking the sync state. `None` while the track has no anchor.
+/// no chance of playing without locking the sync state. `None` while the track is not on a
+/// playback timeline.
 #[derive(Clone)]
 pub(crate) struct LiveSyncDeadline(Arc<AtomicI64>);
 

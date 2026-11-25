@@ -20,8 +20,13 @@ pub(crate) enum MoqCatalogError {
     CodecConfigExtractionError(&'static str),
 }
 
-/// Tracks selected from one catalog snapshot.
-pub(super) type CatalogTracks = (Option<VideoTrack>, Option<AudioTrack>);
+/// What one catalog snapshot says about the broadcast.
+pub(super) struct CatalogSnapshot {
+    pub video: Option<VideoTrack>,
+    pub audio: Option<AudioTrack>,
+    /// The catalog advertises one clock for the broadcast, so its tracks share a timeline.
+    pub shared_timeline: bool,
+}
 
 /// Subscription to the catalog track of a broadcast.
 pub(super) struct MoqCatalogReader {
@@ -49,16 +54,18 @@ impl MoqCatalogReader {
     }
 
     /// Waits for the next catalog snapshot, `None` once the catalog track ends.
-    pub async fn next(&mut self) -> Option<Result<CatalogTracks, MoqCatalogError>> {
+    pub async fn next(&mut self) -> Option<Result<CatalogSnapshot, MoqCatalogError>> {
         let catalog = match self.consumer.next().await.transpose()? {
             Ok(catalog) => catalog,
             Err(err) => return Some(Err(MoqCatalogError::CatalogReadError(err))),
         };
         debug!(format = ?self.format, ?catalog, "Received MoQ catalog");
 
-        let video = find_first_video(&catalog.video);
-        let audio = find_first_audio(&catalog.audio);
-        Some(Ok((video, audio)))
+        Some(Ok(CatalogSnapshot {
+            video: find_first_video(&catalog.video),
+            audio: find_first_audio(&catalog.audio),
+            shared_timeline: catalog.clock.is_some(),
+        }))
     }
 }
 

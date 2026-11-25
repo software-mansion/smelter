@@ -32,6 +32,16 @@ pub struct LiveInputBufferOptions {
     pub max: Option<Duration>,
 }
 
+/// What a live input does when the stream can't be on time with the `max` buffer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LiveInputBufferMaxPolicy {
+    /// The buffer grows past `max` as far as the stream needs, and nothing is lost.
+    Extend,
+    /// Playback is never more than `max` behind the live edge of the stream, measured on audio
+    /// when the input has it. Audio that arrives too late is dropped, video is shown late.
+    Enforce,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PortOrRange {
     Exact(u16),

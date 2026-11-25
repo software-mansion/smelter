@@ -5,6 +5,7 @@ use utoipa::ToSchema;
 /// Stats report for a track synchronized by the input sync (`RTMP`, `HLS`, `MoQ`).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 #[serde(tag = "mode", rename_all = "snake_case")]
+#[allow(clippy::large_enum_variant)]
 pub enum InputSyncTrackStatsReport {
     /// Non-live stream, timestamps are normalized to start at zero.
     Simple(SimpleSyncTrackStatsReport),
@@ -45,36 +46,41 @@ pub struct LiveSyncTrackStatsReport {
     /// not the bitrate of the media.
     pub bitrate_1_minute: u64,
 
-    /// State of the live edge synchronization.
+    /// State of the synchronization.
     pub state: LiveSyncTrackState,
 
     /// Total count of timestamp discontinuities detected.
     pub discontinuities_detected: u32,
 
-    /// Remaining shift of the playback position until the timestamp offset of the track reaches
-    /// its target. Positive when the buffer is being shrunk, negative when it is being grown, zero
-    /// when converged. For the secondary track of `started_independent` it is the remaining shift
-    /// relative to the leader's final position.
-    pub target_offset_distance_seconds: f64,
+    /// How far playback is behind the live edge of the stream (content arriving as fast as the
+    /// fastest chunks). It is the latency added by the synchronization, and the value that the
+    /// `buffer` option of the input controls. `None` before the track starts.
+    pub buffer_seconds: Option<f64>,
+    /// Value that `buffer_seconds` is brought to by a re-anchor. It is the desired buffer, or
+    /// more when chunks are late on a regular basis. `None` before the track starts.
+    pub target_buffer_seconds: Option<f64>,
+    /// Smallest `buffer_seconds` that does not start a re-anchor. `None` before the track
+    /// starts.
+    pub buffer_min_seconds: Option<f64>,
+    /// Largest `buffer_seconds` that does not start a re-anchor. `None` before the track
+    /// starts.
+    pub buffer_max_seconds: Option<f64>,
+    /// How much later than the fastest chunks the chunks that are late on a regular basis
+    /// arrive. `None` before the track starts.
+    pub regular_lateness_seconds: Option<f64>,
 
-    /// How far the playback position is behind the pessimistic live edge estimate (content
-    /// arriving as slow as the slowest recent chunk). Margin before the playback runs out of
-    /// content. Measured against the estimate of both tracks combined in `started_shared` and of
-    /// this track alone in `started_independent`. `None` before the track starts.
-    pub live_edge_lower_bound_distance_seconds: Option<f64>,
+    /// Re-anchors since the track was added.
+    pub reanchors: LiveSyncReanchorsStatsReport,
 
-    /// How far the playback position is behind the optimistic live edge estimate (content
-    /// arriving as fast as the fastest recent chunk). Total latency introduced by the
-    /// synchronization. Measured against the estimate of both tracks combined in `started_shared`
-    /// and of this track alone in `started_independent`. `None` before the track starts.
-    pub live_edge_upper_bound_distance_seconds: Option<f64>,
-
-    /// Like `live_edge_upper_bound_distance_seconds`, but the estimate only looks back over the
-    /// last few seconds instead of the full window, so it reacts to a latency change within
-    /// seconds. Never larger than the full-window value; it drops below it when the stream slipped
-    /// (content arriving slower than real time) and the full window still remembers the earlier,
-    /// faster delivery. `None` before the track starts or when nothing arrived within the window.
-    pub live_edge_recent_upper_bound_distance_seconds: Option<f64>,
+    /// Total count of chunks that were dropped: they arrived after the time they should have
+    /// been played at, they could not be decoded without a chunk that was dropped, or more than
+    /// 120 seconds of content was waiting.
+    pub chunks_dropped: u64,
+    /// Total count of video frames that arrived after the time they should have been played at
+    /// and were shown late.
+    pub late_chunks_shown: u64,
+    /// Total time the track had nothing to play since it started.
+    pub interrupted_seconds: f64,
 
     /// Content currently held back by the sync.
     pub buffer: LiveSyncBufferStatsReport,
@@ -83,19 +89,42 @@ pub struct LiveSyncTrackStatsReport {
     pub last_10_seconds: LiveSyncTrackSlidingWindowStatsReport,
 }
 
-/// State of the live edge synchronization of a track.
+/// State of the synchronization of a live track.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum LiveSyncTrackState {
-    /// Chunks are held back until the live edge is estimated.
+    /// Chunks are held back until the live edge of the stream is known.
     WaitingForStart,
-    /// Started with the timestamp offset shared with the other track; the buffer is sized from the
-    /// live edge of both tracks combined.
-    StartedShared,
-    /// Started while the tracks are on unrelated timelines. The leader (audio when it runs) sizes
-    /// the buffer from its own live edge; the secondary track follows the leader, shifted by the
-    /// distance between their live edges.
-    StartedIndependent,
+    Playing,
+    /// The track ran out of content to play.
+    Interrupted,
+    /// A re-anchor is in progress: content is played slightly faster or slower.
+    Reanchoring,
+}
+
+/// Counts of the re-anchors of a live track. A re-anchor changes the time the content of the
+/// stream is played at, to bring `buffer_seconds` back into its range. Every re-anchor is
+/// counted once by how it was done (`jumps`, `slews`) and once by its reason (the other fields).
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, JsonSchema, ToSchema)]
+pub struct LiveSyncReanchorsStatsReport {
+    /// Re-anchors done at once. Content is skipped or playback pauses.
+    pub jumps: u32,
+    /// Re-anchors done over time, by playing content slightly faster or slower.
+    pub slews: u32,
+
+    /// Chunks that are late on a regular basis had less buffer than the configured minimum.
+    pub buffer_too_small: u32,
+    /// The buffer was above the configured maximum.
+    pub buffer_too_large: u32,
+    /// Chunks that are late on a regular basis arrived after the time they should have been
+    /// played at.
+    pub content_late: u32,
+    /// The buffer was outside of its range while nothing was playing.
+    pub interrupted: u32,
+    /// Buffer that was added for a delay in delivery was taken back after the delay went away.
+    pub added_latency_taken_back: u32,
+    /// Tracks that were synchronized separately turned out to share a timeline.
+    pub tracks_joined: u32,
 }
 
 /// Stats report for the content currently held in the sync buffer.

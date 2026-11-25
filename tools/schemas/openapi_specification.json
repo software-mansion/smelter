@@ -2469,6 +2469,13 @@
         ],
         "description": "Buffer a live input keeps between the live edge of the stream and playback.\nA larger buffer adds latency, but tolerates more delivery jitter and\nnetwork stalls."
       },
+      "InputBufferMaxPolicy": {
+        "type": "string",
+        "enum": [
+          "extend",
+          "enforce"
+        ]
+      },
       "InputBufferOptions": {
         "type": "object",
         "description": "Values that are not provided are derived from the provided ones and the\nprotocol defaults.",
@@ -2479,7 +2486,7 @@
               "null"
             ],
             "format": "double",
-            "description": "Buffer the input aims to keep, in milliseconds. At the start it should\nbuffer at least that much media before producing first chunk."
+            "description": "Buffer the input starts with, in milliseconds, measured for the chunks that arrive the\nfastest. It is also the value the buffer is brought back to when `min_ms` or `max_ms` is\nnot met."
           },
           "min_ms": {
             "type": [
@@ -2487,7 +2494,7 @@
               "null"
             ],
             "format": "double",
-            "description": "Lower range of what is considered stable state. If buffer is smaller than this\nvalue then media will be slightly \"stretched\" so the buffer converges on desired value."
+            "description": "Smallest buffer, in milliseconds, that chunks arriving late on a regular basis (network\njitter, stalls that keep coming back) should be left with. When they have less, the\nbuffer grows."
           },
           "max_ms": {
             "type": [
@@ -2495,7 +2502,7 @@
               "null"
             ],
             "format": "double",
-            "description": "Upper range of what is considered stable state. If buffer is larger than this\nvalue then media will be slightly \"squashed\" so the buffer converges on desired value."
+            "description": "Largest buffer, in milliseconds, measured for the chunks that arrive the fastest. When\nthe buffer is larger, it shrinks back to `desired_ms`. The buffer still grows past this\nvalue when it is needed to keep `min_ms` for the chunks that are late on a regular basis."
           }
         },
         "additionalProperties": false
@@ -3078,6 +3085,70 @@
         ],
         "description": "Stats report for the content currently held in the sync buffer."
       },
+      "LiveSyncReanchorsStatsReport": {
+        "type": "object",
+        "description": "Counts of the re-anchors of a live track. A re-anchor changes the time the content of the\nstream is played at, to bring `buffer_seconds` back into its range. Every re-anchor is\ncounted once by how it was done (`jumps`, `slews`) and once by its reason (the other fields).",
+        "required": [
+          "jumps",
+          "slews",
+          "buffer_too_small",
+          "buffer_too_large",
+          "content_late",
+          "interrupted",
+          "added_latency_taken_back",
+          "tracks_joined"
+        ],
+        "properties": {
+          "jumps": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Re-anchors done at once. Content is skipped or playback pauses.",
+            "minimum": 0
+          },
+          "slews": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Re-anchors done over time, by playing content slightly faster or slower.",
+            "minimum": 0
+          },
+          "buffer_too_small": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Chunks that are late on a regular basis had less buffer than the configured minimum.",
+            "minimum": 0
+          },
+          "buffer_too_large": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The buffer was above the configured maximum.",
+            "minimum": 0
+          },
+          "content_late": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Chunks that are late on a regular basis arrived after the time they should have been\nplayed at.",
+            "minimum": 0
+          },
+          "interrupted": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The buffer was outside of its range while nothing was playing.",
+            "minimum": 0
+          },
+          "added_latency_taken_back": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Buffer that was added for a delay in delivery was taken back after the delay went away.",
+            "minimum": 0
+          },
+          "tracks_joined": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Tracks that were synchronized separately turned out to share a timeline.",
+            "minimum": 0
+          }
+        }
+      },
       "LiveSyncTrackSlidingWindowStatsReport": {
         "type": "object",
         "description": "Stats report for the given time window in a live stream track.",
@@ -3131,11 +3202,12 @@
       },
       "LiveSyncTrackState": {
         "type": "string",
-        "description": "State of the live edge synchronization of a track.",
+        "description": "State of the synchronization of a live track.",
         "enum": [
           "waiting_for_start",
-          "started_shared",
-          "started_independent"
+          "playing",
+          "interrupted",
+          "reanchoring"
         ]
       },
       "LiveSyncTrackStatsReport": {
@@ -3146,7 +3218,10 @@
           "bitrate_1_minute",
           "state",
           "discontinuities_detected",
-          "target_offset_distance_seconds",
+          "reanchors",
+          "chunks_dropped",
+          "late_chunks_shown",
+          "interrupted_seconds",
           "buffer",
           "last_10_seconds"
         ],
@@ -3165,7 +3240,7 @@
           },
           "state": {
             "$ref": "#/components/schemas/LiveSyncTrackState",
-            "description": "State of the live edge synchronization."
+            "description": "State of the synchronization."
           },
           "discontinuities_detected": {
             "type": "integer",
@@ -3173,34 +3248,66 @@
             "description": "Total count of timestamp discontinuities detected.",
             "minimum": 0
           },
-          "target_offset_distance_seconds": {
+          "buffer_seconds": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "How far playback is behind the live edge of the stream (content arriving as fast as the\nfastest chunks). It is the latency added by the synchronization, and the value that the\n`buffer` option of the input controls. `None` before the track starts."
+          },
+          "target_buffer_seconds": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Value that `buffer_seconds` is brought to by a re-anchor. It is the desired buffer, or\nmore when chunks are late on a regular basis. `None` before the track starts."
+          },
+          "buffer_min_seconds": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Smallest `buffer_seconds` that does not start a re-anchor. `None` before the track\nstarts."
+          },
+          "buffer_max_seconds": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Largest `buffer_seconds` that does not start a re-anchor. `None` before the track\nstarts."
+          },
+          "regular_lateness_seconds": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "How much later than the fastest chunks the chunks that are late on a regular basis\narrive. `None` before the track starts."
+          },
+          "reanchors": {
+            "$ref": "#/components/schemas/LiveSyncReanchorsStatsReport",
+            "description": "Re-anchors since the track was added."
+          },
+          "chunks_dropped": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total count of chunks that were dropped: they arrived after the time they should have\nbeen played at, they could not be decoded without a chunk that was dropped, or more than\n120 seconds of content was waiting.",
+            "minimum": 0
+          },
+          "late_chunks_shown": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total count of video frames that arrived after the time they should have been played at\nand were shown late.",
+            "minimum": 0
+          },
+          "interrupted_seconds": {
             "type": "number",
             "format": "double",
-            "description": "Remaining shift of the playback position until the timestamp offset of the track reaches\nits target. Positive when the buffer is being shrunk, negative when it is being grown, zero\nwhen converged. For the secondary track of `started_independent` it is the remaining shift\nrelative to the leader's final position."
-          },
-          "live_edge_lower_bound_distance_seconds": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double",
-            "description": "How far the playback position is behind the pessimistic live edge estimate (content\narriving as slow as the slowest recent chunk). Margin before the playback runs out of\ncontent. Measured against the estimate of both tracks combined in `started_shared` and of\nthis track alone in `started_independent`. `None` before the track starts."
-          },
-          "live_edge_upper_bound_distance_seconds": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double",
-            "description": "How far the playback position is behind the optimistic live edge estimate (content\narriving as fast as the fastest recent chunk). Total latency introduced by the\nsynchronization. Measured against the estimate of both tracks combined in `started_shared`\nand of this track alone in `started_independent`. `None` before the track starts."
-          },
-          "live_edge_recent_upper_bound_distance_seconds": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double",
-            "description": "Like `live_edge_upper_bound_distance_seconds`, but the estimate only looks back over the\nlast few seconds instead of the full window, so it reacts to a latency change within\nseconds. Never larger than the full-window value; it drops below it when the stream slipped\n(content arriving slower than real time) and the full window still remembers the earlier,\nfaster delivery. `None` before the track starts or when nothing arrived within the window."
+            "description": "Total time the track had nothing to play since it started."
           },
           "buffer": {
             "$ref": "#/components/schemas/LiveSyncBufferStatsReport",
@@ -3344,8 +3451,8 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/InputBuffer",
-                "description": "Input buffer configuration.\n\nDefaults: `desired_ms=2000`, `min_ms=1000`, `max_ms=5000`."
+                "$ref": "#/components/schemas/MoqInputBuffer",
+                "description": "Input buffer configuration.\n\nDefaults: `desired_ms=2000`, `min_ms=1000`, `max_ms=5000`, `max_policy=enforce`."
               }
             ]
           }
@@ -3752,6 +3859,61 @@
             }
           }
         ]
+      },
+      "MoqInputBuffer": {
+        "oneOf": [
+          {
+            "type": "number",
+            "format": "double",
+            "description": "Desired buffer in milliseconds; the allowed range is derived from it."
+          },
+          {
+            "$ref": "#/components/schemas/MoqInputBufferOptions"
+          }
+        ],
+        "description": "Buffer a MoQ input keeps between the live edge of the stream and playback.\nA larger buffer adds latency, but tolerates more delivery jitter and\nnetwork stalls."
+      },
+      "MoqInputBufferOptions": {
+        "type": "object",
+        "description": "Values that are not provided are derived from the provided ones and the\nprotocol defaults.",
+        "properties": {
+          "desired_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Buffer the input starts with, in milliseconds, measured for the chunks that arrive the\nfastest. It is also the value the buffer is brought back to when `min_ms` or `max_ms` is\nnot met."
+          },
+          "min_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Smallest buffer, in milliseconds, that chunks arriving late on a regular basis (network\njitter, stalls that keep coming back) should be left with. When they have less, the\nbuffer grows."
+          },
+          "max_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Largest buffer, in milliseconds, measured for the chunks that arrive the fastest. When\nthe buffer is larger, it shrinks back to `desired_ms`."
+          },
+          "max_policy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InputBufferMaxPolicy",
+                "description": "What happens when the stream can't be on time with a buffer of `max_ms`.\n\nDefaults to `enforce`."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
       },
       "MoqOutputContainer": {
         "type": "string",

@@ -1,13 +1,14 @@
 use std::time::Duration;
 
 use crate::{
-    Timestamp, TimestampOffset,
+    Timestamp,
     pipeline::utils::input_sync::TrackKind,
     stats::{
         input_reports::{
             FifoBufferStatsReport, InputSyncTrackStatsReport, JitterBufferStatsReport,
-            LiveSyncBufferStatsReport, LiveSyncTrackSlidingWindowStatsReport, LiveSyncTrackState,
-            LiveSyncTrackStatsReport, SimpleSyncTrackState, SimpleSyncTrackStatsReport,
+            LiveSyncBufferStatsReport, LiveSyncReanchorsStatsReport,
+            LiveSyncTrackSlidingWindowStatsReport, LiveSyncTrackState, LiveSyncTrackStatsReport,
+            SimpleSyncTrackState, SimpleSyncTrackStatsReport,
         },
         utils::SlidingWindowValue,
     },
@@ -52,25 +53,54 @@ pub(crate) enum LiveSyncStatsEvent {
     ChunkReleased {
         effective_buffer_ns: i64,
     },
+    /// A re-anchor started.
+    Reanchor {
+        kind: LiveSyncReanchorKind,
+        reason: LiveSyncReanchorReason,
+    },
+    /// Chunk left the sync buffer without being released.
+    ChunkDropped,
+    /// Video chunk was released to be shown after its time.
+    LateChunkShown,
     /// Periodic snapshot of the sync state.
     StateSnapshot(LiveSyncTrackStateSnapshot),
 }
 
 #[derive(Debug, Clone, Copy)]
+pub(crate) enum LiveSyncReanchorKind {
+    Jump,
+    Slew,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum LiveSyncReanchorReason {
+    BufferTooSmall,
+    BufferTooLarge,
+    ContentLate,
+    Interrupted,
+    AddedLatencyTakenBack,
+    TracksJoined,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct LiveSyncTrackStateSnapshot {
+    /// Content held back by the sync.
     pub buffer: LiveSyncBufferStats,
-    /// Signed distance between the current and the target anchor; positive
-    /// when the buffer is being shrunk.
-    pub target_offset_distance: TimestampOffset,
-    /// How far the playback position is behind the pessimistic live edge estimate
-    /// bounds; `None` before the track starts.
-    pub live_edge_lower_bound_distance: Option<Timestamp>,
-    /// How far the playback position is behind the optimistic live edge estimate
-    /// bounds; `None` before the track starts.
-    pub live_edge_upper_bound_distance: Option<Timestamp>,
-    /// Like `live_edge_upper_bound_distance`, but the estimate only looks back over a short
-    /// window; `None` before the track starts or when nothing arrived within it.
-    pub live_edge_recent_upper_bound_distance: Option<Timestamp>,
+    /// `None` before the track starts.
+    pub playback: Option<LiveSyncPlaybackStats>,
+    /// Total time the track had nothing to play since it started.
+    pub interrupted: Duration,
+}
+
+/// Where playback of a track is, as distances behind the live edge of the stream.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct LiveSyncPlaybackStats {
+    pub buffer: Timestamp,
+    pub target_buffer: Timestamp,
+    /// The range `buffer` does not start a re-anchor in.
+    pub buffer_min: Timestamp,
+    pub buffer_max: Timestamp,
+    pub regular_lateness: Timestamp,
 }
 
 /// Snapshot of the content held in a sync buffer.
@@ -122,6 +152,9 @@ struct InputSyncLiveTrackState {
     discontinuities_detected_10_secs: SlidingWindowValue<u32>,
     effective_buffer_on_receive_10_secs: SlidingWindowValue<i64>,
     effective_buffer_on_output_10_secs: SlidingWindowValue<i64>,
+    reanchors: LiveSyncReanchorsStatsReport,
+    chunks_dropped: u64,
+    late_chunks_shown: u64,
     snapshot: LiveSyncTrackStateSnapshot,
 }
 
@@ -173,27 +206,23 @@ impl InputSyncTrackState {
                 })
             }
             InputSyncModeState::Live(live) => {
+                let playback = live.snapshot.playback;
                 InputSyncTrackStatsReport::Live(LiveSyncTrackStatsReport {
                     bitrate_1_second,
                     bitrate_1_minute,
                     state: live.state,
                     discontinuities_detected: live.discontinuities_detected,
-                    target_offset_distance_seconds: live
-                        .snapshot
-                        .target_offset_distance
-                        .as_secs_f64(),
-                    live_edge_lower_bound_distance_seconds: live
-                        .snapshot
-                        .live_edge_lower_bound_distance
-                        .map(|distance| distance.as_secs_f64()),
-                    live_edge_upper_bound_distance_seconds: live
-                        .snapshot
-                        .live_edge_upper_bound_distance
-                        .map(|distance| distance.as_secs_f64()),
-                    live_edge_recent_upper_bound_distance_seconds: live
-                        .snapshot
-                        .live_edge_recent_upper_bound_distance
-                        .map(|distance| distance.as_secs_f64()),
+                    buffer_seconds: playback.map(|playback| playback.buffer.as_secs_f64()),
+                    target_buffer_seconds: playback
+                        .map(|playback| playback.target_buffer.as_secs_f64()),
+                    buffer_min_seconds: playback.map(|playback| playback.buffer_min.as_secs_f64()),
+                    buffer_max_seconds: playback.map(|playback| playback.buffer_max.as_secs_f64()),
+                    regular_lateness_seconds: playback
+                        .map(|playback| playback.regular_lateness.as_secs_f64()),
+                    reanchors: live.reanchors,
+                    chunks_dropped: live.chunks_dropped,
+                    late_chunks_shown: live.late_chunks_shown,
+                    interrupted_seconds: live.snapshot.interrupted.as_secs_f64(),
                     buffer: match live.snapshot.buffer {
                         LiveSyncBufferStats::Fifo { duration } => {
                             LiveSyncBufferStatsReport::Fifo(FifoBufferStatsReport {
@@ -288,6 +317,29 @@ impl InputSyncTrackState {
                     } => live
                         .effective_buffer_on_output_10_secs
                         .push(effective_buffer_ns),
+                    LiveSyncStatsEvent::Reanchor { kind, reason } => {
+                        let reanchors = &mut live.reanchors;
+                        match kind {
+                            LiveSyncReanchorKind::Jump => reanchors.jumps += 1,
+                            LiveSyncReanchorKind::Slew => reanchors.slews += 1,
+                        }
+                        match reason {
+                            LiveSyncReanchorReason::BufferTooSmall => {
+                                reanchors.buffer_too_small += 1
+                            }
+                            LiveSyncReanchorReason::BufferTooLarge => {
+                                reanchors.buffer_too_large += 1
+                            }
+                            LiveSyncReanchorReason::ContentLate => reanchors.content_late += 1,
+                            LiveSyncReanchorReason::Interrupted => reanchors.interrupted += 1,
+                            LiveSyncReanchorReason::AddedLatencyTakenBack => {
+                                reanchors.added_latency_taken_back += 1
+                            }
+                            LiveSyncReanchorReason::TracksJoined => reanchors.tracks_joined += 1,
+                        }
+                    }
+                    LiveSyncStatsEvent::ChunkDropped => live.chunks_dropped += 1,
+                    LiveSyncStatsEvent::LateChunkShown => live.late_chunks_shown += 1,
                     LiveSyncStatsEvent::StateSnapshot(new_snapshot) => live.snapshot = new_snapshot,
                 }
             }
@@ -317,14 +369,15 @@ impl InnerInputSyncTrackState {
                         effective_buffer_on_output_10_secs: SlidingWindowValue::new(
                             Duration::from_secs(10),
                         ),
+                        reanchors: LiveSyncReanchorsStatsReport::default(),
+                        chunks_dropped: 0,
+                        late_chunks_shown: 0,
                         snapshot: LiveSyncTrackStateSnapshot {
                             buffer: LiveSyncBufferStats::Fifo {
                                 duration: Timestamp::ZERO,
                             },
-                            target_offset_distance: TimestampOffset::ZERO,
-                            live_edge_lower_bound_distance: None,
-                            live_edge_upper_bound_distance: None,
-                            live_edge_recent_upper_bound_distance: None,
+                            playback: None,
+                            interrupted: Duration::ZERO,
                         },
                     }))
                 }

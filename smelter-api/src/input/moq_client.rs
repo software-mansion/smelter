@@ -4,7 +4,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::{InputBuffer, SideChannel};
+use super::{MoqInputBuffer, SideChannel};
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
@@ -24,8 +24,8 @@ pub struct MoqClientInput {
     pub side_channel: Option<SideChannel>,
     /// Input buffer configuration.
     ///
-    /// Defaults: `desired_ms=2000`, `min_ms=1000`, `max_ms=5000`.
-    pub buffer: Option<InputBuffer>,
+    /// Defaults: `desired_ms=2000`, `min_ms=1000`, `max_ms=5000`, `max_policy=enforce`.
+    pub buffer: Option<MoqInputBuffer>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq, Eq, Hash)]

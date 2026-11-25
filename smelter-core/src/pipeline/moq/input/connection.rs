@@ -28,7 +28,7 @@ use crate::{
         H264AvcDecoderConfig, H264AvccToAnnexB, InitializableThread,
         channel::{Sender, TrySendError},
         input_sync::{InputSyncStatsSender, TrackEvent, TrackKind, TrackSink},
-        live_sync::{BufferingStrategy, LiveSync, LiveSyncOptions, TrackPriority},
+        live_sync::{self, AtUpperLimit, LiveSync, LiveSyncOptions, LiveSyncTuning},
     },
 };
 
@@ -36,7 +36,7 @@ use crate::prelude::*;
 
 use super::{
     buffer::{MoqChunk, MoqJitterBuffer, resolve_buffer_options},
-    catalog::{MoqCatalogError, MoqCatalogReader},
+    catalog::{CatalogSnapshot, MoqCatalogError, MoqCatalogReader},
     track_reader::{LateGroupOptions, MoqTrackReader},
 };
 
@@ -74,6 +74,7 @@ pub(crate) struct BroadcastCtx {
     pub broadcast: broadcast::Consumer,
     pub decoder_options: MoqInputDecoders,
     pub buffer: LiveInputBufferOptions,
+    pub buffer_max_policy: LiveInputBufferMaxPolicy,
     pub should_close: Arc<AtomicBool>,
 }
 
@@ -162,16 +163,29 @@ impl BroadcastHandler {
     ) -> Self {
         let (min, desired, max) = resolve_buffer_options(broadcast_ctx.buffer);
         let sync_stats = InputSyncStatsSender::new(&input_ref, &ctx.stats_sender);
+        // Tracks are delivered separately, so with `Enforce` late video does not hold audio back.
+        let (at_upper, max_behind) = match broadcast_ctx.buffer_max_policy {
+            LiveInputBufferMaxPolicy::Extend => (AtUpperLimit::Extend, live_sync::CAPACITY),
+            LiveInputBufferMaxPolicy::Enforce => (AtUpperLimit::Enforce, max),
+        };
         let input_sync = Arc::new(LiveSync::new(
             LiveSyncOptions {
-                buffering_strategy: BufferingStrategy::Range { min, max, desired },
-                // tracks are delivered separately, so late video can be dropped to keep audio
-                // latency low
-                track_priority: TrackPriority::Audio,
-                stabilization_period: Duration::from_millis(500),
-                stabilization_tolerance: Duration::from_millis(100),
-                max_wait: desired * 2,
-                stale_estimate_threshold: Duration::from_millis(500),
+                lower: min,
+                start: desired,
+                upper: max,
+                at_upper,
+                segmented: false,
+                // set from the catalog
+                shared_timeline: false,
+                tuning: LiveSyncTuning {
+                    settle: Duration::from_millis(500),
+                    tolerance: Duration::min(Duration::from_millis(100), desired / 10),
+                    window_base: Duration::from_secs(1),
+                    start_timeout: Duration::max(desired * 2, Duration::from_secs(3)),
+                    max_slew: Duration::from_millis(1200),
+                    // the jitter buffer does not keep the write order
+                    stitch: false,
+                },
             },
             ctx.queue_ctx.sync_point,
             sync_stats,
@@ -186,7 +200,7 @@ impl BroadcastHandler {
             input_sync,
             late_groups: LateGroupOptions {
                 grace: Duration::min(Duration::from_secs(1), desired),
-                max_behind: max,
+                max_behind,
             },
             decoder_buffer_size,
             should_close: broadcast_ctx.should_close,
@@ -204,8 +218,15 @@ impl BroadcastHandler {
     /// from the catalog and starts the new ones. A new track starts in the queue after the
     /// previous track of the same kind drained.
     async fn run(&mut self, mut catalog: MoqCatalogReader) -> Result<(), MoqConnectionError> {
-        while let Some(tracks) = catalog.next().await {
-            let (video, audio) = tracks?;
+        while let Some(snapshot) = catalog.next().await {
+            let CatalogSnapshot {
+                video,
+                audio,
+                shared_timeline,
+            } = snapshot?;
+            self.track_ctx
+                .input_sync
+                .set_shared_timeline(shared_timeline);
 
             let selected_video = video.as_ref().map(|video| (&video.name, &video.config));
             if RunningTrack::needs_restart(&self.video, selected_video) {

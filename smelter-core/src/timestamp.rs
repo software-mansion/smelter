@@ -4,8 +4,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use tracing::trace;
-
 const NANOS_PER_SEC: i64 = 1_000_000_000;
 const NANOS_PER_MILLI: i64 = 1_000_000;
 const NANOS_PER_MICRO: i64 = 1_000;
@@ -397,35 +395,9 @@ pub(crate) struct TimestampOffset(Timestamp);
 impl TimestampOffset {
     pub(crate) const ZERO: TimestampOffset = TimestampOffset(Timestamp::ZERO);
 
-    pub(crate) fn abs_duration(self) -> Duration {
-        self.0.abs_duration()
-    }
-
-    pub(crate) fn as_secs_f64(self) -> f64 {
-        self.0.as_secs_f64()
-    }
-
     /// Maps a raw timestamp (pts or dts) onto the output timeline.
     pub(crate) fn to_output_pts(self, pts: Timestamp) -> Timestamp {
         pts + self.0
-    }
-
-    /// Input pts presented at `output_pts`.
-    pub(crate) fn to_input_pts(self, output_pts: Timestamp) -> Timestamp {
-        output_pts - self.0
-    }
-
-    /// Moves the mapping at most `step` toward `target`, i.e. toward
-    /// presenting the same input pts at the same output pts. A no-op once both
-    /// describe the same mapping.
-    pub(crate) fn nudge_toward(&mut self, target: TimestampOffset, max_step: Timestamp) {
-        let offset_to_target = target.0 - self.0;
-        if offset_to_target == Timestamp::ZERO {
-            return;
-        }
-        let change = Timestamp::clamp(offset_to_target, -max_step, max_step);
-        self.0 += change;
-        trace!(?change, anchor=?self.0, "Nudging anchor toward target");
     }
 }
 

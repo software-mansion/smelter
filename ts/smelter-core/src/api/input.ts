@@ -180,7 +180,7 @@ function intoMoqClientRegisterInput(input: Inputs.RegisterMoqClientInput): Regis
     required: input.required,
     decoder_map: input.decoderMap,
     side_channel: intoSideChannel(input.sideChannel),
-    buffer: intoInputBuffer(input.buffer),
+    buffer: intoMoqInputBuffer(input.buffer),
   };
 }
 
@@ -207,6 +207,23 @@ function intoInputBuffer(buffer?: Inputs.InputBuffer | null): Api.InputBuffer | 
     desired_ms: buffer.desiredMs,
     min_ms: buffer.minMs,
     max_ms: buffer.maxMs,
+  };
+}
+
+function intoMoqInputBuffer(
+  buffer?: Inputs.InputMoqBuffer | null
+): Api.MoqInputBuffer | undefined {
+  if (buffer == null) {
+    return undefined;
+  }
+  if (typeof buffer === 'number') {
+    return buffer;
+  }
+  return {
+    desired_ms: buffer.desiredMs,
+    min_ms: buffer.minMs,
+    max_ms: buffer.maxMs,
+    max_policy: buffer.maxPolicy,
   };
 }
 

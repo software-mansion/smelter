@@ -19,18 +19,21 @@ export type SideChannel = {
 
 export type InputBufferOptions = {
   /**
-   * Buffer the input aims to keep, in milliseconds. At the start it should buffer at least
-   * that much media before producing first chunk.
+   * Buffer the input starts with, in milliseconds, measured for the chunks that arrive the
+   * fastest. It is also the value the buffer is brought back to when `minMs` or `maxMs` is
+   * not met.
    */
   desiredMs?: number | null;
   /**
-   * Lower range of what is considered stable state. If buffer is smaller than this value
-   * then media will be slightly "stretched" so the buffer converges on desired value.
+   * Smallest buffer, in milliseconds, that chunks arriving late on a regular basis (network
+   * jitter, stalls that keep coming back) should be left with. When they have less, the
+   * buffer grows.
    */
   minMs?: number | null;
   /**
-   * Upper range of what is considered stable state. If buffer is larger than this value
-   * then media will be slightly "squashed" so the buffer converges on desired value.
+   * Largest buffer, in milliseconds, measured for the chunks that arrive the fastest. When
+   * the buffer is larger, it shrinks back to `desiredMs`. The buffer still grows past this
+   * value when it is needed to keep `minMs` for the chunks that are late on a regular basis.
    */
   maxMs?: number | null;
 };
