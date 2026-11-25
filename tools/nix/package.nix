@@ -1,6 +1,7 @@
 { rustPlatform
 , ffmpeg_8-headless
 , openssl
+, aws-lc
 , pkg-config
 , llvmPackages
 , libGL
@@ -16,6 +17,7 @@ let
   buildInputs = [
     ffmpeg_8-headless
     openssl
+    aws-lc
     libopus
     libGL
     vulkan-loader
