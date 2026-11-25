@@ -4,29 +4,46 @@
 
 ### 💥 Breaking changes
 
-- Remove `preset` from `ffmpeg_h264` encoder options. Pass encoder specific options via `ffmpeg_options` instead, e.g. `"ffmpeg_options": { "preset": "ultrafast" }` by [@wkozyra95](https://github.com/wkozyra95)
-- Remove `send_eos_when` from output options by [@wkozyra95](https://github.com/wkozyra95)
+- Remove `preset` from `ffmpeg_h264` encoder options. Pass encoder specific options via `ffmpeg_options` instead, e.g. `"ffmpeg_options": { "preset": "ultrafast" }`.
+- Remove `send_eos_when` from output options.
 
 ### ✨ New features
 
-- Add `encoder_name` option to `ffmpeg_h264` encoder to select which FFmpeg encoder is used by [@wkozyra95](https://github.com/wkozyra95)
-- Add `SMELTER_RENDER_MAX_LAYOUTS_COUNT` environment variable to configure the maximum number of layouts (default 100) by [@wkozyra95](https://github.com/wkozyra95)
-- Support FFmpeg 9 by [@wkozyra95](https://github.com/wkozyra95)
-- Add `start_at_ms` option to MP4 and HLS outputs. Output is created when the register request is handled, but it starts producing data at the specified time by [@wkozyra95](https://github.com/wkozyra95)
-- Add `buffer` option to RTMP and HLS inputs to control the buffer kept between the live edge and playback, and `ingest_mode` option to RTMP input by [@wkozyra95](https://github.com/wkozyra95)
-- Return `endpoint_route` when registering a WHEP server output by [@wkozyra95](https://github.com/wkozyra95)
+- Add MoQ client input and output (`moq_client`), with reconnect support. TLS verification can be disabled with `SMELTER_MOQ_DISABLE_TLS_VERIFICATION`.
+- Add `encoder_name` option to `ffmpeg_h264` encoder to select which FFmpeg encoder is used.
+- Add `ffmpeg_options` to HLS output.
+- Add `SMELTER_RENDER_MAX_LAYOUTS_COUNT` environment variable to configure the maximum number of layouts (default 100).
+- Support FFmpeg 9.
+- Add `start_at_ms` option to MP4 and HLS outputs. Output is created when the register request is handled, but it starts producing data at the specified time.
+- Add `buffer` option to RTMP and HLS inputs to control the buffer kept between the live edge and playback, and `ingest_mode` option to RTMP input.
+- Return `endpoint_route` when registering a WHEP server output.
 
 ### 🐛 Bug fixes
 
-- Fix `VIDEO_INPUT_DELIVERED`/`AUDIO_INPUT_DELIVERED` events not being sent before queue start ([#2068](https://github.com/software-mansion/smelter/pull/2068) by [@wkozyra95](https://github.com/wkozyra95))
+- Fix `VIDEO_INPUT_DELIVERED`/`AUDIO_INPUT_DELIVERED` events not being sent before queue start.
+- Handle lost and malformed packets in H264 RTP inputs, and resume decoding on recovery points after packet loss.
+- Fix panic on malformed H264 NAL units.
+- Fix A/V sync offset caused by AAC and Opus encoder/decoder delays.
+- Fix HE-AAC (SBR/PS) decoding and support Opus stereo streams with channel mapping family 1.
+- Fix MP4 input looping (dropped first frame, audio/video tracks out of sync between loops).
+- Preserve URL query string in RTMP output stream key.
+- Return an error when font registration fails.
+- Fix image aspect ratio calculations and validate image dimensions.
+- Fix side channel on macOS.
+- Ensure output EOS and done events are sent when a track ends or a WebRTC connection fails.
 
 ### 🔧 Others
+
+- Improve rescaling quality by replacing mip-based Lanczos rescaling with a separable resampler.
+- HLS input no longer downloads unused variants.
+- Improve audio mixer handling of gaps, clock drift and timestamp discontinuities.
+- Update CEF to 158.
 
 ## [v0.6.0](https://github.com/software-mansion/smelter/releases/tag/v0.6.0)
 
 ### 💥 Breaking changes
 - Rename `var<push_constant>` to `var<immediate>` in user-provided shaders ([#1624](https://github.com/software-mansion/smelter/pull/1624) by [@noituri](https://github.com/noituri))
-- User-provided shaders now need to include `enable wgpu_binding_array;`. ([#2025](https://github.com/software-mansion/smelter/pull/2025)) by [@noituri](https://github.com/noituri))
+- User-provided shaders now need to include `enable wgpu_binding_array;`. ([#2025](https://github.com/software-mansion/smelter/pull/2025) by [@noituri](https://github.com/noituri))
 - Replace `url` field with `stream_key` in RTMP input, port is now defined globally via `SMELTER_RTMP_SERVER_PORT` ([#1656](https://github.com/software-mansion/smelter/pull/1656), [#1677](https://github.com/software-mansion/smelter/pull/1677) by [@wkazmierczak](https://github.com/wkazmierczak))
 - Rename `vk-video` feature to `gpu-video` ([#1942](https://github.com/software-mansion/smelter/pull/1942)) by [@jerzywilczek](https://github.com/jerzywilczek)
 - Remove `offset_ms` from WHIP and WHEP inputs ([#1974](https://github.com/software-mansion/smelter/pull/1974), [#1857](https://github.com/software-mansion/smelter/pull/1857) by [@wkozyra95](https://github.com/wkozyra95))
