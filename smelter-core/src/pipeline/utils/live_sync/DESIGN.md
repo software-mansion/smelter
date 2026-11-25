@@ -8,6 +8,9 @@ not marked `(?)` one by one. `[today]` marks the current implementation. Scenari
 Revised on 2026-11-25 after a review by another session. The review is section 14, and section
 15 says where each of its findings went.
 
+Sections 16 and 17 were added on 2026-11-25 by the session that prepares the implementation:
+what has to be settled before the rules can be written in Rust, and the plan for writing them.
+
 1. The idea
 2. Model: what is measured, what is controlled, the band
 3. Structure: four stages
@@ -23,6 +26,8 @@ Revised on 2026-11-25 after a review by another session. The review is section 1
 13. Decisions to review, and what is left open
 14. Review findings
 15. Where the review findings went
+16. Before the implementation: contradictions and vague rules
+17. Implementation plan: what stays, the layout, the order of work
 
 ## 1. The idea
 
@@ -1266,3 +1271,362 @@ and after the change (`python3 design_sim.py review`). All twelve pointed at som
 12. **Scenarios to add**: the group `review` of the script. Still not run: a returning track
     with a slow first keyframe, the bufferbloat sawtooth, a backlog that comes slower than
     real time.
+
+## 16. Before the implementation: contradictions and vague rules
+
+Sections 1-5 read against `design_sim.py` and against the Rust code next to this file, by the
+session that prepares the implementation (2026-11-25). No Rust was written. Every item ends
+with what will be implemented.
+
+- Stages 1 and 2: the script decides, also where its behavior looks like a shortcut of the
+  model. Those items say "as the script".
+- Everything else was decided here and is open to review.
+- Numbers in square brackets are lines of `design_sim.py`.
+
+### 16.1 Where the script differs from section 4 (stages 1 and 2)
+
+Checked and equal: ED1, the three conditions of ED3 and its window, LT1, LT3-LT6, 2.4, DC1, the
+table of DC3, DC4, and the constants of 5.5 other than item 13.
+
+1. **ED2: a confirmed fall of more than 1s restarts the window of ED3** [83-93].
+   - The first two of the three chunks are not added to the window. With the third, the window
+     is replaced by these three chunks.
+   - All three still enter the history of LT1. A single chunk more than 1s under the edge
+     reads there as a chunk at the edge: it ends an occasion (LT2) and a stretch (LT9).
+   - Implement: as the script.
+2. **ED3 takes half of `W` after a gap in arrivals, not `W`** [113-131].
+   - Text: "after `W` it is the edge" (4.2), "content is late for `W`", "the freeze is longer by
+     `W`" (6), "ED3 confirms the new level after `W`" (8).
+   - Script: the earlier half of the window needs only one chunk. After a stall of at least
+     `W / 2` the edge moves `W / 2` after delivery resumed (section 12: 0.5s with a `W` of 1s).
+     Without a gap it takes `W`, because until then the window holds chunks at the old edge.
+   - Implement: as the script.
+3. **There are two values of `c`** [105-111, 378, 388].
+   - ED3 takes it over the window that reaches back to the fourth chunk (sparse tracks). The
+     `c` of RL4 and RL7 is over plain `W`, and it is the edge when nothing arrived in the last
+     `W`: then nothing is kept.
+   - In enforce the kept test is cut off like the target: `min(c + B*, c of the reference +
+     upper)`. So is the start [363-364]: `T = min(E + start, E of the reference + upper)`.
+   - Implement: as the script.
+4. **ED4: settled is measured against a remembered level, not over the last `settle`**
+   [102-103, 133-134].
+   - The timer restarts when the edge is more than `tol` under the level, and the level moves
+     there. A rise (ED3) moves the level up without restarting the timer. The first chunk
+     starts the timer.
+   - Difference from the text: an edge that falls slowly and steadily (a source that runs a
+     little fast) is not settled for `settle` each time the fall adds up to `tol`. It matters
+     only until the track counts.
+   - Implement: as the script.
+5. **LT7: "comes back at once" is defined only in the script** [94-101].
+   - Rises that were not taken back are a stack. A rise is taken back when the edge is at or
+     under the edge from before it (plus `tol`), and the edge was still above half of the rise
+     less than one `W` ago. When it came down slower, the rise is forgotten and nothing is
+     undone. Several rises are undone newest first.
+   - The stack never expires, and every chunk walks all of it. A source that runs slow adds a
+     rise of `tol` every few seconds for as long as it runs.
+   - Implement: as the script, and a rise is forgotten after 120s (the length of the
+     history; its undo would shift nothing there by then). Given up: when a rise older than
+     120s is taken back, DC7 does not remove the latency that followed it.
+6. **LT2-LT4 count in 250ms slots, not in chunks** [183-212].
+   - A level is reached in a slot whose largest delay is within a tenth of it. Going back in
+     time, the occasion takes every slot whose smallest delay is not two tenths under the
+     level, and the first slot that is.
+   - So reaches in the same slot or in neighboring slots are always one occasion, and a time
+     without arrivals neither separates two occasions nor counts as "faster in between".
+   - An occasion is dated by its newest slot. "Apart" in LT3 and LT4 is between those.
+   - Implement: as the script.
+7. **LT9 is not LT2 applied to durations** [228-242].
+   - The script does not use the occasions of a level. It takes every stretch between two
+     slots with a chunk at the edge (within `tol`) that has at least one slot without such a
+     chunk in between. The stretch in progress counts, up to now.
+   - Durations are the same within a tenth, at least one slot, and "at least as long" counts
+     as reached, like a level in LT2.
+   - "Apart" is from start to start here, and the keep time runs from the end of the latest
+     stretch.
+   - Implement: as the script.
+8. **TR1, LT8: no track counts before DC1** [349-351, 360-361].
+   - Text: a track counts from the moment its edge settled.
+   - Script: at DC1 every track that has delivered counts at once, settled or not (a start by
+     timeout). Only after DC1 it is as TR1 says.
+   - So nothing is recorded as lateness before DC1, and after a start by timeout the rest of
+     the burst is.
+   - Implement: as the script.
+9. **DC3: a slew to earlier waits while nothing is playing** [401-406].
+   - The text covers only the slew to later, which becomes a jump. A slew to earlier stops
+     while the buffer is inside the band and goes on when something plays again. Outside the
+     band it is the jump of the first row.
+   - Implement: as the script.
+10. **DC6: the script knows how long a chunk is** [262]. A track plays until the end of its
+    newest released chunk (20ms in the script). The chunk types have no duration.
+    - Implement: the presentation time alone, as DC6 reads. A track with long gaps between
+      frames then counts as not playing in between, which 9.3 already relies on.
+11. **DC7 does not test whether "the reason is gone"** [400, 424-430].
+    - Text: two reasons (LT4, LT7), and latency the stream brought itself stays (drift).
+    - Script: whenever the buffer is above the target by more than `tol` and that much was
+      added, it is slewed back by `min(added, B - B*)`. So what was added is also taken back
+      when the target came down because the edge fell (a source that runs fast, a shorter
+      path).
+    - Implement: as the script.
+12. **DC7: what counts as added is defined only in the script** [293-294, 312-315, 391-394,
+    431-434]. Three numbers: the timeline without what was added, and how much of the rises
+    of the input edge the timeline has and has not followed yet.
+    - A re-anchor to later is added latency, except the part that follows a rise the timeline
+      had not followed yet.
+    - A rise of `E` first turns what was already added into followed: the stream moved to
+      where the timeline already was.
+    - A rise that is taken back (LT7) turns its followed part into added.
+    - A re-anchor to earlier takes the first number down with it: added is never negative.
+    - A gap, ported as it is: a fall of `E` does not reduce "not followed yet". When `E`
+      goes down and up without ED3 (the track with the later edge goes idle and returns,
+      TR1), it adds up, a later re-anchor is booked as following the stream, and DC7 does not
+      take it back.
+    - Implement: as the script.
+13. **Constants.**
+    - `start_timeout`: `max(2 x start, 3s)` in 5.5, so 4s (RTMP), 3s (MoQ 100 / 250 / 500ms)
+      and 4s (MoQ 1s / 2s / 5s). The script ran with 5s, 2s and 10s [743, 748, 36].
+    - `ahead` (stage 3): 500ms in 5.5, 100ms in the script [38].
+    - Implement: 5.5. The script has three numbers here and no rule. Of section 12, only "the
+      edge never settles" depends on them.
+14. **Numbers of section 12 that the script does not give today.** All six groups were run for
+    this review (24 minutes); everything else in section 12 came out as written.
+    - 2s stall every 90s: "about 0.25s is lost at every stall". Script: 0.5s over four stalls.
+    - MoQ, delays of up to 400ms: "nothing lost". Script: 0.3s dropped, and one re-anchor
+      while nothing played.
+    - MoQ, 0.6s hiccup every 15s, enforce: "about 0.1s lost per hiccup". Script: 1.8s over ten
+      hiccups, and 1.5s with nothing playing.
+    - MoQ, delay 300ms higher for 3s every 8s: "0.7s of audio late". Script: 1.0s.
+    - Nothing to implement.
+
+### 16.2 Where the document contradicts itself
+
+1. **RL3 says what RL2 says.** RL2: a chunk is released when it is due within `ahead`. RL3:
+   with a hole, release waits until the first chunk that is there is due within `ahead`. A
+   hole changes nothing `[today: 5s ahead without a hole, 100ms with one]`, and the "Holes"
+   part of the buffer contract (5.3) has no user in live sync.
+   - Implement: RL2 only. The buffer keeps reporting "waiting for a gap" for the stats.
+2. **DC5 against RL4: what a jump to earlier costs.** DC5: "the oldest unreleased content of
+   that length misses its time". RL4: late means the presentation time has passed. After a
+   jump to earlier by `x`, only `x - ahead` of content is in the past. The rest maps in
+   front of chunks that were already released, and the track would hand the decoder
+   presentation times that go back.
+   - Implement: after a jump to earlier, content that maps before the newest presentation
+     time the track has released is handled as late (RL4).
+3. **`max_policy` "does not exist" on RTMP and HLS, and "the shape stays"** (5.1). `buffer` is
+   one API type for the three inputs (`smelter-api/src/input/buffer.rs`).
+   - Implement: the MoQ input gets its own buffer type, the shared fields plus `max_policy`.
+4. **`shared_timeline` is an option of `LiveSync::new` (5.2), and it comes from the catalog**
+   (7). The MoQ input creates the sync before the first catalog snapshot, and the catalog can
+   change during a broadcast (`moq/input/connection.rs`).
+   - Implement: a setter on `LiveSync`, called on every snapshot. Only the hang catalog has
+     `clock`; with the MSF catalog the hint is off.
+5. **The stats of 5.4 against the report they replace.** Gauges "per input", in `_ms`. Today's
+   report is per track and in `_seconds` (`stats/input_reports/sync.rs`), with TR6 the values
+   differ per track, and 5.4 does not say which of today's fields stay.
+   - Implement: per track, in seconds; a track reports the timeline it is on. Stay: bitrate,
+     the buffered content, the effective buffer on receive and on output, discontinuities.
+     Replaced: the state, `target_offset_distance_seconds`, the three `live_edge_*`.
+6. **A broken timestamp "is stitched away and back" (9.3) against ST2-ST4.** Away and back are
+   two jumps on one track, one chunk apart. The second comes while the first re-base still
+   waits for the other track, which ST3 does not cover. Each sends `Discontinuity`, and the
+   HLS sink then waits for a keyframe (`hls_input.rs`).
+   - Implement: 16.3, item 2. On HLS a broken timestamp stays a freeze until the next
+     keyframe.
+7. **"No hidden time source" (3, 9.3) against "the arrival time is taken inside
+   `write_chunk`"** (5.2).
+   - Implement: the clock is read in the entry points only (`write_chunk`, the ticker,
+     `remove_track`, `flush`) and passed down `[today: the same, apart from the stats code]`.
+8. **TR6 moves "the non-reference track", and TR5 defines a reference for enforce only.**
+   - Implement: in TR6 video moves while audio counts, with either policy.
+
+### 16.3 Rules that are too vague to implement
+
+1. **ST2: "the pts of the previous chunk plus the previous frame gap".** Chunks come in decode
+   order. With B-frames the previous chunk is not the newest content, and the gap to the one
+   before it can be negative. After one chunk there is no gap.
+   - Implement: the largest stitched pts of the track so far, plus the smallest positive pts
+     step among its recent chunks (0 when there is none).
+2. **ST2-ST4: everything around the re-base that waits.**
+   - Not covered: the other track has no chunk yet or is added later (no `J` to test); it
+     jumps by a `J` that does not pair; the waiting track jumps again; an input with one
+     track; what an undo does to chunks that are already stitched and to the event that was
+     sent.
+   - Implement:
+     - one offset for the input, and at most one re-base that waits (track, offset, `J`);
+     - one track: the re-base is the offset of the input at once. A track that delivers its
+       first chunk takes the waiting re-base when there is one, which settles it;
+     - a jump on the waiting track replaces what waits. When that brings the track back
+       within the pair tolerance of the offset of the input, nothing waits anymore (away and
+       back);
+     - a jump on the other track that does not pair: what waited becomes the offset of the
+       input, and the new jump waits in its place;
+     - chunks keep the pts they were written with. An undo changes the offset for later
+       chunks only and sends a second `Discontinuity`. For stages 1-3 it is a pts jump that
+       is not stitched.
+   - The offset is applied at write (stage 1 needs the stitched pts), so `apply_anchor` has
+     to add up: stitch at write, `T` at release `[today: HlsPacket overwrites]`.
+   - The event has to leave in front of its chunk, seconds after the write. The track
+     remembers the position of that chunk in its FIFO; stitching is on for FIFO buffers only.
+   - A misread that section 6 does not list: a second rendition that keeps delivering more
+     than 2s of the old timeline after the first track jumped (H11) undoes a real
+     discontinuity. Both tracks end up not stitched (G6, with an artifact).
+3. **DC5 is the one rule of stage 2 that the script does not have.** The text leaves open
+   which value of `T` is compared with the band while `T` differs along the pts, how a track
+   reads `T` for a pts older than the newest released one (B-frames, a track that is behind
+   or was just added), and what happens to the dts.
+   - Implement:
+     - `T` is a short list of segments over the pts (from pts, value, slope);
+     - only the part after the newest released pts of any track (the frontier) ever changes:
+       a jump is a new value there, a slew is a slope there, set again on every tick (DC4);
+     - stage 2 works with the value at the frontier;
+     - older pts read the segments as they were, and before the oldest kept segment its
+       first value;
+     - a chunk is shifted as a whole: its dts moves by the `T` of its pts.
+4. **RL4: the cut of late video.** The reading that will be implemented, for the run of late
+   chunks at the front of the buffer:
+   - the run has a keyframe: what is before its newest keyframe is dropped, the rest is
+     released decode-only;
+   - it has none: it continues the GOP that is being released, and all of it is released
+     decode-only;
+   - no chunk on time follows the run in the buffer: its last chunk, in buffer order
+     `[today: the same]`, is released to be shown.
+   - Not covered: a run without a keyframe when nothing of its GOP was released (the start
+     cuts into a GOP, a drop by RL5). The decoder would get frames without their references
+     (2.1 of `REDESIGN.md`).
+   - Implement: one flag per video track, "needs a keyframe". It is set at the start and
+     after every drop that is not a cut at a keyframe, and while it is set, chunks before the
+     next keyframe are dropped `[today: only the HLS sink does this]`.
+5. **RL5: "120s of content".** Implement: the pts span of the buffer. The oldest chunks are
+   dropped, on video with the flag of item 4. It also holds before DC1.
+6. **RL6 before DC1, and `remove_track`.** There is no `T` yet.
+   - Implement: `flush` starts the way DC1 does after its timeout (`T = E + start` on the
+     edge of now), then releases everything in order, late or not. `remove_track` does that
+     for one track `[today: the same]`.
+7. **RL7 for the best-effort video track.** "Only a newer keyframe is a reason to stop
+   reading" can't be said through the deadline, which is one pts per track.
+   - Implement: no deadline for that track. The MoQ reader then gives up on a group only by
+     its own limit `[today: max_behind in track_reader.rs, set to max]`, and RL4 drops the
+     late GOPs that have a newer keyframe.
+   - That limit contradicts extend: the buffer may grow past `upper`, and the reader drops
+     what ends more than `upper` behind the newest group. With extend the limit becomes the
+     capacity (RL5).
+8. **5.3: the buffer contract.**
+   - "Drop from the front up to a pts" does not work on a FIFO. It is in decode order, where
+     the pts go back and forth (B-frames).
+   - The keyframe flag as "a new field of the chunk type": the RTMP buffer holds
+     `EncodedInputChunk`, the public chunk type of the crate, which is also built by the MP4
+     and RTP inputs (six places) that have no use for the flag.
+   - Implement: the buffer shows its chunks from the front (pts, keyframe) and hands them out
+     one by one; stage 3 decides for each. The flag is a method of `InputSyncItem`: HLS
+     `is_key()`, MoQ the first frame of a group, RTMP a wrapper around the chunk, filled from
+     `VideoData::is_keyframe`. `EncodedInputChunk` does not change.
+9. **TR6.** It is not in the script, and it is the least defined rule:
+   - when it is tested. By TR3 a new track is scheduled on `T` from its first chunk. With
+     unrelated timestamps all of it is late or far ahead before any edge can be compared;
+   - on which edges. A burst puts the edge of a new track seconds late (G1);
+   - what "its own timeline" means for the start of the second track, for DC6, for the
+     cut-off of enforce and for DC7;
+   - "re-anchored to the shared one by DC3": by which row.
+   - Implement:
+     - without the hint, a new track is not scheduled until its edge has settled (or
+       `start_timeout`). Then it joins `T` when the edges are under 5s apart, and otherwise
+       starts on its own edge (`T = E + start`);
+     - while the tracks are apart, every rule of stage 2 runs per timeline, with the track
+       that is on it: `E`, `L`, the band, DC6, DC7, and in enforce the cut-off at `upper`
+       above its own edge;
+     - taken apart, both keep the `T` they have. Joined: the timeline of video moves to the
+       one of audio, by a slew when it is at most `max_slew` away and video is playing, by a
+       jump otherwise. Then `E` and `L` are combined again.
+
+## 17. Implementation plan: what stays, the layout, the order of work
+
+A direct replacement: the new live sync takes the place of the current one in one change (step
+5), and nothing selects between them at any point.
+
+### 17.1 What stays and what goes
+
+In `live_sync/`:
+
+| file | stays | goes |
+|---|---|---|
+| `mod.rs` | `LiveSync`, the ticker (20ms) | `LiveSyncOptions` as it is (5.2) |
+| `track.rs` | all of it | |
+| `buffer.rs` | `FifoBuffer`, `ChunkBuffer` | the trait as it is (16.3, item 8), `BufferingStrategy`, `TrackPriority` |
+| `state.rs` | the frame: one state behind one mutex, a write runs a tick, `add_track`, `remove_track`, `flush`, closed sinks, deadlines, stats | `Mode`, the start and correction decisions, every reset, release in pts order across the tracks |
+| `stats.rs` | the sender | what it reports |
+| `edge_estimator.rs`, `mode.rs`, `decision_start_track.rs`, `decision_correct_mode.rs` | | all of it |
+
+Around it:
+
+- `input_sync`: `TrackEvent`, `TrackSink` and `InputSync` stay. `InputSyncItem` gets
+  `is_keyframe`.
+- The inputs: how `buffer` is resolved into three values stays. The per-protocol values they
+  pass today become the tuning of 5.5. The late group handling of the MoQ reader stays (RL7).
+  The HLS sink no longer holds back decode-only packets of a GOP (RL4 does it).
+- The decoder side does not change (`DecodeOnlyFilter`, `EncodedInputEvent::Discontinuity`).
+- `smelter-core::stats` and the API type of `buffer` change, in the last step.
+
+### 17.2 Layout
+
+```
+live_sync/
+  mod.rs        LiveSync, LiveSyncOptions, LiveSyncTuning, the ticker
+  track.rs      LiveSyncTrack, LiveSyncDeadline
+  buffer.rs     LiveSyncBuffer, FifoBuffer
+  state.rs      SharedState, Track: runs the stages in order
+  stitch.rs     stage 0   ST1-ST4
+  edge.rs       stage 1   ED1-ED4, rises and their undo            class Edge
+  lateness.rs   stage 1   LT1-LT6, LT9                             class Depth
+  measure.rs    stage 1   one track: edge, lateness, TR1, LT7, LT8  simulate() [320-351]
+  timeline.rs   stage 2   T over the pts (DC5)
+  decide.rs     stage 2   TR2, TR5, 2.4, DC1-DC4, DC6, DC7         simulate() [353-434]
+  release.rs    stage 3   RL2, RL4-RL7
+  stats.rs
+```
+
+- `edge.rs`, `lateness.rs` and `decide.rs` keep the structure of the script, so that each can
+  be read side by side with it. That reading is the check of the port: the scenarios of the
+  script are not ported as Rust tests (the user, 2026-11-25).
+- One tick: every track runs its measurement; one snapshot of the tracks is taken (edge,
+  lateness, `A`, `c`, whether it counts, the newest presentation time it released); stage 2
+  runs once per timeline on that snapshot; every track releases; deadlines and stats.
+- Stage 2 is a method of the struct that owns a timeline: the segments of `T`, the three
+  numbers of DC7, the direction of the re-anchor that is running. It reads the snapshot and
+  nothing else.
+- TR6 only chooses which tracks are on a timeline: one timeline with both tracks, or one
+  each. Stage 2 does not know about it.
+- `lateness.rs` reads `L` from the history on every change, as the script does: up to 480
+  levels times 480 slots when nothing is regular. Ported as it is and measured after the
+  switch.
+
+### 17.3 Order of work
+
+Every step compiles. Steps 2-4 add code that nothing calls yet (`allow(dead_code)` on the new
+modules until step 5), and the current live sync runs unchanged until then.
+
+1. **Keyframe flag.** `InputSyncItem::is_keyframe`, set by the three inputs (16.3, item 8).
+   - After it: the same behavior; nothing reads the flag.
+2. **Stage 1.** `edge.rs`, `lateness.rs`, `measure.rs`, with 16.1, items 1-8.
+3. **Stage 2.** `timeline.rs`, `decide.rs`, with 16.1, items 9-13 and 16.3, item 3. One
+   timeline; both policies (the script has both).
+4. **Buffer contract and stage 3.** The new methods of `LiveSyncBuffer` next to the old ones,
+   for `FifoBuffer` and `MoqJitterBuffer`. `release.rs`, with 16.2, items 1-2 and 16.3, items
+   4-7.
+   - After steps 2-4: the same behavior; the new code is not called.
+5. **The switch.** The new `LiveSyncOptions`; `state.rs` runs the stages; the three inputs
+   pass the new options (RTMP and HLS extend, MoQ enforce, HLS with the segments hint). The
+   files and types of 17.1 that go are deleted, with the old methods of the buffer trait.
+   - The stats report keeps its shape for now and is filled from the new state: the buffer
+     as the distance to the upper bound, `B - L` as the distance to the lower one, `T - T*`
+     as the distance to the target.
+   - After it: all three inputs run on the new live sync, with one timeline per input.
+     Missing: stitching (a pts jump of 10s or more is one jump with an artifact, as on MoQ;
+     `[today: a restart]`), TR6 (a MoQ input with unrelated timestamps does not play both
+     tracks), the public option, the new stats.
+6. **Stage 0.** `stitch.rs`, on for RTMP and HLS, with 16.3, items 1-2.
+7. **TR6 and the hint.** Two timelines, `set_shared_timeline`, the MoQ input reads `clock`
+   from the catalog (16.2, item 4; 16.3, item 9).
+8. **Public option and stats.** `max_policy` on the MoQ input, the report of 5.4 (16.2, items
+   3 and 5), through `/api-change`. The HLS sink loses its GOP holding. Module docs,
+   changelog.
+
+Steps 6 and 7 do not depend on each other. Step 8 does not depend on 6 or 7.
