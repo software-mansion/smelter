@@ -1,23 +1,15 @@
 use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::{Arc, atomic::AtomicBool},
     time::Duration,
 };
 
 use bytes::Bytes;
-use ffmpeg_next::{
-    Dictionary, Packet, Rational,
-    format::{context, input_with_interrupt_and_dictionary},
-    media::Type,
-};
+use ffmpeg_next::{Packet, Rational};
 use tracing::{Level, Span, debug, info, span, trace, warn};
 
 use crate::{
     pipeline::{
         decoder::{DecoderThreadHandle, EncodedInputEvent},
-        ffmpeg_utils::ReadExtradataExt,
         input::Input,
         utils::{
             channel::TrySendError,
@@ -31,7 +23,10 @@ use crate::{
     queue::{QueueInput, QueueSender, QueueTrackGroupOffset, QueueTrackGroupOptions},
 };
 
-use super::hls_decoder::{spawn_audio_decoder, spawn_video_decoder};
+use super::{
+    ffmpeg_input::{FfmpegInputContext, HlsStream},
+    hls_decoder::{spawn_audio_decoder, spawn_video_decoder},
+};
 
 use crate::prelude::*;
 
@@ -261,13 +256,6 @@ impl HlsDemuxerThread {
             .flatten()
             .find(|track| track.index == stream_id)
     }
-}
-
-/// One track of the playlist, as the demuxer described it.
-struct HlsStream {
-    index: usize,
-    time_base: Rational,
-    extradata: Option<Bytes>,
 }
 
 impl HlsStream {
@@ -510,50 +498,6 @@ impl TrackSink<HlsPacket> for DecoderTrackWriter {
 
     fn is_closed(&self) -> bool {
         self.closed
-    }
-}
-
-struct FfmpegInputContext {
-    ctx: context::Input,
-}
-
-impl FfmpegInputContext {
-    fn new(url: &Arc<str>, should_close: Arc<AtomicBool>) -> Result<Self, ffmpeg_next::Error> {
-        let ctx = input_with_interrupt_and_dictionary(
-            &**url,
-            move || should_close.load(Ordering::Relaxed),
-            Dictionary::from_iter([("protocol_whitelist", "tcp,hls,http,https,file,tls")]),
-        )?;
-        Ok(Self { ctx })
-    }
-
-    fn audio_stream(&self) -> Option<HlsStream> {
-        self.stream(Type::Audio)
-    }
-
-    fn video_stream(&self) -> Option<HlsStream> {
-        self.stream(Type::Video)
-    }
-
-    fn stream(&self, kind: Type) -> Option<HlsStream> {
-        let stream = self.ctx.streams().best(kind)?;
-        Some(HlsStream {
-            index: stream.index(),
-            time_base: stream.time_base(),
-            extradata: stream.read_extradata(),
-        })
-    }
-
-    /// The HLS demuxer only knows the duration of a playlist that ended
-    /// (`#EXT-X-ENDLIST`), so a playlist without one is a live one.
-    fn is_live(&self) -> bool {
-        self.ctx.duration() <= 0
-    }
-
-    fn read_packet(&mut self) -> Result<Packet, ffmpeg_next::Error> {
-        let mut packet = Packet::empty();
-        packet.read(&mut self.ctx)?;
-        Ok(packet)
     }
 }
 
