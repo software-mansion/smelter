@@ -26,7 +26,7 @@ import { getSmelterStatus } from '../getSmelterStatus';
 // `smelter-labs/rc-releases` repo and set VERSION to the release tag (which also
 // represents a commit hash in the main repo).
 //
-const VERSION = `ec1fc728`;
+const VERSION = `482f554a`;
 const REPO = `smelter-labs/rc-releases`;
 
 export type LocallySpawnedInstanceOptions = {

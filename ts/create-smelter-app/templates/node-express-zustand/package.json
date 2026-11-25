@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@swmansion/smelter": "workspace:0.5.0-rc.0",
-    "@swmansion/smelter-node": "workspace:0.5.0-rc.0",
+    "@swmansion/smelter-node": "workspace:0.5.0-rc.1",
     "express": "^4.22.0",
     "react": "^18.3.1",
     "zustand": "4.5.5"
