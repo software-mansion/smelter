@@ -8,15 +8,16 @@ use crate::{
         NativeEncodeCapabilities, NativeEncodeProfileCapabilities,
         NativeEncodeQualityLevelProperties,
     },
-    backends::vulkan::vulkan_encoder::{EncodedBytestreamFormat, FullEncoderParameters},
+    backends::vulkan::vulkan_encoder::FullEncoderParameters,
     backends::vulkan::wrappers::ProfileInfo,
     parameters::RateControl,
+    parser::h264::to_avcc,
 };
 
 pub(crate) mod h264;
 pub(crate) mod h265;
 
-pub(crate) trait EncodeCodec: Codec {
+pub(crate) trait EncodeCodec: Codec + Send + 'static {
     fn profile_info<'a>(params: &FullEncoderParameters<Self>) -> ProfileInfo<'a>;
     fn encode_profile_capabilities(
         caps: &Self::NativeEncodeCodecCapabilities,
@@ -102,10 +103,12 @@ pub(crate) trait EncodeCodec: Codec {
     fn codec_session_parameters_get_info<'a>(
         info: Self::CodecWriteParametersInfo,
     ) -> Self::CodecEncodeSessionParametersGetInfo<'a>;
-    fn codec_write_parameters_info_all() -> Self::CodecWriteParametersInfo;
-    fn codec_write_parameters_info_each() -> Vec<Self::CodecWriteParametersInfo>;
 
-    type OutputBytestreamFormat: Default + Into<EncodedBytestreamFormat>;
+    type OutputBytestreamFormat: Copy + Default + std::fmt::Debug + Send + 'static;
+    fn inline_write_parameters_infos(
+        format: Self::OutputBytestreamFormat,
+    ) -> Vec<Self::CodecWriteParametersInfo>;
+    fn convert_output_bytestream(format: Self::OutputBytestreamFormat, data: &mut Vec<u8>);
 
     fn resolve_idr_period<'a>(
         quality_level_properties: &Self::CodecSpecificEncodeQualityLevelProperties<'a>,
@@ -181,4 +184,11 @@ pub(crate) trait CodecSpecificEncoderQualityLevelProperties:
     std::fmt::Debug + Clone + Default + vk::ExtendsVideoEncodeQualityLevelPropertiesKHR
 {
     fn zeroed(&self) -> bool;
+}
+
+pub(crate) fn annexb_nalu_to_length_prefixed(nalu: &mut Vec<u8>) {
+    if nalu.starts_with(&[0, 0, 1]) {
+        nalu.insert(0, 0);
+    }
+    to_avcc(nalu);
 }

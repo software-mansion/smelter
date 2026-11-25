@@ -31,7 +31,6 @@ use crate::{
     device::{ColorRange, ColorSpace, Rational},
     encoders::{VideoEncoderError, VideoEncoderParametersInfoH264, VideoEncoderParametersInfoH265},
     parameters::RateControl,
-    parser::h264::to_avcc,
 };
 
 pub(crate) mod async_encoder;
@@ -291,18 +290,18 @@ pub(crate) struct InFlightEncodeResources {
     _view: ImageView,
 }
 
-pub(crate) struct EncodeSubmission {
+pub(crate) struct EncodeSubmission<C: EncodeCodec> {
     pub(crate) is_idr: bool,
     pub(crate) wait_value: SemaphoreWaitValue,
     pub(crate) pts: Option<u64>,
     prepended_stream_params: Vec<u8>,
-    bytestream_format: EncodedBytestreamFormat,
+    bytestream_format: C::OutputBytestreamFormat,
     query: ResultQuery<EncodeFeedback>,
     output_buffer: Option<EncodeOutputBuffer>,
     _in_flight_resources: InFlightEncodeResources,
 }
 
-impl Drop for EncodeSubmission {
+impl<C: EncodeCodec> Drop for EncodeSubmission<C> {
     fn drop(&mut self) {
         if let Some(output_buffer) = self.output_buffer.take() {
             output_buffer.release_to_pool();
@@ -310,7 +309,7 @@ impl Drop for EncodeSubmission {
     }
 }
 
-impl EncodeSubmission {
+impl<C: EncodeCodec> EncodeSubmission<C> {
     pub(crate) fn download(mut self) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         let feedback = self.query.get_result_blocking()?;
         if feedback.status != vk::QueryResultStatusKHR::COMPLETE {
@@ -325,9 +324,7 @@ impl EncodeSubmission {
             )?
         };
 
-        if self.bytestream_format == EncodedBytestreamFormat::LengthPrefixed {
-            annexb_nalu_to_length_prefixed(&mut encoded);
-        }
+        C::convert_output_bytestream(self.bytestream_format, &mut encoded);
 
         let mut stream_params = std::mem::take(&mut self.prepended_stream_params);
         let output = if stream_params.is_empty() {
@@ -343,19 +340,6 @@ impl EncodeSubmission {
             is_keyframe: self.is_idr,
         })
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum EncodedBytestreamFormat {
-    AnnexB,
-    LengthPrefixed,
-}
-
-fn annexb_nalu_to_length_prefixed(nalu: &mut Vec<u8>) {
-    if nalu.starts_with(&[0, 0, 1]) {
-        nalu.insert(0, 0);
-    }
-    to_avcc(nalu);
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -375,7 +359,7 @@ pub(crate) struct FullEncoderParameters<C: EncodeCodec> {
     pub(crate) color_space: ColorSpace,
     pub(crate) color_range: ColorRange,
     pub(crate) max_in_flight_submissions: u32,
-    pub(crate) bytestream_format: EncodedBytestreamFormat,
+    pub(crate) bytestream_format: C::OutputBytestreamFormat,
 }
 
 impl<C: EncodeCodec> From<&FullEncoderParameters<C>> for vk::VideoEncodeUsageInfoKHR<'_> {
@@ -400,7 +384,7 @@ pub(crate) struct VulkanEncoder<'a, C: EncodeCodec> {
     active_reference_slots: VecDeque<(usize, C::ReferenceInfo)>,
     rate_control: RateControl,
     inline_stream_params: bool,
-    bytestream_format: EncodedBytestreamFormat,
+    bytestream_format: C::OutputBytestreamFormat,
     encoding_device: Arc<EncodingDevice>,
 }
 
@@ -533,7 +517,7 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
         additional_wait: Option<WaitInfo>,
         force_idr: bool,
         pts: Option<u64>,
-    ) -> Result<EncodeSubmission, VulkanEncoderError> {
+    ) -> Result<EncodeSubmission<C>, VulkanEncoderError> {
         let query = self.query_pool.query();
         let output_buffer = self.output_buffer_pool.buffer()?;
 
@@ -885,20 +869,14 @@ impl<'a, C: EncodeCodec + 'a> VulkanEncoder<'a, C> {
     }
 
     fn inline_stream_parameters(&self) -> Result<Vec<u8>, VulkanEncoderError> {
-        match self.bytestream_format {
-            EncodedBytestreamFormat::AnnexB => {
-                self.stream_parameters(C::codec_write_parameters_info_all())
-            }
-            EncodedBytestreamFormat::LengthPrefixed => {
-                let mut stream_params = Vec::new();
-                for info in C::codec_write_parameters_info_each() {
-                    let mut nalu = self.stream_parameters(info)?;
-                    annexb_nalu_to_length_prefixed(&mut nalu);
-                    stream_params.append(&mut nalu);
-                }
-                Ok(stream_params)
-            }
+        let mut stream_params = Vec::new();
+        for info in C::inline_write_parameters_infos(self.bytestream_format) {
+            let mut data = self.stream_parameters(info)?;
+            C::convert_output_bytestream(self.bytestream_format, &mut data);
+            stream_params.append(&mut data);
         }
+
+        Ok(stream_params)
     }
 
     pub fn stream_parameters(

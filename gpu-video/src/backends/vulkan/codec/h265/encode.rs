@@ -3,10 +3,10 @@ use std::num::NonZeroU32;
 use ash::vk;
 
 use crate::{
-    backends::vulkan::vulkan_encoder::{EncodedBytestreamFormat, VulkanEncoderError},
+    backends::vulkan::vulkan_encoder::VulkanEncoderError,
     backends::vulkan::{
         codec::{
-            EncodeCodec,
+            EncodeCodec, annexb_nalu_to_length_prefixed,
             h265::{
                 H265Codec, H265VkParameters,
                 parameters::{
@@ -365,34 +365,43 @@ impl EncodeCodec for H265Codec {
             .std_sps_id(0)
             .std_pps_id(0)
     }
-    fn codec_write_parameters_info_all() -> Self::CodecWriteParametersInfo {
-        Self::CodecWriteParametersInfo {
-            write_vps: true,
-            write_sps: true,
-            write_pps: true,
+    type OutputBytestreamFormat = OutputBytestreamFormatH265;
+    fn inline_write_parameters_infos(
+        format: Self::OutputBytestreamFormat,
+    ) -> Vec<Self::CodecWriteParametersInfo> {
+        match format {
+            OutputBytestreamFormatH265::AnnexB => {
+                vec![Self::CodecWriteParametersInfo {
+                    write_vps: true,
+                    write_sps: true,
+                    write_pps: true,
+                }]
+            }
+            OutputBytestreamFormatH265::Hvcc => vec![
+                Self::CodecWriteParametersInfo {
+                    write_vps: true,
+                    write_sps: false,
+                    write_pps: false,
+                },
+                Self::CodecWriteParametersInfo {
+                    write_vps: false,
+                    write_sps: true,
+                    write_pps: false,
+                },
+                Self::CodecWriteParametersInfo {
+                    write_vps: false,
+                    write_sps: false,
+                    write_pps: true,
+                },
+            ],
         }
     }
-    fn codec_write_parameters_info_each() -> Vec<Self::CodecWriteParametersInfo> {
-        vec![
-            Self::CodecWriteParametersInfo {
-                write_vps: true,
-                write_sps: false,
-                write_pps: false,
-            },
-            Self::CodecWriteParametersInfo {
-                write_vps: false,
-                write_sps: true,
-                write_pps: false,
-            },
-            Self::CodecWriteParametersInfo {
-                write_vps: false,
-                write_sps: false,
-                write_pps: true,
-            },
-        ]
+    fn convert_output_bytestream(format: Self::OutputBytestreamFormat, data: &mut Vec<u8>) {
+        match format {
+            OutputBytestreamFormatH265::AnnexB => {}
+            OutputBytestreamFormatH265::Hvcc => annexb_nalu_to_length_prefixed(data),
+        }
     }
-
-    type OutputBytestreamFormat = OutputBytestreamFormatH265;
 
     fn resolve_idr_period<'a>(
         quality_level_properties: &Self::CodecSpecificEncodeQualityLevelProperties<'a>,
@@ -438,13 +447,4 @@ fn pic_type(is_idr: bool) -> u32 {
 pub(crate) struct ReferenceListInfoH265 {
     list_info: vk::native::StdVideoEncodeH265ReferenceListsInfo,
     short_term_ref_pic_set: vk::native::StdVideoH265ShortTermRefPicSet,
-}
-
-impl From<OutputBytestreamFormatH265> for EncodedBytestreamFormat {
-    fn from(format: OutputBytestreamFormatH265) -> Self {
-        match format {
-            OutputBytestreamFormatH265::AnnexB => Self::AnnexB,
-            OutputBytestreamFormatH265::Hvcc => Self::LengthPrefixed,
-        }
-    }
 }

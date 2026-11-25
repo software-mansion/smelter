@@ -491,10 +491,7 @@ impl VulkanDevice {
             color_space,
             color_range,
             max_in_flight_submissions: max_in_flight_submissions.unwrap_or(3),
-            bytestream_format: output_parameters
-                .bytestream_format
-                .unwrap_or_default()
-                .into(),
+            bytestream_format: output_parameters.bytestream_format.unwrap_or_default(),
         })
     }
 }

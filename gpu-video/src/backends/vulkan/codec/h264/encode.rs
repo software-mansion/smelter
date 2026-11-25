@@ -4,7 +4,7 @@ use ash::vk;
 
 use crate::{
     backends::vulkan::codec::{
-        EncodeCodec,
+        EncodeCodec, annexb_nalu_to_length_prefixed,
         h264::{
             H264Codec,
             parameters::{VkH264PictureParameterSet, VkH264SequenceParameterSet},
@@ -13,9 +13,7 @@ use crate::{
     backends::vulkan::vulkan_device::caps::{
         NativeEncodeProfileCapabilities, NativeEncodeQualityLevelProperties,
     },
-    backends::vulkan::vulkan_encoder::{
-        EncodedBytestreamFormat, FullEncoderParameters, VulkanEncoderError,
-    },
+    backends::vulkan::vulkan_encoder::{FullEncoderParameters, VulkanEncoderError},
     backends::vulkan::wrappers::ProfileInfo,
     parameters::{OutputBytestreamFormatH264, RateControl},
 };
@@ -303,26 +301,35 @@ impl EncodeCodec for H264Codec {
             .std_sps_id(0)
             .std_pps_id(0)
     }
-    fn codec_write_parameters_info_all() -> Self::CodecWriteParametersInfo {
-        H264WriteParametersInfo {
-            write_sps: true,
-            write_pps: true,
+    type OutputBytestreamFormat = OutputBytestreamFormatH264;
+    fn inline_write_parameters_infos(
+        format: Self::OutputBytestreamFormat,
+    ) -> Vec<Self::CodecWriteParametersInfo> {
+        match format {
+            OutputBytestreamFormatH264::AnnexB => {
+                vec![Self::CodecWriteParametersInfo {
+                    write_sps: true,
+                    write_pps: true,
+                }]
+            }
+            OutputBytestreamFormatH264::Avcc => vec![
+                Self::CodecWriteParametersInfo {
+                    write_sps: true,
+                    write_pps: false,
+                },
+                Self::CodecWriteParametersInfo {
+                    write_sps: false,
+                    write_pps: true,
+                },
+            ],
         }
     }
-    fn codec_write_parameters_info_each() -> Vec<Self::CodecWriteParametersInfo> {
-        vec![
-            H264WriteParametersInfo {
-                write_sps: true,
-                write_pps: false,
-            },
-            H264WriteParametersInfo {
-                write_sps: false,
-                write_pps: true,
-            },
-        ]
+    fn convert_output_bytestream(format: Self::OutputBytestreamFormat, data: &mut Vec<u8>) {
+        match format {
+            OutputBytestreamFormatH264::AnnexB => {}
+            OutputBytestreamFormatH264::Avcc => annexb_nalu_to_length_prefixed(data),
+        }
     }
-
-    type OutputBytestreamFormat = OutputBytestreamFormatH264;
 
     fn resolve_idr_period<'a>(
         quality_level_properties: &Self::CodecSpecificEncodeQualityLevelProperties<'a>,
@@ -362,14 +369,5 @@ fn primary_pic_type(is_idr: bool) -> vk::native::StdVideoH264PictureType {
         vk::native::StdVideoH264PictureType_STD_VIDEO_H264_PICTURE_TYPE_IDR
     } else {
         vk::native::StdVideoH264PictureType_STD_VIDEO_H264_PICTURE_TYPE_P
-    }
-}
-
-impl From<OutputBytestreamFormatH264> for EncodedBytestreamFormat {
-    fn from(format: OutputBytestreamFormatH264) -> Self {
-        match format {
-            OutputBytestreamFormatH264::AnnexB => Self::AnnexB,
-            OutputBytestreamFormatH264::Avcc => Self::LengthPrefixed,
-        }
     }
 }
