@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use super::{
-    buffer::LiveSyncBuffer,
+    buffer::{LiveSyncBuffer, shared_band},
     edge_estimator::EdgeEstimate,
     mode::{IndependentMode, Mode, SecondaryTrackOffset, SharedMode, SlewingAnchor},
     state::SharedState,
@@ -62,7 +62,12 @@ pub(super) fn start_track_decision<B: LiveSyncBuffer>(
     if let None = state.mode
         && !tracks_diverged
     {
-        let anchor = strategy.desired_anchor(&shared_estimation, now_pts);
+        let priority_estimation = match state.options.track_priority {
+            Some(TrackKind::Audio) => audio_estimation.as_ref(),
+            Some(TrackKind::Video) => video_estimation.as_ref(),
+            None => None,
+        };
+        let anchor = shared_band(strategy, &shared_estimation, priority_estimation, now_pts).target;
         return Some(Mode::Shared(
             SharedMode::from_anchor(anchor).with_started(kind),
         ));
@@ -108,7 +113,7 @@ pub(super) fn start_track_decision<B: LiveSyncBuffer>(
             // by the offset, so video does not move; the buffer is sized by audio's own
             // estimate from now on.
             let current = old_video_anchor - video_offset;
-            let target = strategy.desired_anchor(&track_estimation, now_pts);
+            let target = strategy.band(&track_estimation, now_pts).target;
 
             IndependentMode {
                 leader_kind: TrackKind::Audio,
@@ -126,7 +131,7 @@ pub(super) fn start_track_decision<B: LiveSyncBuffer>(
         // Audio is selected as a leader with anchor calculated based on estimator results
         TrackKind::Audio => IndependentMode {
             leader_kind: TrackKind::Audio,
-            leader_anchor: SlewingAnchor::new(strategy.desired_anchor(&track_estimation, now_pts)),
+            leader_anchor: SlewingAnchor::new(strategy.band(&track_estimation, now_pts).target),
             secondary_track_offset: None,
         },
 
@@ -151,7 +156,7 @@ pub(super) fn start_track_decision<B: LiveSyncBuffer>(
                     // when video was starting it might have already polluted shared estimator
                     // (and so the shared target), so recalculating target from track estimator
                     Mode::Shared(shared) => SlewingAnchor {
-                        target: strategy.desired_anchor(&audio_estimation, now_pts),
+                        target: strategy.band(&audio_estimation, now_pts).target,
                         ..shared.anchor
                     },
                     Mode::Independent(independent) => independent.leader_anchor,
@@ -165,7 +170,7 @@ pub(super) fn start_track_decision<B: LiveSyncBuffer>(
         // Video is selected as a leader with anchor calculated based on estimator results
         TrackKind::Video => IndependentMode {
             leader_kind: TrackKind::Video,
-            leader_anchor: SlewingAnchor::new(strategy.desired_anchor(&track_estimation, now_pts)),
+            leader_anchor: SlewingAnchor::new(strategy.band(&track_estimation, now_pts).target),
             secondary_track_offset: None,
         },
     }))

@@ -135,16 +135,6 @@ pub(crate) struct EdgeEstimate {
 }
 
 impl EdgeEstimate {
-    /// Distance between the bounds; how much of a buffer the delivery pattern
-    /// itself (jitter, batch size) takes up. Zero while the lower bound is
-    /// not stable.
-    pub fn spread(&self) -> Timestamp {
-        match self.lower_bound.stable {
-            true => self.upper_bound.pts - self.lower_bound.pts,
-            false => Timestamp::ZERO,
-        }
-    }
-
     /// Whether the tracks are known to be on different timelines.
     pub fn timelines_diverged(audio: Option<&EdgeEstimate>, video: Option<&EdgeEstimate>) -> bool {
         // looser than the converge threshold, so a mode cannot flap between the two

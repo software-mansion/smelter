@@ -17,6 +17,9 @@
 //!
 //! Shared timeline:
 //! - Both tracks apply one anchor, sized from an estimate over all chunks.
+//! - With a priority track, the anchor never leaves the range the priority track's own estimate
+//!   allows: the other track can grow the buffer only until the priority track's freshest content
+//!   is `max` behind, while the priority track's own lateness still grows it as far as needed.
 //! - Chunks are released in a common pts order, so a slew moves both tracks the same way.
 //!
 //! Unrelated timelines:
@@ -81,6 +84,10 @@ use state::SharedState;
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LiveSyncOptions {
     pub buffering_strategy: BufferingStrategy,
+    /// Track whose buffer limits hold when the tracks share a timeline but need different
+    /// buffers. The other track's lateness counts only within the range the priority track allows
+    /// on its own; late content beyond it is just late. `None` sizes the buffer for every track.
+    pub track_priority: Option<TrackKind>,
     /// How long the live edge estimates have to stay stable before starting.
     pub stabilization_period: Duration,
     /// Estimate improvements smaller than this (delivery jitter) do not reset

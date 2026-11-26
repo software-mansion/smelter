@@ -159,6 +159,7 @@ impl HlsDemuxerThread {
             true => InputSync::Live(LiveSync::new(
                 LiveSyncOptions {
                     buffering_strategy: BufferingStrategy::Range { min, max, desired },
+                    track_priority: None,
                     stabilization_period: Duration::from_millis(1000),
                     // mostly dead value, chunks are usually larger than stabilization_period
                     // so tolerance does not matter, stable state will trigger as soon as we have

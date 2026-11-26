@@ -12,7 +12,8 @@ use crate::prelude::*;
 ///
 /// The buffer can never be smaller than the delivery spread (upper minus
 /// lower bound, i.e. jitter or the size of a batch), so if `desired` or
-/// `max` do not leave room for it above `min` they are raised to fit.
+/// `max` do not leave room for it above `min` they are raised to fit (see
+/// [`BufferingStrategy::band`]).
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum BufferingStrategy {
     Range {
@@ -60,39 +61,82 @@ impl BufferingStrategy {
         }
     }
 
-    /// Anchor this strategy aims for: the freshest content at `desired`, or
-    /// further back if the delivery spread does not fit above `min`.
-    pub(super) fn desired_anchor(
-        &self,
-        estimation: &EdgeEstimate,
-        now_pts: Timestamp,
-    ) -> TimestampOffset {
-        let BufferingStrategy::Range { min, desired, .. } = *self;
-        let spread = estimation.spread();
-        Timestamp::offset(
-            estimation.upper_bound.pts,
-            Timestamp::max(now_pts + desired, now_pts + spread + min),
-        )
+    /// Anchors this strategy accepts for `estimation`, and the one it aims for.
+    ///
+    /// The slowest content (lower bound) gets at least `min`, the freshest (upper bound) at most
+    /// `max` and ideally `desired`. When the delivery spread does not fit, `min` wins.
+    pub(super) fn band(&self, estimation: &EdgeEstimate, now_pts: Timestamp) -> Band {
+        let BufferingStrategy::Range { min, max, desired } = *self;
+        let (lower_bound, upper_bound) = (estimation.lower_bound, estimation.upper_bound);
+
+        // Without a stable lower bound the spread is unknown, so the freshest content stands in
+        // for the slowest.
+        let slowest_pts = match lower_bound.stable {
+            true => lower_bound.pts,
+            false => upper_bound.pts,
+        };
+        let slowest_at_min = Timestamp::offset(slowest_pts, now_pts + min);
+
+        Band {
+            lower: lower_bound.stable.then_some(slowest_at_min),
+            upper: TimestampOffset::max(
+                Timestamp::offset(upper_bound.pts, now_pts + max),
+                slowest_at_min,
+            ),
+            target: TimestampOffset::max(
+                Timestamp::offset(upper_bound.pts, now_pts + desired),
+                slowest_at_min,
+            ),
+        }
+    }
+}
+
+/// Band of an anchor the tracks share: sized from the estimate over all their chunks, but never
+/// outside the band of the priority track alone, when there is one.
+pub(super) fn shared_band(
+    strategy: BufferingStrategy,
+    shared: &EdgeEstimate,
+    priority: Option<&EdgeEstimate>,
+    now_pts: Timestamp,
+) -> Band {
+    let band = strategy.band(shared, now_pts);
+    match priority {
+        Some(priority) => band.clamp_to(&strategy.band(priority, now_pts)),
+        None => band,
+    }
+}
+
+/// Range of anchors a [`BufferingStrategy`] accepts, and the anchor it aims for when the current
+/// one falls outside of it. A larger anchor presents the same content later (more buffer).
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Band {
+    /// Smallest accepted anchor; `None` while the lower bound of the estimate is not stable (see
+    /// [`PtsBound::stable`](super::edge_estimator::PtsBound::stable)), so it is not judged.
+    pub lower: Option<TimestampOffset>,
+    /// Largest accepted anchor.
+    pub upper: TimestampOffset,
+    pub target: TimestampOffset,
+}
+
+impl Band {
+    pub fn contains(&self, anchor: TimestampOffset) -> bool {
+        self.lower.is_none_or(|lower| anchor >= lower) && anchor <= self.upper
     }
 
-    /// Whether the buffer `anchor` produces is within the range this strategy allows;
-    /// when it is not, the anchor should be re-anchored at [`desired_anchor`](Self::desired_anchor).
-    ///
-    /// A lower bound that is not stable (see
-    /// [`PtsBound::stable`](super::edge_estimator::PtsBound::stable)) is not judged.
-    pub(super) fn buffer_in_range(
-        &self,
-        estimation: &EdgeEstimate,
-        anchor: TimestampOffset,
-        now_pts: Timestamp,
-    ) -> bool {
-        let BufferingStrategy::Range { min, max, .. } = *self;
-        let lower_bound = anchor.to_output_pts(estimation.lower_bound.pts);
-        let upper_bound = anchor.to_output_pts(estimation.upper_bound.pts);
-        let spread = estimation.spread();
-        let min_ok = !estimation.lower_bound.stable || lower_bound >= now_pts + min;
-        let max_ok = upper_bound <= Timestamp::max(now_pts + max, now_pts + spread + min);
-        min_ok && max_ok
+    /// This band with every anchor moved inside `limit`.
+    pub fn clamp_to(self, limit: &Band) -> Band {
+        let clamp = |anchor: TimestampOffset| {
+            let anchor = TimestampOffset::min(anchor, limit.upper);
+            match limit.lower {
+                Some(lower) => TimestampOffset::max(anchor, lower),
+                None => anchor,
+            }
+        };
+        Band {
+            lower: self.lower.map(clamp),
+            upper: clamp(self.upper),
+            target: clamp(self.target),
+        }
     }
 }
 
@@ -178,3 +222,83 @@ impl<T: InputSyncItem + Send + 'static> LiveSyncBuffer for FifoBuffer<T> {
 }
 
 pub(crate) type ChunkBuffer = FifoBuffer<EncodedInputChunk>;
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::{BufferingStrategy, shared_band};
+    use crate::{
+        Timestamp, TimestampOffset,
+        utils::live_sync::edge_estimator::{DeliveryStats, EdgeEstimate, PtsBound},
+    };
+
+    const NOW: Timestamp = Timestamp::from_secs(100);
+
+    const STRATEGY: BufferingStrategy = BufferingStrategy::Range {
+        min: Duration::from_secs(1),
+        desired: Duration::from_secs(2),
+        max: Duration::from_secs(5),
+    };
+
+    /// Freshest content arrives right now, the slowest `lateness` behind it.
+    fn estimate(lateness: Timestamp) -> EdgeEstimate {
+        EdgeEstimate {
+            upper_bound: PtsBound {
+                pts: NOW,
+                stable: true,
+            },
+            lower_bound: PtsBound {
+                pts: NOW - lateness,
+                stable: true,
+            },
+            recent_upper_bound_pts: Some(NOW),
+            delivery: DeliveryStats {
+                last_pts: NOW,
+                observed_for: Duration::from_secs(60),
+                max_arrival_gap: Duration::from_millis(20),
+                since_last_arrival: Duration::ZERO,
+            },
+        }
+    }
+
+    /// Buffer of the freshest content under `anchor`.
+    fn buffer(anchor: TimestampOffset) -> Timestamp {
+        anchor.to_output_pts(NOW) - NOW
+    }
+
+    #[test]
+    fn without_priority_every_track_gets_min() {
+        // video 6s late needs 7s of buffer, over `max`
+        let shared = estimate(Timestamp::from_secs(6));
+        let band = shared_band(STRATEGY, &shared, None, NOW);
+        assert_eq!(buffer(band.target), Timestamp::from_secs(7));
+        assert_eq!(buffer(band.upper), Timestamp::from_secs(7));
+    }
+
+    #[test]
+    fn priority_caps_other_track_at_max() {
+        let audio = estimate(Timestamp::from_millis(100));
+        let shared = estimate(Timestamp::from_secs(6));
+        let band = shared_band(STRATEGY, &shared, Some(&audio), NOW);
+        assert_eq!(buffer(band.target), Timestamp::from_secs(5));
+        assert!(band.contains(band.target));
+        assert!(!band.contains(band.target - Timestamp::from_millis(100)));
+    }
+
+    #[test]
+    fn other_track_within_max_still_counts() {
+        let audio = estimate(Timestamp::from_millis(100));
+        let shared = estimate(Timestamp::from_secs(2));
+        let band = shared_band(STRATEGY, &shared, Some(&audio), NOW);
+        assert_eq!(buffer(band.target), Timestamp::from_secs(3));
+    }
+
+    #[test]
+    fn priority_track_lateness_goes_over_max() {
+        let audio = estimate(Timestamp::from_secs(6));
+        let shared = estimate(Timestamp::from_secs(6));
+        let band = shared_band(STRATEGY, &shared, Some(&audio), NOW);
+        assert_eq!(buffer(band.target), Timestamp::from_secs(7));
+    }
+}
