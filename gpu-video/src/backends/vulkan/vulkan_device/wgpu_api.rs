@@ -92,6 +92,7 @@ impl VulkanDevice {
             wgpu_features,
             wgpu_experimental_features,
             wgpu_limits,
+            vulkan_device_extensions,
         } = desc;
 
         let transcoder_features = match cfg!(feature = "transcoder") {
@@ -105,6 +106,11 @@ impl VulkanDevice {
 
         let mut wgpu_extensions = hal_adapter.required_device_extensions(wgpu_features);
         required_extensions.append(&mut wgpu_extensions);
+        for extension in vulkan_device_extensions {
+            if !required_extensions.contains(&extension) {
+                required_extensions.push(extension);
+            }
+        }
 
         let mut wgpu_physical_device_features =
             hal_adapter.physical_device_features(&required_extensions, wgpu_features);

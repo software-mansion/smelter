@@ -26,6 +26,8 @@ pub struct VideoDeviceDescriptor {
 
     #[cfg(feature = "wgpu")]
     pub wgpu_limits: wgpu::Limits,
+
+    pub vulkan_device_extensions: Vec<&'static std::ffi::CStr>,
 }
 
 /// A fraction

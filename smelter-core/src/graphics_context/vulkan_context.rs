@@ -116,6 +116,7 @@ pub fn create_vulkan_graphics_ctx(
         wgpu_features,
         wgpu_experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
         wgpu_limits: limits.clone(),
+        vulkan_device_extensions: Vec::new(),
     })?;
 
     Ok(GraphicsContext {
