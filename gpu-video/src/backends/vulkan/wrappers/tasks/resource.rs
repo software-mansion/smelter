@@ -1,7 +1,6 @@
 use std::{
     any::Any,
-    ops::Range,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, PoisonError},
 };
 
 use ash::vk;
@@ -127,50 +126,35 @@ impl Image {
         todo!()
     }
 
-    pub(crate) fn layers(self: &Arc<Self>, layers: Range<u32>) -> ImageLayer {
-        todo!()
-    }
-
-    pub(crate) fn all_layers(self: &Arc<Self>) -> ImageLayer {
-        todo!()
-    }
-
     pub(crate) fn state(&self) -> &ResourceState {
-        todo!()
+        &self.state
     }
 }
 
 impl Buffer {
     pub(crate) fn whole(self: &Arc<Self>) -> BufferRange {
-        todo!()
+        BufferRange {
+            buffer: self.clone(),
+            size: self.size,
+            offset: 0,
+            owner: None,
+        }
     }
 
-    pub(crate) fn range(self: &Arc<Self>, offset: u64, size: u64) -> BufferRange {
-        todo!()
+    pub(crate) fn range(self: &Arc<Self>, offset: u64, size: u64) -> Result<BufferRange, TaskError> {
+        if offset + size > self.size {
+            return Err(TaskError::BufferRangeOutOfBounds { offset, range_size: size, buffer_size: self.size });
+        }
+
+        Ok(BufferRange {
+            buffer: self.clone(),
+            size, offset,
+            owner: None,
+        })
     }
 
     pub(crate) fn state(&self) -> &ResourceState {
-        todo!()
-    }
-}
-
-impl DecodeInputBuffer {
-    pub(crate) fn range(self: &Arc<Self>) -> BufferRange {
-        todo!()
-    }
-
-    pub(super) fn raw(&self) -> vk::Buffer {
-        todo!()
-    }
-}
-
-impl EncodeOutputBuffer {
-    pub(crate) fn range(self: &Arc<Self>) -> BufferRange {
-        todo!()
-    }
-
-    pub(super) fn raw(&self) -> vk::Buffer {
-        todo!()
+        &self.state
     }
 }
 
@@ -209,22 +193,40 @@ pub(crate) struct SubresourceState {
     pub(crate) layout: vk::ImageLayout,
     pub(crate) last_write: Option<AccessRecord>,
     pub(crate) reads_since: Vec<AccessRecord>,
-    pub(crate) owner: Option<u32>,
+    pub(crate) owned_by_family: Option<u32>,
     pub(crate) exported: bool,
     pub(crate) lent_to_wgpu: bool,
 }
 
 impl SubresourceState {
     pub(super) fn fresh() -> Self {
-        todo!()
+        Self {
+            layout: vk::ImageLayout::UNDEFINED,
+            last_write: None,
+            reads_since: Vec::new(),
+            owned_by_family: None,
+            exported: false,
+            lent_to_wgpu: false,
+        }
     }
 
     pub(super) fn merge_read(&mut self, record: AccessRecord) {
-        todo!()
+        let slot = self
+            .reads_since
+            .iter_mut()
+            .find(|other| Arc::ptr_eq(&other.timeline, &record.timeline));
+
+        if let Some(slot) = slot {
+            slot.value = slot.value.max(record.value);
+            slot.stage |= record.stage;
+            slot.access |= record.access;
+        } else {
+            self.reads_since.push(record);
+        }
     }
 
     pub(super) fn prune_reached(&mut self) {
-        todo!()
+        self.reads_since.retain(|r| !r.is_reached())
     }
 }
 
@@ -239,7 +241,7 @@ pub(crate) struct AccessRecord {
 
 impl AccessRecord {
     pub(super) fn is_reached(&self) -> bool {
-        todo!()
+        self.timeline.completed() >= self.value
     }
 }
 
@@ -258,29 +260,74 @@ pub(crate) enum ResourceUsage {
 
 impl ResourceUsage {
     pub(super) fn contains(self, required: ResourceUsage) -> bool {
-        todo!()
+        match (self, required) {
+            (ResourceUsage::Image(own), ResourceUsage::Image(required)) => own.contains(required),
+            (ResourceUsage::Buffer(own), ResourceUsage::Buffer(required)) => own.contains(required),
+            (ResourceUsage::Session, ResourceUsage::Session) => true,
+            _ => false,
+        }
     }
 }
 
 impl ResourceState {
     pub(crate) fn new(sharing: Sharing, usage: ResourceUsage, subresource_count: u32) -> Self {
-        todo!()
+        Self {
+            sharing,
+            usage,
+            subresources: Mutex::new(
+                vec![SubresourceState::fresh(); subresource_count as usize].into_boxed_slice(),
+            ),
+        }
     }
 
+    /// returns whether all waits are done
     pub(crate) fn reset_for_reuse(&self) -> bool {
-        todo!()
+        let mut lock = self.lock();
+        let mut timelines: Vec<&Arc<Timeline>> = Vec::new();
+
+        for state in lock.iter() {
+            for access in state.reads_since.iter().chain(state.last_write.iter()) {
+                if !timelines.iter().any(|t| Arc::ptr_eq(&access.timeline, t)) {
+                    timelines.push(&access.timeline)
+                }
+            }
+        }
+
+        for timeline in timelines {
+            _ = timeline.refresh();
+        }
+
+        let mut all_clear = true;
+        for state in lock.iter_mut() {
+            state.prune_reached();
+            if let Some(write) = &state.last_write
+                && write.is_reached()
+            {
+                state.last_write = None;
+            }
+
+            if state.last_write.is_some() || !state.reads_since.is_empty() {
+                all_clear = false
+            }
+        }
+
+        all_clear
     }
 
     pub(crate) fn is_lent_to_wgpu(&self) -> bool {
-        todo!()
+        self.lock().iter().any(|s| s.lent_to_wgpu)
     }
 
     pub(crate) fn lend_to_wgpu(&self) {
-        todo!()
+        for state in self.lock().iter_mut() {
+            state.lent_to_wgpu = true;
+        }
     }
 
     pub(super) fn lock(&self) -> std::sync::MutexGuard<'_, Box<[SubresourceState]>> {
-        todo!()
+        self.subresources
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
     }
 }
 

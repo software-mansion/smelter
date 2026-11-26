@@ -134,6 +134,8 @@ pub(crate) enum TaskError {
     WaitTimeout,
     #[error("a completion callback panicked earlier")]
     CallbackPanicked,
+    #[error("a {offset}..{range_size}+{offset} range is outside of a buffer of size {buffer_size}")]
+    BufferRangeOutOfBounds { offset: u64, range_size: u64, buffer_size: u64 },
 }
 
 impl From<ExecError> for TaskError {

@@ -1,5 +1,5 @@
 use std::sync::{
-    Arc, Mutex, MutexGuard,
+    Arc, Mutex, MutexGuard, PoisonError,
     atomic::{AtomicBool, AtomicU64},
 };
 
@@ -63,37 +63,57 @@ pub(super) struct TimelineState {
 
 impl Timeline {
     pub(super) fn new(device: Arc<Device>, label: &str) -> Result<Self, TaskError> {
-        todo!()
+        let semaphore = TimelineSemaphore::new(device, 0, Some(label))?;
+        Ok(Self {
+            semaphore,
+            state: TimelineState {
+                next_value: 1,
+                last_submitted: None,
+            }
+            .into(),
+            completed: 0.into(),
+            pinned: false.into(),
+        })
     }
 
     pub(crate) fn raw(&self) -> vk::Semaphore {
-        todo!()
+        self.semaphore.semaphore
     }
 
     pub(crate) fn completed(&self) -> u64 {
-        todo!()
+        self.completed.load(std::sync::atomic::Ordering::Acquire)
     }
 
     pub(crate) fn refresh(&self) -> Result<u64, vk::Result> {
-        todo!()
+        let val = unsafe {
+            self.semaphore
+                .device
+                .device
+                .get_semaphore_counter_value(self.semaphore.semaphore)?
+        };
+        self.store_completed(val);
+        Ok(val)
     }
 
     pub(super) fn store_completed(&self, value: u64) {
-        todo!()
+        self.completed
+            .fetch_max(value, std::sync::atomic::Ordering::Release);
     }
 
     pub(super) fn state(&self) -> MutexGuard<'_, TimelineState> {
-        todo!()
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     pub(super) fn mark_pinned(&self) -> bool {
-        todo!()
+        !self.pinned.swap(true, std::sync::atomic::Ordering::Relaxed)
     }
 }
 
 impl TimelineState {
     pub(super) fn reserve(&mut self) -> u64 {
-        todo!()
+        let val = self.next_value;
+        self.next_value += 1;
+        val
     }
 }
 
@@ -107,11 +127,11 @@ pub(crate) struct QueueBinding {
 
 impl QueueBinding {
     pub(crate) fn role(&self) -> Role {
-        todo!()
+        self.role
     }
 
     pub(crate) fn family_index(&self) -> u32 {
-        todo!()
+        self.queue.family_index
     }
 }
 
@@ -138,19 +158,46 @@ pub(crate) struct Sharing {
 }
 
 impl Sharing {
-    pub(super) fn from_families(families: impl IntoIterator<Item = u32>) -> Self {
-        todo!()
+    // TODO: temporary pub(crate), should go back to pub(super) at some point
+    pub(crate) fn from_families(families: impl IntoIterator<Item = u32>) -> Self {
+        let mut families = families.into_iter().collect::<Vec<_>>();
+        families.sort_unstable();
+        families.dedup();
+
+        if families.len() <= 1 {
+            Self {
+                mode: vk::SharingMode::EXCLUSIVE,
+                families: Vec::new(),
+            }
+        } else {
+            Self {
+                mode: vk::SharingMode::CONCURRENT,
+                families: families.into_iter().collect(),
+            }
+        }
+    }
+
+    // TODO: temporary, will be removed later
+    pub(crate) fn new_exclusive() -> Self {
+        Self {
+            mode: vk::SharingMode::EXCLUSIVE,
+            families: Vec::new(),
+        }
     }
 
     pub(crate) fn is_exclusive(&self) -> bool {
-        todo!()
+        self.mode == vk::SharingMode::EXCLUSIVE
     }
 
     pub(crate) fn families(&self) -> &[u32] {
-        todo!()
+        &self.families
     }
 
     pub(crate) fn allows_family(&self, family: u32, owner: Option<u32>) -> bool {
-        todo!()
+        match self.mode {
+            vk::SharingMode::CONCURRENT => self.families.contains(&family),
+            vk::SharingMode::EXCLUSIVE => owner.is_none_or(|owner| owner == family),
+            _ => unreachable!(),
+        }
     }
 }

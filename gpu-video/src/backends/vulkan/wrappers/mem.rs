@@ -9,7 +9,10 @@ use crate::backends::vulkan::{
     vulkan_decoder::VulkanDecoderError,
     vulkan_device::EncodingDevice,
     vulkan_encoder::VulkanEncoderError,
-    wrappers::{ImageLayoutTracker, OpenCommandBuffer, ProfileInfo},
+    wrappers::{
+        ImageLayoutTracker, OpenCommandBuffer, ProfileInfo,
+        tasks::{ResourceState, ResourceUsage, Sharing},
+    },
 };
 
 use super::{Device, Instance};
@@ -115,8 +118,7 @@ impl<'a> DecodeInputBufferPool<'a> {
 }
 
 pub(crate) struct DecodeInputBuffer {
-    pub(crate) buffer: Buffer,
-    capacity: u64,
+    pub(crate) buffer: Arc<Buffer>,
     allocator: Arc<Allocator>,
     pool_freelist: Weak<Mutex<Vec<DecodeInputBuffer>>>,
 }
@@ -131,8 +133,7 @@ impl DecodeInputBuffer {
         let buffer = Buffer::new_decode(allocator.clone(), INITIAL_SIZE, profile)?;
 
         Ok(Self {
-            buffer,
-            capacity: INITIAL_SIZE,
+            buffer: buffer.into(),
             allocator,
             pool_freelist,
         })
@@ -147,18 +148,22 @@ impl DecodeInputBuffer {
     ) -> Result<(), VulkanDecoderError> {
         debug_assert!(data.len() as u64 <= size);
 
-        if self.capacity < size {
-            let new_capacity = size.max(2 * self.capacity);
-            self.buffer = Buffer::new_decode(self.allocator.clone(), new_capacity, profile)?;
-            self.capacity = new_capacity;
+        let reusable = self.buffer.size < size && Arc::get_mut(&mut self.buffer).is_some();
+
+        if !reusable {
+            let new_capacity = size.max(2 * self.buffer.size);
+            self.buffer = Buffer::new_decode(self.allocator.clone(), new_capacity, profile)?.into();
         }
 
         unsafe {
-            let mem = self.allocator.map_memory(&mut self.buffer.allocation)?;
+            let buffer = Arc::get_mut(&mut self.buffer).unwrap();
+            let mem = self.allocator.map_memory(&mut buffer.allocation)?;
             let slice = std::slice::from_raw_parts_mut(mem.cast(), data.len());
             slice.copy_from_slice(data);
-            self.allocator.unmap_memory(&mut self.buffer.allocation);
+            self.allocator.unmap_memory(&mut buffer.allocation);
         }
+
+        // TODO: remove the pools for buffers
 
         Ok(())
     }
@@ -379,10 +384,13 @@ fn image_usage_to_wgpu_texture_usages(usage: vk::ImageUsageFlags) -> wgpu::Textu
 }
 
 pub(crate) struct Buffer {
+    // TODO: should become more private
     pub(crate) buffer: vk::Buffer,
     pub(crate) allocation: vk_mem::Allocation,
     allocator: Arc<Allocator>,
     transfer_direction: TransferDirection,
+    pub(super) state: ResourceState,
+    pub(super) size: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -477,11 +485,31 @@ impl Buffer {
         let (buffer, allocation) =
             unsafe { allocator.create_buffer(&create_info, &allocation_create_info)? };
 
+        let sharing = if create_info.p_queue_family_indices.is_null() {
+            &[]
+        } else {
+            unsafe {
+                std::slice::from_raw_parts(
+                    create_info.p_queue_family_indices,
+                    create_info.queue_family_index_count as usize,
+                )
+            }
+        };
+        let sharing = match create_info.sharing_mode {
+            vk::SharingMode::EXCLUSIVE => Sharing::new_exclusive(),
+            vk::SharingMode::CONCURRENT => Sharing::from_families(sharing.iter().copied()),
+            _ => unreachable!(),
+        };
+
+        let state = ResourceState::new(sharing, ResourceUsage::Buffer(create_info.usage), 1);
+
         Ok(Self {
             buffer,
             allocation,
             allocator,
             transfer_direction,
+            state,
+            size: create_info.size,
         })
     }
 
@@ -551,6 +579,7 @@ pub(crate) struct Image {
     allocation: vk_mem::Allocation,
     allocator: Arc<Allocator>,
     tracker: Arc<Mutex<ImageLayoutTracker>>,
+    pub(super) state: ResourceState,
     pub(crate) device: Arc<Device>,
     pub(crate) extent: vk::Extent3D,
 }
@@ -586,10 +615,34 @@ impl Image {
             image_create_info.array_layers as usize,
         )?;
 
+        let families = if image_create_info.p_queue_family_indices.is_null() {
+            &[]
+        } else {
+            unsafe {
+                std::slice::from_raw_parts(
+                    image_create_info.p_queue_family_indices,
+                    image_create_info.queue_family_index_count as usize,
+                )
+            }
+        };
+
+        let sharing = match image_create_info.sharing_mode {
+            vk::SharingMode::CONCURRENT => Sharing::from_families(families.iter().copied()),
+            vk::SharingMode::EXCLUSIVE => Sharing::new_exclusive(),
+            _ => unreachable!(),
+        };
+
+        let state = ResourceState::new(
+            sharing,
+            ResourceUsage::Image(image_create_info.usage),
+            image_create_info.array_layers,
+        );
+
         Ok(Image {
             image,
             allocation,
             device: allocator.device.clone(),
+            state,
             allocator,
             tracker,
             extent,

@@ -12,7 +12,7 @@ use super::Device;
 
 pub(crate) struct TimelineSemaphore {
     pub(crate) semaphore: vk::Semaphore,
-    device: Arc<Device>,
+    pub(crate) device: Arc<Device>,
 }
 
 impl TimelineSemaphore {
