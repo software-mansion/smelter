@@ -96,10 +96,15 @@ impl CoreVideoDeviceBackend for VulkanDevice {
 impl VulkanDevice {
     pub(crate) fn create(
         video_adapter: VulkanAdapter<'_>,
-        _desc: VideoDeviceDescriptor,
+        desc: VideoDeviceDescriptor,
     ) -> Result<crate::VideoDevice, VulkanDeviceInitError> {
         let mut required_extensions = video_adapter.required_extensions();
         required_extensions.push(ash::khr::timeline_semaphore::NAME);
+        for extension in desc.vulkan_device_extensions {
+            if !required_extensions.contains(&extension) {
+                required_extensions.push(extension);
+            }
+        }
 
         let mut timeline_semaphore_feature =
             vk::PhysicalDeviceTimelineSemaphoreFeatures::default().timeline_semaphore(true);
