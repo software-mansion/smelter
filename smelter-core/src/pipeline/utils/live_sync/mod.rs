@@ -52,7 +52,10 @@
 //! - A pts jump below the discontinuity threshold (10s) that is not matched by a gap in arrival
 //!   is taken at face value. Forward, the output freezes for the length of the jump and the extra
 //!   buffer is slewed away only if it exceeds the maximum. Backward, chunks are late until the
-//!   stale estimate resets the track.
+//!   anchor slews far enough to cover them.
+//! - The same holds for delivery that gets slower and stays there while chunks keep arriving
+//!   (e.g. a stall after which content continues): the anchor only slews toward the new edge, so
+//!   content is late until it gets there.
 //! - Old content delivered while the upper bound is stable (e.g. a backlog flushed by a track
 //!   that joins late) counts as slow delivery and inflates the spread until it leaves the window.
 //! - Live edges are estimated from pts, so with unrelated timelines the offset between the tracks
@@ -96,10 +99,6 @@ pub(crate) struct LiveSyncOptions {
     /// Start with the current estimates if the live edge was not detected
     /// within this much time from the track's first chunk.
     pub max_wait: Duration,
-    /// Distance between the upper bound and its recent counterpart above which the estimate of a
-    /// started track counts as stale and the track starts over: its timeline slipped and the full
-    /// window still holds the old edge.
-    pub stale_estimate_threshold: Duration,
 }
 
 /// Synchronization of a single input; create per-track handles with

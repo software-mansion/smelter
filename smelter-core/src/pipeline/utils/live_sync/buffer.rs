@@ -252,7 +252,6 @@ mod tests {
                 pts: NOW - lateness,
                 stable: true,
             },
-            recent_upper_bound_pts: Some(NOW),
             delivery: DeliveryStats {
                 last_pts: NOW,
                 observed_for: Duration::from_secs(60),

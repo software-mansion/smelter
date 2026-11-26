@@ -8,29 +8,29 @@ use crate::prelude::*;
 /// Width of one bucket; the granularity at which old observations expire.
 const BUCKET: Duration = Duration::from_secs(2);
 
-/// Offset window look-back for perfectly steady delivery; observed arrival
-/// gaps only grow it from here.
-const MIN_LOOKBACK: Duration = Duration::from_secs(20);
+/// Look-back of the upper bound (the offset minimum) for perfectly steady delivery; observed
+/// arrival gaps only grow it from here. Short, so slower delivery that lasts moves the upper
+/// bound within seconds; it stays robust because the minimum only rises when every chunk in the
+/// window is slow.
+const UPPER_MIN_LOOKBACK: Duration = Duration::from_secs(6);
 
-/// Hard cap of the offset window look-back and of the retained history.
+/// The upper bound look-back covers at least this many worst-case arrival gaps, so batched
+/// delivery (e.g. HLS segments) keeps the newest burst in view between bursts.
+const UPPER_LOOKBACK_GAPS: u32 = 2;
+
+/// Look-back of the lower bound (the offset maximum) for perfectly steady delivery; observed
+/// arrival gaps only grow it from here. Long, so how late delivery gets is remembered for a while.
+const LOWER_MIN_LOOKBACK: Duration = Duration::from_secs(20);
+
+/// The lower bound look-back covers at least this many worst-case arrival gaps, so batched
+/// delivery keeps several bursts in view.
+const LOWER_LOOKBACK_GAPS: u32 = 4;
+
+/// Hard cap of both look-backs and of the retained history.
 const MAX_LOOKBACK: Duration = Duration::from_secs(120);
 
-/// The offset window covers at least this many worst-case arrival gaps, so
-/// batched delivery (e.g. HLS segments) keeps several bursts in view.
-const LOOKBACK_GAPS: u32 = 4;
-
-/// Look-back of the recent upper bound for perfectly steady delivery (see
-/// [`EdgeEstimate::recent_upper_bound_pts`]). Short, so a slipped timeline is noticed within a
-/// few seconds; it stays robust because the minimum only falls behind when every chunk in the
-/// window is slow.
-const RECENT_LOOKBACK: Duration = Duration::from_secs(2);
-
-/// The recent look-back covers at least this many worst-case arrival gaps, so batched delivery
-/// keeps a whole burst in view.
-const RECENT_LOOKBACK_GAPS: u32 = 2;
-
-/// Look-back of the arrival gap maximum. Longer than [`MIN_LOOKBACK`], so a
-/// one-off stall keeps the offset window widened for a while after it ends
+/// Look-back of the arrival gap maximum. Longer than [`LOWER_MIN_LOOKBACK`], so a
+/// one-off stall keeps the windows widened for a while after it ends
 /// instead of being forgotten as soon as it leaves a short window.
 const GAP_LOOKBACK: Duration = Duration::from_secs(60);
 
@@ -52,15 +52,15 @@ const GAP_LOOKBACK: Duration = Duration::from_secs(60);
 /// flush right after connecting keeps extending the upper bound until
 /// delivery drops to a real time rate).
 ///
-/// The extremes are tracked per bucket over a sliding window, so the estimate
+/// The extremes are tracked per bucket over sliding windows, so the estimate
 /// follows changes of the network latency instead of locking to lifetime
-/// extremes. The look-back adapts to the observed delivery pattern: it stays
-/// at [`MIN_LOOKBACK`] for continuous streams (WebRTC, RTMP) and stretches to
-/// cover several arrival gaps for batched ones (HLS segments), up to
-/// [`MAX_LOOKBACK`]. Adaptation to a latency change therefore takes up to one
-/// window; fast reactions (e.g. buffer corrections) should compare the
-/// playback position against delivered content ([`DeliveryStats::last_pts`])
-/// instead.
+/// extremes. Each look-back adapts to the observed delivery pattern: it stays
+/// at its minimum for continuous streams (WebRTC, RTMP) and stretches to
+/// cover arrival gaps for batched ones (HLS segments), up to [`MAX_LOOKBACK`].
+/// The upper bound uses a short window ([`UPPER_MIN_LOOKBACK`]), so it follows
+/// delivery that got slower within seconds; faster delivery moves it at once.
+/// The lower bound uses a long one ([`LOWER_MIN_LOOKBACK`]), so the delivery
+/// spread is remembered.
 ///
 /// Only the estimation lives here; what to do with it (buffering, anchoring,
 /// offset slewing) is up to the caller.
@@ -125,10 +125,6 @@ pub(crate) struct EdgeEstimate {
     ///   - Breaking stable state might mean degraded performance, but it is too late to treat it as
     ///     a signal because it is set after late packet arrives
     pub lower_bound: PtsBound,
-    /// Upper bound over a short look-back; `None` when nothing was observed within it. Never
-    /// ahead of `upper_bound`. It falls behind when the timeline slipped (pts advancing slower
-    /// than real time) and the full window has not forgotten the old fastest delivery yet.
-    pub recent_upper_bound_pts: Option<Timestamp>,
     /// Plain statistics of what was actually delivered; unlike the bounds
     /// they do not extrapolate.
     pub delivery: DeliveryStats,
@@ -279,7 +275,7 @@ impl LiveEdgeEstimator {
         observations.record(now, now_index, offset_ns, pts, upper_stable);
 
         let max_gap = observations.max_arrival_gap(now, now_index);
-        let (min_offset_ns, _) = observations.offset_bounds_ns(now_index, max_gap);
+        let min_offset_ns = observations.min_offset_ns(now_index, max_gap);
         observations
             .min_offset_stability
             .track(now, min_offset_ns, signed_ns(self.tolerance));
@@ -290,7 +286,12 @@ impl LiveEdgeEstimator {
         let observations = self.observations.as_ref()?;
         let now_index = self.bucket_index(now);
         let max_gap = observations.max_arrival_gap(now, now_index);
-        let (min_offset_ns, max_offset_ns) = observations.offset_bounds_ns(now_index, max_gap);
+        let min_offset_ns = observations.min_offset_ns(now_index, max_gap);
+        // The windows differ, so the slowest delivery remembered by the long one can be faster
+        // than the fastest one of the short window; the lower bound never passes the upper one.
+        let max_offset_ns = observations
+            .max_offset_ns(now_index, max_gap)
+            .map(|max_offset_ns| i64::max(max_offset_ns, min_offset_ns));
         let now_ns = self.sync_point.timestamp_at(now).as_nanos();
         // negative only when pts run ahead of the wall clock
         let bound_pts = |offset_ns: i64| Timestamp::from_nanos(now_ns.saturating_sub(offset_ns));
@@ -309,13 +310,9 @@ impl LiveEdgeEstimator {
                 stable: false,
             },
         };
-        let recent_upper_bound_pts = observations
-            .recent_min_offset_ns(now_index, max_gap)
-            .map(bound_pts);
         Some(EdgeEstimate {
             upper_bound,
             lower_bound,
-            recent_upper_bound_pts,
             delivery: DeliveryStats {
                 last_pts: observations.last_pts,
                 observed_for: now.saturating_duration_since(observations.first_observation),
@@ -440,46 +437,40 @@ impl Observations {
         max_gap
     }
 
-    /// Offset extremes `(min, max)` over the window; the look-back scales
-    /// with the arrival gap so batched delivery keeps several bursts in
-    /// view. Falls back to the newest bucket when nothing was observed
-    /// within the window (prolonged stall), so the last known regime keeps
-    /// being reported. The maximum is `None` if the window holds no stable
-    /// sample.
-    fn offset_bounds_ns(&self, now_index: u64, max_gap: Duration) -> (i64, Option<i64>) {
-        let lookback = Duration::clamp(max_gap * LOOKBACK_GAPS, MIN_LOOKBACK, MAX_LOOKBACK);
-        let oldest_valid = now_index.saturating_sub(buckets_in(lookback) - 1);
-        let mut bounds: Option<(i64, Option<i64>)> = None;
-        for bucket in &self.buckets {
-            if bucket.index < oldest_valid {
-                continue;
-            }
-            bounds = Some(match bounds {
-                None => (bucket.min_offset_ns, bucket.max_offset_ns),
-                Some((min, max)) => (
-                    i64::min(min, bucket.min_offset_ns),
-                    Option::max(max, bucket.max_offset_ns),
-                ),
-            });
-        }
-        bounds.unwrap_or_else(|| {
-            let newest = self.buckets.back().expect("never empty");
-            (newest.min_offset_ns, newest.max_offset_ns)
-        })
-    }
-
-    /// Offset minimum over the recent look-back; `None` when nothing was observed within it.
-    fn recent_min_offset_ns(&self, now_index: u64, max_gap: Duration) -> Option<i64> {
+    /// Offset minimum over the upper bound window.
+    fn min_offset_ns(&self, now_index: u64, max_gap: Duration) -> i64 {
         let lookback = Duration::clamp(
-            max_gap * RECENT_LOOKBACK_GAPS,
-            RECENT_LOOKBACK,
+            max_gap * UPPER_LOOKBACK_GAPS,
+            UPPER_MIN_LOOKBACK,
             MAX_LOOKBACK,
         );
-        let oldest_valid = now_index.saturating_sub(buckets_in(lookback) - 1);
-        self.buckets
-            .iter()
-            .filter(|bucket| bucket.index >= oldest_valid)
+        self.window(now_index, lookback)
             .map(|bucket| bucket.min_offset_ns)
             .min()
+            .expect("window never empty")
+    }
+
+    /// Offset maximum over the lower bound window; `None` if the window holds no stable sample.
+    fn max_offset_ns(&self, now_index: u64, max_gap: Duration) -> Option<i64> {
+        let lookback = Duration::clamp(
+            max_gap * LOWER_LOOKBACK_GAPS,
+            LOWER_MIN_LOOKBACK,
+            MAX_LOOKBACK,
+        );
+        self.window(now_index, lookback)
+            .filter_map(|bucket| bucket.max_offset_ns)
+            .max()
+    }
+
+    /// Buckets within `lookback` of `now_index`; the look-back scales with the arrival gap, so a
+    /// window always reaches back to the newest bucket while delivery pauses. Falls back to the
+    /// newest bucket when nothing was observed within the window (prolonged stall), so the last
+    /// known regime keeps being reported. Never empty.
+    fn window(&self, now_index: u64, lookback: Duration) -> impl Iterator<Item = &Bucket> {
+        let newest = self.buckets.back().expect("never empty").index;
+        let oldest_valid = u64::min(now_index.saturating_sub(buckets_in(lookback) - 1), newest);
+        self.buckets
+            .iter()
+            .filter(move |bucket| bucket.index >= oldest_valid)
     }
 }

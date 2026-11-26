@@ -171,7 +171,6 @@ impl BroadcastHandler {
                 stabilization_period: Duration::from_millis(500),
                 stabilization_tolerance: Duration::from_millis(100),
                 max_wait: desired * 2,
-                stale_estimate_threshold: Duration::from_millis(500),
             },
             ctx.queue_ctx.sync_point,
             sync_stats,
