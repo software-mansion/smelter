@@ -86,7 +86,7 @@ pub(crate) struct QueueIndices<'a> {
 
 impl QueueIndices<'_> {
     pub(crate) fn queue_create_infos(&self) -> Vec<QueueCreateInfo> {
-        // One create info per family, with the max queue_count any role wants;
+        // One create info per family, with the max queue_count requested for it;
         // listing a family twice in pQueueCreateInfos is invalid.
         let mut queues_per_family: HashMap<usize, usize> = HashMap::new();
         for (family_idx, queue_count) in [
