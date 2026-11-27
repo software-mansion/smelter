@@ -68,6 +68,7 @@ mod decision_correct_mode;
 mod decision_start_track;
 mod edge_estimator;
 mod mode;
+mod segment_estimator;
 mod state;
 mod stats;
 mod track;
