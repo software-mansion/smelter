@@ -6,8 +6,9 @@ use std::{
 /// Width of one time bucket; the granularity at which old gaps expire.
 const TIME_BUCKET: Duration = Duration::from_secs(10);
 
-/// How long a gap counts towards the estimate.
-const WINDOW: Duration = Duration::from_secs(300);
+/// Number of time buckets kept. Only buckets with recorded gaps are stored, so they span 5 minutes
+/// of continuous delivery and longer when delivery pauses.
+const TIME_BUCKETS: usize = 30;
 
 /// Gaps longer than this are not segments (stalls, reconnects) and are not recorded.
 const MAX_GAP: Duration = Duration::from_secs(30);
@@ -39,15 +40,17 @@ const MIN_EVIDENCE: Duration = Duration::from_secs(5);
 ///   only if they take up more time than the regular gap.
 #[allow(dead_code)]
 pub(crate) struct SegmentEstimator {
+    /// Instant that time bucket indices count from.
+    start: Instant,
     last_observation: Option<Instant>,
-    /// Oldest first.
+    /// Oldest first; only buckets with recorded gaps.
     time_buckets: VecDeque<TimeBucket>,
     /// Sum over all `time_buckets`.
     totals: [GapClass; GAP_CLASSES],
 }
 
 struct TimeBucket {
-    start: Instant,
+    index: u64,
     classes: [GapClass; GAP_CLASSES],
 }
 
@@ -68,6 +71,7 @@ impl GapClass {
 impl SegmentEstimator {
     pub fn new() -> Self {
         Self {
+            start: Instant::now(),
             last_observation: None,
             time_buckets: VecDeque::new(),
             totals: [GapClass::EMPTY; GAP_CLASSES],
@@ -80,34 +84,31 @@ impl SegmentEstimator {
         let Some(last_observation) = self.last_observation.replace(now) else {
             return;
         };
-
-        while let Some(oldest) = self.time_buckets.front()
-            && now.saturating_duration_since(oldest.start) >= WINDOW
-        {
-            for (total, class) in self.totals.iter_mut().zip(oldest.classes) {
-                total.sum -= class.sum;
-                total.count -= class.count;
-            }
-            self.time_buckets.pop_front();
-        }
-
         let gap = now.saturating_duration_since(last_observation);
         if gap > MAX_GAP {
             return;
         }
 
-        let bucket = match self.time_buckets.back_mut() {
-            Some(bucket) if now.saturating_duration_since(bucket.start) < TIME_BUCKET => bucket,
-            _ => {
-                self.time_buckets.push_back(TimeBucket {
-                    start: now,
-                    classes: [GapClass::EMPTY; GAP_CLASSES],
-                });
-                self.time_buckets.back_mut().expect("just pushed")
+        let index =
+            (now.saturating_duration_since(self.start).as_nanos() / TIME_BUCKET.as_nanos()) as u64;
+        if self.time_buckets.back().is_none_or(|bucket| bucket.index != index) {
+            self.time_buckets.push_back(TimeBucket {
+                index,
+                classes: [GapClass::EMPTY; GAP_CLASSES],
+            });
+        }
+        if self.time_buckets.len() > TIME_BUCKETS
+            && let Some(oldest) = self.time_buckets.pop_front()
+        {
+            for (total, class) in self.totals.iter_mut().zip(oldest.classes) {
+                total.sum -= class.sum;
+                total.count -= class.count;
             }
-        };
-        let index = gap_class(gap);
-        for class in [&mut bucket.classes[index], &mut self.totals[index]] {
+        }
+
+        let bucket = self.time_buckets.back_mut().expect("never empty");
+        let class_index = gap_class(gap);
+        for class in [&mut bucket.classes[class_index], &mut self.totals[class_index]] {
             class.sum += gap;
             class.count += 1;
         }
