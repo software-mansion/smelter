@@ -165,10 +165,12 @@ impl BroadcastHandler {
         let input_sync = Arc::new(LiveSync::new(
             LiveSyncOptions {
                 buffering_strategy: BufferingStrategy::Range { min, max, desired },
+                // Tracks are delivered separately, so lagging video must not take audio past
+                // `max`; video that does not fit is late instead.
+                track_priority: Some(TrackKind::Audio),
                 stabilization_period: Duration::from_millis(500),
                 stabilization_tolerance: Duration::from_millis(100),
                 max_wait: desired * 2,
-                stale_estimate_threshold: Duration::from_millis(500),
             },
             ctx.queue_ctx.sync_point,
             sync_stats,

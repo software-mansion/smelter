@@ -57,10 +57,11 @@ pub(crate) fn start_connection_thread(
         true => InputSync::Live(LiveSync::new(
             LiveSyncOptions {
                 buffering_strategy: BufferingStrategy::Range { min, max, desired },
+                // Both tracks arrive over one connection, so they are late together.
+                track_priority: None,
                 stabilization_period: Duration::from_millis(500),
                 stabilization_tolerance: Duration::from_millis(100),
                 max_wait: desired * 2,
-                stale_estimate_threshold: Duration::from_secs(2),
             },
             ctx.queue_ctx.sync_point,
             stats,

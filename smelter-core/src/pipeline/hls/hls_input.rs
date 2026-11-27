@@ -159,15 +159,13 @@ impl HlsDemuxerThread {
             true => InputSync::Live(LiveSync::new(
                 LiveSyncOptions {
                     buffering_strategy: BufferingStrategy::Range { min, max, desired },
+                    track_priority: None,
                     stabilization_period: Duration::from_millis(1000),
                     // mostly dead value, chunks are usually larger than stabilization_period
                     // so tolerance does not matter, stable state will trigger as soon as we have
                     // a gap between chunks.
                     stabilization_tolerance: Duration::from_millis(250),
                     max_wait: Duration::from_secs(10),
-                    // Depending on what is actually producing the HLS or when segment size change
-                    // the upper bound can jump quickly, so threshold has to be large.
-                    stale_estimate_threshold: Duration::from_secs(10),
                 },
                 input_ctx.ctx.queue_ctx.sync_point,
                 stats,

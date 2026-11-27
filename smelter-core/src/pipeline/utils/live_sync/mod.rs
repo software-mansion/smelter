@@ -7,7 +7,9 @@
 //! Chunks written to an input are held back until its live edge has been estimated; that estimate
 //! decides where playback starts, far enough behind the edge to keep the configured buffer.
 //! Estimation continues after the start, so an edge that drifted away is corrected by slewing the
-//! anchor that maps input timestamps onto output ones.
+//! anchor that maps input timestamps onto output ones. While the anchor slews toward a later
+//! target, a late chunk makes it jump just enough for the chunk to make the queue, but not past
+//! the target, so the output pauses instead of dropping content.
 //!
 //! The tracks of an input do not have to share a timeline, so how they are anchored is an
 //! input-wide `Mode`. Live edges further apart than the split threshold mean unrelated
@@ -17,6 +19,9 @@
 //!
 //! Shared timeline:
 //! - Both tracks apply one anchor, sized from an estimate over all chunks.
+//! - With a priority track, the anchor never leaves the range the priority track's own estimate
+//!   allows: the other track can grow the buffer only until the priority track's freshest content
+//!   is `max` behind, while the priority track's own lateness still grows it as far as needed.
 //! - Chunks are released in a common pts order, so a slew moves both tracks the same way.
 //!
 //! Unrelated timelines:
@@ -33,7 +38,8 @@
 //! - On a pts discontinuity only the track that jumped starts over, and it tells its sink. The
 //!   other track keeps playing and leads on its own until the timelines converge again.
 //! - A track that stops delivering for long enough to run out of released content starts over
-//!   too, so it has to earn its place on the shared timeline again.
+//!   too, so it has to earn its place on the shared timeline again. Its estimator keeps the
+//!   delivery history, but the track waits for new chunks and a stable estimate again.
 //!
 //! Decisions (`start_track_decision`, `correct_mode_decision`) read the state and the state
 //! applies them.
@@ -48,8 +54,8 @@
 //!   re-alignment stopped, the offset keeps what the leader had left to slew at that moment.
 //! - A pts jump below the discontinuity threshold (10s) that is not matched by a gap in arrival
 //!   is taken at face value. Forward, the output freezes for the length of the jump and the extra
-//!   buffer is slewed away only if it exceeds the maximum. Backward, chunks are late until the
-//!   stale estimate resets the track.
+//!   buffer is slewed away only if it exceeds the maximum. Backward, the anchor jumps to cover
+//!   the late chunks, so the output pauses for the length of the jump.
 //! - Old content delivered while the upper bound is stable (e.g. a backlog flushed by a track
 //!   that joins late) counts as slow delivery and inflates the spread until it leaves the window.
 //! - Live edges are estimated from pts, so with unrelated timelines the offset between the tracks
@@ -81,6 +87,10 @@ use state::SharedState;
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LiveSyncOptions {
     pub buffering_strategy: BufferingStrategy,
+    /// Track whose buffer limits hold when the tracks share a timeline but need different
+    /// buffers. The other track's lateness counts only within the range the priority track allows
+    /// on its own; late content beyond it is just late. `None` sizes the buffer for every track.
+    pub track_priority: Option<TrackKind>,
     /// How long the live edge estimates have to stay stable before starting.
     pub stabilization_period: Duration,
     /// Estimate improvements smaller than this (delivery jitter) do not reset
@@ -89,10 +99,6 @@ pub(crate) struct LiveSyncOptions {
     /// Start with the current estimates if the live edge was not detected
     /// within this much time from the track's first chunk.
     pub max_wait: Duration,
-    /// Distance between the upper bound and its recent counterpart above which the estimate of a
-    /// started track counts as stale and the track starts over: its timeline slipped and the full
-    /// window still holds the old edge.
-    pub stale_estimate_threshold: Duration,
 }
 
 /// Synchronization of a single input; create per-track handles with

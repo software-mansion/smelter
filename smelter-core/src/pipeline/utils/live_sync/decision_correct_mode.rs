@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 use super::{
-    buffer::{BufferingStrategy, LiveSyncBuffer},
+    buffer::{BufferingStrategy, LiveSyncBuffer, shared_band},
     edge_estimator::EdgeEstimate,
     mode::{IndependentMode, Mode, SecondaryTrackOffset, SharedMode, SlewingAnchor},
     state::SharedState,
@@ -48,6 +48,10 @@ struct Context {
     video_started: bool,
     audio_estimation: Option<EdgeEstimate>,
     video_estimation: Option<EdgeEstimate>,
+    /// Own estimate of the priority track (see [`LiveSyncOptions::track_priority`]).
+    ///
+    /// [`LiveSyncOptions::track_priority`]: super::LiveSyncOptions::track_priority
+    priority_estimation: Option<EdgeEstimate>,
 }
 
 impl Context {
@@ -64,6 +68,7 @@ impl Context {
             video_started: state.is_started(TrackKind::Video),
             audio_estimation: estimation(TrackKind::Audio),
             video_estimation: estimation(TrackKind::Video),
+            priority_estimation: state.options.track_priority.and_then(estimation),
         }
     }
 
@@ -111,25 +116,30 @@ fn split_shared(
         leader_kind,
         leader_anchor: SlewingAnchor {
             current: shared.anchor.current,
-            target: ctx.strategy.desired_anchor(leader_estimation, ctx.now_pts),
+            target: ctx.strategy.band(leader_estimation, ctx.now_pts).target,
             last_released_pts: None,
         },
         secondary_track_offset,
     })
 }
 
-/// The shared buffer is sized by the strategy from the shared estimate.
+/// The shared buffer is sized by the strategy from the shared estimate, within the range the
+/// priority track allows.
 fn correct_shared(
     mut shared: SharedMode,
     shared_estimation: Option<EdgeEstimate>,
     ctx: &Context,
 ) -> Mode {
-    if let Some(estimation) = shared_estimation
-        && !ctx
-            .strategy
-            .buffer_in_range(&estimation, shared.anchor.current, ctx.now_pts)
-    {
-        shared.anchor.target = ctx.strategy.desired_anchor(&estimation, ctx.now_pts);
+    if let Some(estimation) = shared_estimation {
+        let band = shared_band(
+            ctx.strategy,
+            &estimation,
+            ctx.priority_estimation.as_ref(),
+            ctx.now_pts,
+        );
+        if !band.contains(shared.anchor.current) {
+            shared.anchor.target = band.target;
+        }
     }
     if !ctx.audio_started && !ctx.video_started {
         // We need to do it because current will never converge on target (nothing is actively
@@ -148,11 +158,9 @@ fn correct_independent(
     ctx: &Context,
 ) -> Mode {
     let leader_anchor = &mut independent.leader_anchor;
-    if !ctx
-        .strategy
-        .buffer_in_range(leader_estimation, leader_anchor.current, ctx.now_pts)
-    {
-        leader_anchor.target = ctx.strategy.desired_anchor(leader_estimation, ctx.now_pts);
+    let band = ctx.strategy.band(leader_estimation, ctx.now_pts);
+    if !band.contains(leader_anchor.current) {
+        leader_anchor.target = band.target;
     }
 
     if ctx.tracks_converged() {
