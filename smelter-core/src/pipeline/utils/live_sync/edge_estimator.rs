@@ -18,20 +18,18 @@ const UPPER_MIN_LOOKBACK: Duration = Duration::from_secs(6);
 /// delivery (e.g. HLS segments) keeps the newest burst in view between bursts.
 const UPPER_LOOKBACK_GAPS: u32 = 2;
 
-/// Look-back of the lower bound (the offset maximum) for perfectly steady delivery; observed
-/// arrival gaps only grow it from here. Long, so how late delivery gets is remembered for a while.
-const LOWER_MIN_LOOKBACK: Duration = Duration::from_secs(20);
+/// Look-back of the lower bound (the offset maximum), extended by the arrival gap in progress.
+/// Nothing is forgotten while delivery pauses, so batched delivery (e.g. HLS segments) keeps the
+/// newest burst in view until the next one arrives. Short, so lateness that stopped is forgotten
+/// within seconds of newer deliveries.
+const LOWER_LOOKBACK: Duration = Duration::from_secs(6);
 
-/// The lower bound look-back covers at least this many worst-case arrival gaps, so batched
-/// delivery keeps several bursts in view.
-const LOWER_LOOKBACK_GAPS: u32 = 4;
-
-/// Hard cap of both look-backs and of the retained history.
+/// Hard cap of the upper bound look-back and of the retained history.
 const MAX_LOOKBACK: Duration = Duration::from_secs(120);
 
-/// Look-back of the arrival gap maximum. Longer than [`LOWER_MIN_LOOKBACK`], so a
-/// one-off stall keeps the windows widened for a while after it ends
-/// instead of being forgotten as soon as it leaves a short window.
+/// Look-back of the arrival gap maximum. Long, so a one-off stall keeps the upper bound window
+/// widened for a while after it ends instead of being forgotten as soon as it leaves a short
+/// window.
 const GAP_LOOKBACK: Duration = Duration::from_secs(60);
 
 /// How much [`LiveEdgeEstimator::reset`] forgets.
@@ -64,13 +62,12 @@ pub(crate) enum EstimatorReset {
 ///
 /// The extremes are tracked per bucket over sliding windows, so the estimate
 /// follows changes of the network latency instead of locking to lifetime
-/// extremes. Each look-back adapts to the observed delivery pattern: it stays
-/// at its minimum for continuous streams (WebRTC, RTMP) and stretches to
-/// cover arrival gaps for batched ones (HLS segments), up to [`MAX_LOOKBACK`].
-/// The upper bound uses a short window ([`UPPER_MIN_LOOKBACK`]), so it follows
-/// delivery that got slower within seconds; faster delivery moves it at once.
-/// The lower bound uses a long one ([`LOWER_MIN_LOOKBACK`]), so the delivery
-/// spread is remembered.
+/// extremes. The upper bound window ([`UPPER_MIN_LOOKBACK`]) adapts to the observed delivery
+/// pattern: it stays at its minimum for continuous streams (WebRTC, RTMP) and stretches to cover
+/// arrival gaps for batched ones (HLS segments), up to [`MAX_LOOKBACK`]. It follows delivery that
+/// got slower within seconds; faster delivery moves it at once. The lower bound window
+/// ([`LOWER_LOOKBACK`]) covers the last few seconds of deliveries, so lateness that stopped is
+/// forgotten soon after; it does not shrink while delivery pauses.
 ///
 /// Only the estimation lives here; what to do with it (buffering, anchoring,
 /// offset slewing) is up to the caller.
@@ -318,10 +315,10 @@ impl LiveEdgeEstimator {
         let now_index = self.bucket_index(now);
         let max_gap = observations.max_arrival_gap(now, now_index);
         let min_offset_ns = observations.min_offset_ns(now_index, max_gap);
-        // The windows differ, so the slowest delivery remembered by the long one can be faster
-        // than the fastest one of the short window; the lower bound never passes the upper one.
+        // The windows differ, so the slowest delivery in the lower bound window can be faster than
+        // the fastest one in the upper bound window; the lower bound never passes the upper one.
         let max_offset_ns = observations
-            .max_offset_ns(now_index, max_gap)
+            .max_offset_ns(now, now_index)
             .map(|max_offset_ns| i64::max(max_offset_ns, min_offset_ns));
         let now_ns = self.sync_point.timestamp_at(now).as_nanos();
         // negative only when pts run ahead of the wall clock
@@ -481,13 +478,10 @@ impl Observations {
             .expect("window never empty")
     }
 
-    /// Offset maximum over the lower bound window; `None` if the window holds no stable sample.
-    fn max_offset_ns(&self, now_index: u64, max_gap: Duration) -> Option<i64> {
-        let lookback = Duration::clamp(
-            max_gap * LOWER_LOOKBACK_GAPS,
-            LOWER_MIN_LOOKBACK,
-            MAX_LOOKBACK,
-        );
+    /// Offset maximum over the lower bound window ([`LOWER_LOOKBACK`] plus the arrival gap in
+    /// progress); `None` if the window holds no stable sample.
+    fn max_offset_ns(&self, now: Instant, now_index: u64) -> Option<i64> {
+        let lookback = LOWER_LOOKBACK + now.saturating_duration_since(self.last_observation);
         self.window(now_index, lookback)
             .filter_map(|bucket| bucket.max_offset_ns)
             .max()
