@@ -341,6 +341,16 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             return false;
         };
 
+        // While slewing toward a later target, late content gets there at once: the anchor jumps
+        // just enough for the chunk to make the queue, but not past the target.
+        if anchor.to_output_pts(chunk.pts()) <= now_pts
+            && let Some(jump) =
+                mode.jump_toward_target(kind, chunk.pts(), now_pts + MIN_QUEUE_HEADROOM)
+        {
+            debug!(?kind, pts=?chunk.pts(), ?jump, "Live sync: anchor jumped for late chunk");
+        }
+        let anchor = mode.anchor(kind).unwrap_or(anchor);
+
         // Late content is only decoded, so the decoder catches up instead of the queue playing
         // it back sped up. The newest video frame is always presented, so the output shows
         // something right away.

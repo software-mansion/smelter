@@ -7,7 +7,9 @@
 //! Chunks written to an input are held back until its live edge has been estimated; that estimate
 //! decides where playback starts, far enough behind the edge to keep the configured buffer.
 //! Estimation continues after the start, so an edge that drifted away is corrected by slewing the
-//! anchor that maps input timestamps onto output ones.
+//! anchor that maps input timestamps onto output ones. While the anchor slews toward a later
+//! target, a late chunk makes it jump just enough for the chunk to make the queue, but not past
+//! the target, so the output pauses instead of dropping content.
 //!
 //! The tracks of an input do not have to share a timeline, so how they are anchored is an
 //! input-wide `Mode`. Live edges further apart than the split threshold mean unrelated
@@ -51,11 +53,8 @@
 //!   re-alignment stopped, the offset keeps what the leader had left to slew at that moment.
 //! - A pts jump below the discontinuity threshold (10s) that is not matched by a gap in arrival
 //!   is taken at face value. Forward, the output freezes for the length of the jump and the extra
-//!   buffer is slewed away only if it exceeds the maximum. Backward, chunks are late until the
-//!   anchor slews far enough to cover them.
-//! - The same holds for delivery that gets slower and stays there while chunks keep arriving
-//!   (e.g. a stall after which content continues): the anchor only slews toward the new edge, so
-//!   content is late until it gets there.
+//!   buffer is slewed away only if it exceeds the maximum. Backward, the anchor jumps to cover
+//!   the late chunks, so the output pauses for the length of the jump.
 //! - Old content delivered while the upper bound is stable (e.g. a backlog flushed by a track
 //!   that joins late) counts as slow delivery and inflates the spread until it leaves the window.
 //! - Live edges are estimated from pts, so with unrelated timelines the offset between the tracks

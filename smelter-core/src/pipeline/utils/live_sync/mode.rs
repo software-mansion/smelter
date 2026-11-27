@@ -198,6 +198,41 @@ impl Mode {
         }
     }
 
+    /// Moves the anchor of `kind` at once so that `pts` is presented at `output_pts`, but only
+    /// toward a later target and never past it. A secondary track jumps its offset; a leader's
+    /// jump is taken out of the secondary offset, so the secondary track stays where it was.
+    /// Returns the applied jump.
+    pub fn jump_toward_target(
+        &mut self,
+        kind: TrackKind,
+        pts: Timestamp,
+        output_pts: Timestamp,
+    ) -> Option<TimestampOffset> {
+        let current = self.anchor(kind)?;
+        let target = self.target(kind)?;
+        let jump = TimestampOffset::min(Timestamp::offset(pts, output_pts), target) - current;
+        if jump <= TimestampOffset::ZERO {
+            return None;
+        }
+        match self {
+            Mode::Shared(shared) => shared.anchor.current = shared.anchor.current + jump,
+            Mode::Independent(independent) if independent.leader_kind == kind => {
+                let leader = &mut independent.leader_anchor;
+                leader.current = leader.current + jump;
+                if let Some(offset) = &mut independent.secondary_track_offset {
+                    offset.current = offset.current - jump;
+                    offset.target = offset.target - jump;
+                }
+            }
+            Mode::Independent(independent) => match &mut independent.secondary_track_offset {
+                Some(offset) => offset.current = offset.current + jump,
+                // without an offset the secondary track has no anchor, so this is unreachable
+                None => return None,
+            },
+        }
+        Some(jump)
+    }
+
     /// Mode after the track of `kind` stops applying its anchor. A shared anchor stays for the
     /// other track; a secondary track loses its offset; a leader hands the anchor the secondary
     /// track has been applying over to it, or leaves nothing if it had none.
