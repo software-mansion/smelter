@@ -34,6 +34,16 @@ const MAX_LOOKBACK: Duration = Duration::from_secs(120);
 /// instead of being forgotten as soon as it leaves a short window.
 const GAP_LOOKBACK: Duration = Duration::from_secs(60);
 
+/// How much [`LiveEdgeEstimator::reset`] forgets.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum EstimatorReset {
+    /// Everything, as if newly created; the old delivery history describes a different timeline.
+    Full,
+    /// Only the current observation. The delivery history stays; the first chunk after the reset
+    /// restarts the stability timer and is not a stable lower bound sample.
+    KeepHistory,
+}
+
 /// Continuously estimates the live edge of a stream by observing chunk
 /// arrival times.
 ///
@@ -77,7 +87,9 @@ pub(crate) struct LiveEdgeEstimator {
 }
 
 struct Observations {
-    first_observation: Instant,
+    /// First chunk of the current observation; `None` after a reset that keeps the history,
+    /// until the next chunk.
+    observing_since: Option<Instant>,
     last_observation: Instant,
     last_pts: Timestamp,
     /// Per-bucket aggregates, oldest first; never empty. Offsets are
@@ -201,7 +213,8 @@ pub(crate) struct PtsBound {
     pub pts: Timestamp,
     /// Upper bound: not pushed outward (beyond the jitter tolerance) by an
     /// observed chunk for at least the stabilization period. The bound
-    /// tightening as old extremes rotate out of the window does not reset it.
+    /// tightening as old extremes rotate out of the window does not reset it; the first chunk
+    /// after a reset that keeps the history does.
     ///
     /// Lower bound: the window holds a chunk observed while the upper bound
     /// was already stable. Earlier chunks are left out, because they may be
@@ -219,7 +232,8 @@ pub(crate) struct DeliveryStats {
     /// not matter); the newest delivered content.
     #[allow(dead_code)]
     pub last_pts: Timestamp,
-    /// Time since the first observed chunk.
+    /// Time since the first chunk of the current observation (see
+    /// [`EstimatorReset::KeepHistory`]).
     pub observed_for: Duration,
     /// Largest recent gap between consecutive chunk arrivals (including the
     /// one in progress). Close to zero for continuous delivery; approximates
@@ -242,9 +256,16 @@ impl LiveEdgeEstimator {
         }
     }
 
-    /// Forget every observation, as if newly created.
-    pub fn reset(&mut self) {
-        self.observations = None;
+    /// Start over, see [`EstimatorReset`]. Until the next chunk there is no estimate.
+    pub fn reset(&mut self, reset: EstimatorReset) {
+        match reset {
+            EstimatorReset::Full => self.observations = None,
+            EstimatorReset::KeepHistory => {
+                if let Some(observations) = &mut self.observations {
+                    observations.observing_since = None;
+                }
+            }
+        }
     }
 
     /// Record a chunk with `pts` that arrived at `now`.
@@ -255,7 +276,7 @@ impl LiveEdgeEstimator {
 
         let Some(observations) = &mut self.observations else {
             self.observations = Some(Observations {
-                first_observation: now,
+                observing_since: Some(now),
                 last_observation: now,
                 last_pts: pts,
                 buckets: VecDeque::from([Bucket {
@@ -269,21 +290,31 @@ impl LiveEdgeEstimator {
             return;
         };
 
+        let restarted = observations.observing_since.is_none();
+        observations.observing_since.get_or_insert(now);
+
         // judged before this chunk updates the upper bound, so a later
         // extension does not disqualify chunks observed earlier
-        let upper_stable = observations.upper_stable(now, self.stabilization_period);
+        let upper_stable = !restarted && observations.upper_stable(now, self.stabilization_period);
         observations.record(now, now_index, offset_ns, pts, upper_stable);
 
         let max_gap = observations.max_arrival_gap(now, now_index);
         let min_offset_ns = observations.min_offset_ns(now_index, max_gap);
-        observations
-            .min_offset_stability
-            .track(now, min_offset_ns, signed_ns(self.tolerance));
+        match restarted {
+            true => observations.min_offset_stability = Stability::new(now, min_offset_ns),
+            false => observations.min_offset_stability.track(
+                now,
+                min_offset_ns,
+                signed_ns(self.tolerance),
+            ),
+        }
     }
 
-    /// Current estimate; `None` until the first observation.
+    /// Current estimate; `None` until the first observation, and after a reset until the next
+    /// one.
     pub fn estimate(&self, now: Instant) -> Option<EdgeEstimate> {
         let observations = self.observations.as_ref()?;
+        let observing_since = observations.observing_since?;
         let now_index = self.bucket_index(now);
         let max_gap = observations.max_arrival_gap(now, now_index);
         let min_offset_ns = observations.min_offset_ns(now_index, max_gap);
@@ -315,7 +346,7 @@ impl LiveEdgeEstimator {
             lower_bound,
             delivery: DeliveryStats {
                 last_pts: observations.last_pts,
-                observed_for: now.saturating_duration_since(observations.first_observation),
+                observed_for: now.saturating_duration_since(observing_since),
                 max_arrival_gap: max_gap,
                 since_last_arrival: now.saturating_duration_since(observations.last_observation),
             },

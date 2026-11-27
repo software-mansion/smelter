@@ -38,7 +38,8 @@
 //! - On a pts discontinuity only the track that jumped starts over, and it tells its sink. The
 //!   other track keeps playing and leads on its own until the timelines converge again.
 //! - A track that stops delivering for long enough to run out of released content starts over
-//!   too, so it has to earn its place on the shared timeline again.
+//!   too, so it has to earn its place on the shared timeline again. Its estimator keeps the
+//!   delivery history, but the track waits for new chunks and a stable estimate again.
 //!
 //! Decisions (`start_track_decision`, `correct_mode_decision`) read the state and the state
 //! applies them.

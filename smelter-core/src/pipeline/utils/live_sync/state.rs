@@ -7,7 +7,7 @@ use super::{
     buffer::{BufferingStrategy, LiveSyncBuffer},
     decision_correct_mode::correct_mode_decision,
     decision_start_track::start_track_decision,
-    edge_estimator::LiveEdgeEstimator,
+    edge_estimator::{EstimatorReset, LiveEdgeEstimator},
     mode::{IndependentMode, Mode},
     stats::LiveSyncTrackStats,
     track::LiveSyncDeadline,
@@ -107,7 +107,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
     pub(super) fn remove_track(&mut self, kind: TrackKind) {
         debug!(?kind, "Live sync: removing track");
         let now = Instant::now();
-        self.reset_track(kind, now);
+        self.reset_track(kind, now, EstimatorReset::Full);
         match kind {
             TrackKind::Audio => self.audio = None,
             TrackKind::Video => self.video = None,
@@ -129,7 +129,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         }
         // Needed when the last track is removed, and harmless in every other case because it does
         // not force an already started track to wait to start again.
-        self.shared_estimator.reset();
+        self.shared_estimator.reset(EstimatorReset::Full);
 
         self.publish_deadlines(now);
         self.report_stats();
@@ -145,14 +145,14 @@ impl<B: LiveSyncBuffer> SharedState<B> {
             && audio.is_stalled(self.mode, now)
         {
             debug!("Live sync: audio track stalled, resetting");
-            self.reset_track(TrackKind::Audio, now);
+            self.reset_track(TrackKind::Audio, now, EstimatorReset::KeepHistory);
         }
 
         if let Some(video) = &self.video
             && video.is_stalled(self.mode, now)
         {
             debug!("Live sync: video track stalled, resetting");
-            self.reset_track(TrackKind::Video, now);
+            self.reset_track(TrackKind::Video, now, EstimatorReset::KeepHistory);
         }
 
         // audio first, so video's decision can align to it
@@ -191,7 +191,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         debug!("Live sync: flush");
         let now = Instant::now();
         for kind in [TrackKind::Audio, TrackKind::Video] {
-            self.reset_track(kind, now);
+            self.reset_track(kind, now, EstimatorReset::Full);
         }
         self.publish_deadlines(now);
         self.report_stats();
@@ -276,7 +276,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
     /// Gives up on the live edge of one track: releases everything it buffered and goes back to
     /// waiting for a start decision. Its own anchor is forgotten; a shared one stays for the
     /// other track.
-    fn reset_track(&mut self, kind: TrackKind, now: Instant) {
+    fn reset_track(&mut self, kind: TrackKind, now: Instant, estimator_reset: EstimatorReset) {
         let flush_anchor = self
             .track(kind)
             .and_then(|track| track.flush_anchor(self.mode, self.options.buffering_strategy, now));
@@ -291,10 +291,11 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         debug!(
             ?kind,
             ?flush_anchor,
+            ?estimator_reset,
             buffer = ?track.buffer.stats(),
             "Live sync: resetting track"
         );
-        track.estimator.reset();
+        track.estimator.reset(estimator_reset);
         if let Some(anchor) = flush_anchor {
             while let Some(chunk) = track.buffer.read() {
                 track.release_chunk(chunk, anchor);
@@ -434,7 +435,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
         }
         debug!(?kind, ?pts, "Live sync: discontinuity detected");
 
-        self.reset_track(kind, now);
+        self.reset_track(kind, now, EstimatorReset::Full);
         // The shared estimate mixes both timelines from now on, so it must not size the other
         // track's anchor; the other track leads until the tracks converge again. A shared anchor
         // nobody applies belongs to the old timeline and would be reused by the next start.
@@ -449,7 +450,7 @@ impl<B: LiveSyncBuffer> SharedState<B> {
                 false => None,
             };
         }
-        self.shared_estimator.reset();
+        self.shared_estimator.reset(EstimatorReset::Full);
 
         // After the reset, so flushed old chunks precede the event in the sink.
         let track = match kind {
@@ -497,7 +498,7 @@ pub(super) struct Track<B: LiveSyncBuffer> {
     /// Instant that output timestamps are measured from.
     sync_point: Instant,
     /// Estimator observing only this track's chunks. A track starts only once it has an
-    /// estimate and the estimator is replaced only after the track left the mode
+    /// estimate and the estimator is reset only after the track left the mode
     /// (`reset_track`), so a started track always has an estimate.
     pub estimator: LiveEdgeEstimator,
     buffer: B,
