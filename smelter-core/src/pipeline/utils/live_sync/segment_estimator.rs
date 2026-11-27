@@ -136,3 +136,77 @@ fn gap_class(gap: Duration) -> usize {
     let octaves = f64::log2(gap.as_secs_f64() / MIN_GAP.as_secs_f64());
     usize::min(1 + (octaves * CLASSES_PER_OCTAVE) as usize, GAP_CLASSES - 1)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Estimator holding `count` gaps of each `gap`.
+    fn estimator_with_gaps(gaps: &[(Duration, u32)]) -> SegmentEstimator {
+        let mut estimator = SegmentEstimator::new();
+        for &(gap, count) in gaps {
+            let class = &mut estimator.totals[gap_class(gap)];
+            class.sum += gap * count;
+            class.count += count;
+        }
+        estimator
+    }
+
+    #[test]
+    fn none_without_enough_evidence() {
+        assert_eq!(SegmentEstimator::new().estimate(), None);
+        // a single segment gap
+        assert_eq!(
+            estimator_with_gaps(&[(Duration::from_secs(4), 1)]).estimate(),
+            None
+        );
+        // backlog flush right after connecting
+        assert_eq!(
+            estimator_with_gaps(&[(Duration::from_micros(400), 10_000)]).estimate(),
+            None
+        );
+    }
+
+    #[test]
+    fn continuous_delivery() {
+        let estimator = estimator_with_gaps(&[(Duration::from_millis(20), 500)]);
+        assert_eq!(estimator.estimate(), Some(Duration::from_millis(20)));
+    }
+
+    #[test]
+    fn segments_win_over_burst_gaps() {
+        // 50 segments, each a burst of 460 chunks followed by a 5.8s wait
+        let estimator = estimator_with_gaps(&[
+            (Duration::from_micros(400), 23_000),
+            (Duration::from_millis(5800), 50),
+        ]);
+        assert_eq!(estimator.estimate(), Some(Duration::from_millis(5800)));
+    }
+
+    #[test]
+    fn segments_split_on_class_edge() {
+        // 5.9s and 6.3s are on both sides of the 6.09s class edge; the stalls hold more time
+        // than either half, but less than both together
+        let estimator = estimator_with_gaps(&[
+            (Duration::from_millis(5900), 10),
+            (Duration::from_millis(6300), 10),
+            (Duration::from_secs(15), 6),
+        ]);
+        assert_eq!(estimator.estimate(), Some(Duration::from_millis(6100)));
+    }
+
+    #[test]
+    fn irregular_stalls_spread_over_classes() {
+        // stalls hold almost as much time as segments, but no window catches most of them
+        let estimator = estimator_with_gaps(&[
+            (Duration::from_secs(6), 20),
+            (Duration::from_secs(10), 1),
+            (Duration::from_secs(13), 1),
+            (Duration::from_secs(17), 1),
+            (Duration::from_secs(21), 1),
+            (Duration::from_secs(25), 1),
+            (Duration::from_secs(29), 1),
+        ]);
+        assert_eq!(estimator.estimate(), Some(Duration::from_secs(6)));
+    }
+}
